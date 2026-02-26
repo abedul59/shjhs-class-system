@@ -65,7 +65,45 @@
         </div>
       </main>
 
-      </div>
+      <main v-if="currentTab === 'audit'" class="data-table">
+        <h3>🕵️ 最近 50 筆黑板編輯紀錄</h3>
+        <table>
+          <thead>
+            <tr><th>時間</th><th>修改區塊</th><th>編輯者</th><th>IP 位址</th><th>裝置資訊</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="log in boardLogs" :key="log.id">
+              <td>{{ formatTime(log.edited_at) }}</td>
+              <td><span class="badge">{{ log.board_type }}</span></td>
+              <td :class="log.editor_role === '導師' ? 'role-teacher' : 'role-student'">{{ log.editor_role }}</td>
+              <td class="ip-text">{{ log.ip_address }}</td>
+              <td class="device-text">{{ shortenAgent(log.user_agent) }}</td>
+            </tr>
+            <tr v-if="boardLogs.length === 0"><td colspan="5" class="empty">目前尚無紀錄</td></tr>
+          </tbody>
+        </table>
+      </main>
+
+      <main v-if="currentTab === 'communication'" class="data-table">
+        <h3>📨 最近 50 筆通知發送紀錄</h3>
+        <table>
+          <thead>
+            <tr><th>發送時間</th><th>收件學生</th><th>通知類型</th><th>發送者</th><th>收件信箱</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="log in commLogs" :key="log.id">
+              <td>{{ formatTime(log.sent_at) }}</td>
+              <td>{{ getStudentName(log.student_id) }}</td>
+              <td><span class="badge notice">{{ log.notification_type }}</span></td>
+              <td>{{ log.sent_by }}</td>
+              <td class="email-text">{{ log.recipient_emails }}</td>
+            </tr>
+            <tr v-if="commLogs.length === 0"><td colspan="5" class="empty">目前尚無紀錄</td></tr>
+          </tbody>
+        </table>
+      </main>
+
+    </div>
   </div>
 </template>
 
@@ -77,12 +115,8 @@ const isUnlocked = ref(false); const passwordInput = ref(''); const currentTab =
 const boardLogs = ref([]); const commLogs = ref([])
 const allMessages = ref([]); const studentsMap = ref({}); const studentsList = ref([])
 
-// 聊天室專用狀態
-const activeChatThread = ref('') // 格式：'studentId_chatType' 例如 'uuid-123_家長'
-const replyContent = ref('')
-const isSending = ref(false)
+const activeChatThread = ref(''); const replyContent = ref(''); const isSending = ref(false)
 
-// 根據上方下拉選單，自動過濾出目前的對話紀錄
 const filteredMessages = computed(() => {
   if (!activeChatThread.value) return []
   const [targetId, targetType] = activeChatThread.value.split('_')
@@ -91,8 +125,7 @@ const filteredMessages = computed(() => {
 
 const verifyPassword = async () => {
   if (passwordInput.value === '168168168') {
-    isUnlocked.value = true
-    await fetchAllData()
+    isUnlocked.value = true; await fetchAllData()
   } else { alert('❌ 密碼錯誤！'); passwordInput.value = '' }
 }
 
@@ -115,13 +148,9 @@ const fetchAllData = async () => {
   }
 
   const { data: msgLogs } = await supabase.from('private_messages').select('*').order('created_at', { ascending: true })
-  if (msgLogs) {
-    allMessages.value = msgLogs
-    scrollToBottom()
-  }
+  if (msgLogs) { allMessages.value = msgLogs; scrollToBottom() }
 }
 
-// 選擇對話時，消除該頻道的未讀紅點
 const markCurrentThreadAsRead = async () => {
   if (!activeChatThread.value) return
   const [targetId, targetType] = activeChatThread.value.split('_')
@@ -131,7 +160,6 @@ const markCurrentThreadAsRead = async () => {
   scrollToBottom()
 }
 
-// 導師發送回覆
 const sendReply = async () => {
   if (!activeChatThread.value || !replyContent.value.trim()) return
   const pwd = window.prompt("🔒 傳送前請再次輸入導師專屬密碼：")
@@ -142,16 +170,9 @@ const sendReply = async () => {
 
   try {
     await supabase.from('private_messages').insert({
-      student_id: targetId,
-      sender_role: '導師',
-      chat_type: targetType, // 標記是回覆家長還是回覆學生！
-      content: replyContent.value,
-      is_read_by_teacher: true
+      student_id: targetId, sender_role: '導師', chat_type: targetType, content: replyContent.value, is_read_by_teacher: true
     })
-    
-    alert('✅ 回覆成功！')
-    replyContent.value = ''
-    await fetchAllData() // 刷新抓取最新訊息
+    alert('✅ 回覆成功！'); replyContent.value = ''; await fetchAllData()
   } catch (error) { alert('發生錯誤') } finally { isSending.value = false }
 }
 
@@ -170,11 +191,13 @@ const exportToExcel = () => {
 }
 
 const formatTime = (isoString) => new Date(isoString).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+const shortenAgent = (agent) => agent ? (agent.length > 30 ? agent.substring(0, 30) + '...' : agent) : '未知'
+const getStudentName = (id) => studentsMap.value[id] || '未知'
 const scrollToBottom = () => { nextTick(() => { const c = document.getElementById('adminChatContainer'); if (c) c.scrollTop = c.scrollHeight }) }
 </script>
 
 <style scoped>
-/* 基礎樣式保留 */
+/* 樣式完整保留 */
 .admin-container { min-height: 100vh; background-color: #f1f5f9; font-family: sans-serif; }
 .lock-screen { display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #1e293b; }
 .lock-box { background: white; padding: 40px; border-radius: 12px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 400px; }
@@ -187,11 +210,23 @@ const scrollToBottom = () => { nextTick(() => { const c = document.getElementByI
 .admin-header button { margin-right: 10px; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; background: #e2e8f0; color: #475569; }
 .admin-header button.active { background: #3b82f6; color: white; }
 .back-btn { text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; background: #ef4444; color: white; display: inline-block; }
+
 .data-table { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
 .table-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; }
 .export-btn { background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; }
 
-/* 聊天室專屬選擇器與視窗 */
+table { width: 100%; border-collapse: collapse; text-align: left; }
+th, td { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; }
+th { background-color: #f8fafc; color: #64748b; font-weight: bold; }
+tr:hover { background-color: #f8fafc; }
+.empty { text-align: center; color: #94a3b8; padding: 30px !important; }
+.badge { background: #e0e7ff; color: #4338ca; padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; }
+.badge.notice { background: #fef3c7; color: #b45309; }
+.role-teacher { color: #dc2626; font-weight: bold; }
+.role-student { color: #059669; font-weight: bold; }
+.ip-text { font-family: monospace; color: #475569; }
+.device-text, .email-text { font-size: 0.9rem; color: #64748b; }
+
 .chat-selector { margin-bottom: 15px; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1; }
 .chat-selector label { font-weight: bold; color: #334155; margin-right: 10px; }
 .chat-selector select { padding: 8px 12px; font-size: 1.1rem; border-radius: 6px; border: 1px solid #94a3b8; width: 300px; }
