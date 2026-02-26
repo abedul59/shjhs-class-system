@@ -1,13 +1,15 @@
 <template>
   <div class="dashboard-container">
     
-<div class="top-notice-board chalkboard">
+    <div class="top-notice-board chalkboard">
       <div class="board-header">
         <h3 class="notice-title">📢 家長須知事項</h3>
         </div>
       
       <ul class="task-list notice-list">
-        <li v-for="(notice, index) in notices" :key="'n-'+index"><span class="bullet">📌</span> {{ notice }}</li>
+        <li v-for="(notice, index) in notices" :key="'n-'+index">
+          <span class="bullet">📌</span> {{ notice }}
+        </li>
         <li v-if="notices.length === 0" class="empty-text">目前無特別須知事項</li>
       </ul>
     </div>
@@ -17,12 +19,13 @@
       <div class="left-panel">
         <div class="clock-card">
           <h2>🕒 {{ currentTime }}</h2>
-<div class="nav-links">
+          <div class="nav-links">
             <NuxtLink to="/parent-bind" class="nav-btn parent-btn">👨‍👩‍👧 綁定</NuxtLink>
             <NuxtLink to="/parent-message" class="nav-btn msg-btn">💬 家長私訊</NuxtLink>
             <NuxtLink to="/student-message" class="nav-btn stu-btn">💬 學生私訊</NuxtLink>
             <NuxtLink to="/admin" class="nav-btn admin-btn">
-              ⚙️ 後台 <span v-if="unreadCount > 0" class="notification-badge">{{ unreadCount }}</span>
+              ⚙️ 後台
+              <span v-if="unreadCount > 0" class="notification-badge">{{ unreadCount }}</span>
             </NuxtLink>
           </div>
         </div>
@@ -85,7 +88,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 const supabase = useSupabaseClient()
 
-// 日期時間邏輯
+// ==================== 日期時間邏輯 ====================
 const currentTime = ref('')
 let timer = null
 const d = new Date()
@@ -94,7 +97,7 @@ const todayDisplay = d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'lo
 
 const updateClock = () => { currentTime.value = new Date().toLocaleTimeString('zh-TW', { hour12: false }) }
 
-// 學生打卡邏輯
+// ==================== 學生打卡邏輯 ====================
 const students = ref([])
 const isUpdating = ref(false)
 const presentCount = computed(() => students.value.filter(s => s.status === '已到').length)
@@ -117,54 +120,56 @@ const toggleStatus = async (student) => {
   const newPunchTime = newStatus === '已到' ? new Date().toLocaleTimeString('zh-TW', { hour12: false }) : null
   const oldStatus = student.status
   const oldPunchTime = student.punch_time
+  
   student.status = newStatus
   student.punch_time = newPunchTime
-  const { error } = await supabase.from('attendances').upsert({ student_id: student.id, record_date: todayISO, status: newStatus, punch_time: newPunchTime }, { onConflict: 'student_id, record_date' })
+  
+  const { error } = await supabase.from('attendances').upsert(
+    { student_id: student.id, record_date: todayISO, status: newStatus, punch_time: newPunchTime }, 
+    { onConflict: 'student_id, record_date' }
+  )
   if (error) { student.status = oldStatus; student.punch_time = oldPunchTime }
   isUpdating.value = false
 }
 
-// 黑板與聯絡簿邏輯
+// ==================== 聯絡簿與黑板邏輯 ====================
 const notices = ref([])
 const tasks = ref([])
-const isEditingNotices = ref(false)
 const isEditingTasks = ref(false)
-const currentNoticeEditor = ref('')
 const currentTaskEditor = ref('')
 
 const fetchContactBook = async () => {
   const { data } = await supabase.from('contact_books').select('tasks, notices').eq('record_date', todayISO).single()
-  if (data) { tasks.value = data.tasks || []; notices.value = data.notices || [] }
+  if (data) { 
+    tasks.value = data.tasks || []
+    notices.value = data.notices || [] 
+  }
 }
 
 const requestEdit = (type) => {
   const pwd = window.prompt("🔒 請輸入權限密碼：")
   if (!pwd) return
-  if (type === 'notices') {
-    if (pwd === '168168168') { currentNoticeEditor.value = '導師'; isEditingNotices.value = true } else { alert("❌ 密碼錯誤！") }
-  } else if (type === 'tasks') {
+  if (type === 'tasks') {
     if (pwd === '168168168') { currentTaskEditor.value = '導師'; isEditingTasks.value = true }
     else if (pwd === '268268268') { currentTaskEditor.value = '股長'; isEditingTasks.value = true }
     else { alert("❌ 密碼錯誤！") }
   }
 }
 
-const addNotice = () => notices.value.push('')
-const removeNotice = (index) => notices.value.splice(index, 1)
 const addTask = () => tasks.value.push('')
 const removeTask = (index) => tasks.value.splice(index, 1)
 
 const saveBoard = async (type) => {
-  notices.value = notices.value.filter(n => n.trim() !== '')
   tasks.value = tasks.value.filter(t => t.trim() !== '')
-  const { error } = await supabase.from('contact_books').upsert({ record_date: todayISO, notices: notices.value, tasks: tasks.value }, { onConflict: 'record_date' })
-  if (!error) {
-    if (type === 'notices') isEditingNotices.value = false
-    if (type === 'tasks') isEditingTasks.value = false
-  }
+  // 更新時必須同時帶上原有的 notices，以免覆蓋遺失
+  const { error } = await supabase.from('contact_books').upsert(
+    { record_date: todayISO, notices: notices.value, tasks: tasks.value }, 
+    { onConflict: 'record_date' }
+  )
+  if (!error && type === 'tasks') isEditingTasks.value = false
 }
 
-// 未讀訊息檢查邏輯
+// ==================== 未讀訊息檢查邏輯 ====================
 const unreadCount = ref(0)
 const fetchUnreadCount = async () => {
   const { count } = await supabase
@@ -175,6 +180,7 @@ const fetchUnreadCount = async () => {
   if (count !== null) unreadCount.value = count
 }
 
+// ==================== 生命週期 ====================
 onMounted(() => {
   updateClock()
   timer = setInterval(updateClock, 1000)
@@ -195,8 +201,7 @@ onUnmounted(() => clearInterval(timer))
 /* 頂部家長須知專屬樣式 */
 .top-notice-board { margin-bottom: 0px; }
 
-/* 時鐘與按鈕區 */
-.stu-btn { background-color: #3b82f6; }
+/* 時鐘與導覽按鈕區 */
 .clock-card { background: white; border-radius: 12px; text-align: center; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 2px solid #e2e8f0; }
 .clock-card h2 { margin: 0 0 10px 0; font-size: 2rem; color: #2c3e50; }
 .nav-links { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
@@ -204,6 +209,7 @@ onUnmounted(() => clearInterval(timer))
 .nav-btn:hover { opacity: 0.8; }
 .parent-btn { background-color: #f59e0b; }
 .msg-btn { background-color: #10b981; }
+.stu-btn { background-color: #3b82f6; }
 .admin-btn { background-color: #64748b; }
 .notification-badge { position: absolute; top: -8px; right: -8px; background-color: #ef4444; color: white; font-size: 0.75rem; font-weight: bold; padding: 2px 6px; border-radius: 10px; border: 2px solid white; animation: pulse 2s infinite; }
 
@@ -251,14 +257,13 @@ button { font-family: inherit; }
 
 .edit-item { gap: 10px; width: 100%; }
 .edit-input { flex: 1; font-size: 1.1rem; padding: 5px 10px; border-radius: 4px; border: none; background: rgba(255,255,255,0.9); width: 100%; box-sizing: border-box; }
-.notice-input { background: #fee2e2; }
 .delete-btn { background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
 
 /* ==================== 手機 RWD 響應式設定 ==================== */
 @media (max-width: 768px) {
   .dashboard-container { padding: 10px; }
   .main-content { flex-direction: column; } /* 手機版改為上下排列 */
-  .punch-grid { grid-template-columns: repeat(5, 1fr); gap: 5px; } /* 維持一排五個，但縮小間距 */
+  .punch-grid { grid-template-columns: repeat(5, 1fr); gap: 5px; } /* 維持一排五個，縮小間距 */
   .punch-btn { padding: 8px 2px; }
   .seat-num { font-size: 1.1rem; }
   .hidden-name { font-size: 0.85rem; }
