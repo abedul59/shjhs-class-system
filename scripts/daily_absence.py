@@ -1,102 +1,143 @@
 import os
+import sys
 import smtplib
-from email.mime.text import MIMEText
-from datetime import datetime, timedelta
+from datetime import datetime
+import pytz
+from email.message import EmailMessage
 from supabase import create_client, Client
 
-# 1. 取得環境變數 (GitHub Secrets 會提供這些)
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
-SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD")
+# ==================== 1. 環境變數與連線設定 ====================
+url: str = os.environ.get("SUPABASE_URL")
+key: str = os.environ.get("SUPABASE_KEY")
+sender_email = os.environ.get("SENDER_EMAIL")
+sender_password = os.environ.get("SENDER_PASSWORD")
 
-# 初始化 Supabase
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+if not all([url, key, sender_email, sender_password]):
+    print("❌ 錯誤：環境變數設定不完整，請檢查 GitHub Secrets (需包含 SENDER_EMAIL 與 SENDER_PASSWORD)。")
+    sys.exit(1)
 
-def main():
-    # 2. 處理台灣時間 (UTC+8)
-    tw_time = datetime.utcnow() + timedelta(hours=8)
-    today_iso = tw_time.strftime('%Y-%m-%d')
-    current_time_str = tw_time.strftime('%H:%M')
+supabase: Client = create_client(url, key)
+
+# 設定台灣時區
+tw_tz = pytz.timezone('Asia/Taipei')
+today_dt = datetime.now(tw_tz)
+today_str = today_dt.strftime('%Y-%m-%d')
+today_display = today_dt.strftime('%Y年%m月%d日')
+
+print(f"啟動遲到檢查排程，目前台灣時間：{today_dt.strftime('%Y-%m-%d %H:%M:%S')}")
+
+# ==================== 2. 檢查導師授權狀態 (核心升級區塊) ====================
+try:
+    ctrl_res = supabase.table('daily_controls').select('*').eq('record_date', today_str).execute()
     
-    print(f"[{tw_time}] 開始執行遲到檢查腳本，今日日期: {today_iso}")
+    if not ctrl_res.data:
+        print("➡️ 今日無授權紀錄（導師尚未進入後台點擊），排程自動結束。")
+        sys.exit(0)
 
-    # 3. 抓取全班名單與今日打卡紀錄
-    students_res = supabase.table('students').select('*').execute()
-    attendances_res = supabase.table('attendances').select('*').eq('record_date', today_iso).execute()
-    parents_res = supabase.table('parents').select('*').execute()
-
-    students = students_res.data
-    attendances = attendances_res.data
-    parents = parents_res.data
-
-    # 4. 找出遲到/未到的學生
-    absent_students = []
-    for student in students:
-        # 尋找該名學生今天的打卡紀錄
-        record = next((a for a in attendances if a['student_id'] == student['id']), None)
-        # 如果「沒有紀錄」或是「狀態為未到」，就判定為缺席
-        if not record or record['status'] == '未到':
-            absent_students.append(student)
-
-    if not absent_students:
-        print("🎉 今天全班都準時到校，無須寄送通知！")
-        return
-
-    # 5. 準備 SMTP 伺服器 (以 Gmail 為例)
-    print(f"共有 {len(absent_students)} 名學生未到，準備寄信...")
-    try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(SENDER_EMAIL, SENDER_PASSWORD)
-    except Exception as e:
-        print(f"❌ SMTP 登入失敗: {e}")
-        return
-
-    # 6. 逐一寄信並寫入 Log
-    for student in absent_students:
-        # 找出這位學生的家長信箱
-        student_parents = [p['email'] for p in parents if p['student_id'] == student['id']]
+    daily_control = ctrl_res.data[0]
+    
+    if not daily_control.get('is_authorized'):
+        print("➡️ 導師目前為「未授權」或「取消授權」狀態，不執行發信。")
+        sys.exit(0)
         
-        if not student_parents:
-            print(f"⚠️ 學生 {student['real_name']} 未綁定家長信箱，跳過。")
+    if daily_control.get('is_sent'):
+        print("✅ 今日遲到通知已經發送完畢，為避免重複發信，排程自動結束。")
+        sys.exit(0)
+
+    cutoff_time = daily_control.get('cutoff_time', '08:00')
+    print(f"🟢 確認已獲得導師授權！結算時間為：{cutoff_time}，開始抓取未到名單...")
+
+except Exception as e:
+    print(f"❌ 查詢授權狀態時發生錯誤: {e}")
+    sys.exit(1)
+
+# ==================== 3. 抓取學生與打卡資料 ====================
+try:
+    students_res = supabase.table('students').select('*').execute()
+    students = students_res.data
+
+    attendances_res = supabase.table('attendances').select('*').eq('record_date', today_str).execute()
+    attendances = {a['student_id']: a for a in attendances_res.data}
+
+    parents_res = supabase.table('parents').select('*').execute()
+    parents = parents_res.data
+except Exception as e:
+    print(f"❌ 撈取資料時發生錯誤: {e}")
+    sys.exit(1)
+
+# 過濾出未到學生
+absent_students = []
+for s in students:
+    att = attendances.get(s['id'])
+    if not att or att.get('status') == '未到':
+        absent_students.append(s)
+
+if not absent_students:
+    print("🎉 今日全班皆已打卡！無須發送遲到通知。")
+    # 雖然沒人遲到，但還是將今日狀態標記為「已發送」，讓導師後台顯示綠燈
+    supabase.table('daily_controls').update({'is_sent': True}).eq('record_date', today_str).execute()
+    sys.exit(0)
+
+# ==================== 4. 執行寄信 ====================
+success_count = 0
+
+try:
+    # 登入 Gmail SMTP 伺服器
+    server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+    server.login(sender_email, sender_password)
+
+    for student in absent_students:
+        # 找出該學生的所有家長信箱並去重複 (支援多位家長)
+        student_parents = [p for p in parents if p['student_id'] == student['id']]
+        emails = list(set([p['email'] for p in student_parents if p.get('email')]))
+
+        if not emails:
+            print(f"⚠️ {student['real_name']} 無家長綁定信箱，略過。")
             continue
 
-        emails_str = ", ".join(student_parents)
-        
-        # 信件內容設計
-        content = (
-            f"親愛的家長您好：\n\n"
-            f"系統偵測到您的孩子 【{student['real_name']}】 於今日 ({today_iso}) {current_time_str} "
-            f"尚未完成到校打卡，特此通知。\n\n"
-            f"若孩子已請假，請忽略此信件；若孩子已出門，請您留意其通勤安全，並可透過聯絡簿或電話與導師聯繫。\n\n"
-            f"班級導師 敬上\n(此為系統自動發送，請勿直接回信)"
-        )
-        
-        msg = MIMEText(content)
+        # 準備信件內容
+        msg = EmailMessage()
         msg['Subject'] = f"⚠️ 學校出缺席通知 - {student['real_name']} 尚未打卡"
-        msg['From'] = SENDER_EMAIL
-        msg['To'] = emails_str
+        msg['From'] = f"班級導師系統 <{sender_email}>"
+        msg['To'] = sender_email # 收件人填自己，避免被判定為垃圾信
+        msg['Bcc'] = ", ".join(emails) # 家長放密件副本
 
-        # 寄出信件
+        content = f"""親愛的家長您好：
+
+系統偵測到您的孩子 【{student['real_name']}】 於今日 ({today_display}) 結算時間 {cutoff_time} 尚未完成到校打卡，特此通知。
+
+若孩子已請假，請忽略此信件；若孩子已出門，請您留意其通勤安全，並可透過班級系統私訊與導師聯繫。
+
+班級導師 敬上
+(此為系統自動發送，請勿直接回信)"""
+        
+        msg.set_content(content)
+
         try:
+            # 寄出信件
             server.send_message(msg)
-            print(f"✅ 已寄送通知給 {student['real_name']} 的家長 ({emails_str})")
+            print(f"📤 成功發送給 {student['real_name']} 的家長: {emails}")
             
-            # 寫入 Supabase 通訊紀錄 (稽核用)
+            # 寫入系統通訊紀錄 (稽核用)
             supabase.table('communication_logs').insert({
                 'student_id': student['id'],
-                'notification_type': '遲到自動通知',
-                'sent_by': 'System Cron',
-                'recipient_emails': emails_str,
+                'notification_type': '遲到通知 (自動排程)',
+                'sent_by': 'Python自動排程',
+                'recipient_emails': ", ".join(emails),
                 'message_content': content
             }).execute()
-            
+
+            success_count += 1
         except Exception as e:
-            print(f"❌ 寄給 {student['real_name']} 失敗: {e}")
+            print(f"❌ 發送給 {student['real_name']} 失敗: {e}")
 
     server.quit()
-    print("腳本執行完畢！")
 
-if __name__ == "__main__":
-    main()
+    # ==================== 5. 標記完成 (連動網頁後台) ====================
+    # 將 is_sent 設為 True，這樣導師後台的呼吸燈就會變成綠色的「已發送」
+    supabase.table('daily_controls').update({'is_sent': True}).eq('record_date', today_str).execute()
+    print(f"✅ 全部作業完成！共成功寄送 {success_count} 封遲到通知信。已將今日狀態更新為「已發送」。")
+
+except Exception as e:
+    print(f"❌ SMTP 寄信過程發生嚴重錯誤: {e}")
+    sys.exit(1)
