@@ -18,12 +18,12 @@
         </div>
 
         <div class="form-group">
-          <label>🎂 學生生日</label>
+          <label>🎂 學生出生西元年和生日</label>
           <input v-model="studentBirthday" type="password" placeholder="西元生日 (例: 20130514)" required :disabled="isLoading" />
         </div>
 
         <div class="form-group">
-          <label>🪪 身分證後五碼</label>
+          <label>🪪 學生身分證後五碼</label>
           <input v-model="studentIdLast5" type="password" maxlength="5" placeholder="請輸入身分證後五碼" required :disabled="isLoading" />
         </div>
 
@@ -35,8 +35,10 @@
             <option value="" disabled selected>請選擇關係...</option>
             <option value="爸爸">爸爸</option>
             <option value="媽媽">媽媽</option>
-            <option value="阿公">阿公</option>
-            <option value="阿嬤">阿嬤</option>
+            <option value="爺爺">爺爺</option>
+            <option value="奶奶">奶奶</option>
+            <option value="外公">外公</option>
+            <option value="外婆">外婆</option>
             <option value="其他">其他 (自行填寫)</option>
           </select>
           <input 
@@ -51,12 +53,12 @@
         </div>
 
         <div class="form-group">
-          <label>📱 聯絡電話</label>
+          <label>📱 您的聯絡手機號碼</label>
           <input v-model="parentPhone" type="tel" placeholder="例如: 0912345678" required :disabled="isLoading" />
         </div>
 
         <div class="form-group">
-          <label>✉️ 您的 Email 信箱</label>
+          <label>✉️ 您的 Email 常用信箱（綁定可收到班級重要事項公告）</label>
           <input v-model="parentEmail" type="email" placeholder="例如: example@gmail.com" required :disabled="isLoading" />
         </div>
 
