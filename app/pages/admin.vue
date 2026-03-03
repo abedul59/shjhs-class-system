@@ -29,11 +29,6 @@
         </div>
 
         <div class="attendance-control-panel">
-          <div class="time-setting">
-            <label>📝 設定信件顯示的遲到結算時間：</label>
-            <input type="time" v-model="cutoffTime" class="edit-input time-input" />
-          </div>
-          
           <div class="absent-list-section">
             <h4>目前未打卡名單 (共 {{ absentStudentsList.length }} 人)</h4>
             <div class="tags-container">
@@ -176,7 +171,6 @@ const studentsMap = ref({}); const studentsList = ref([]); const adminStudents =
 
 // 手動遲到發信專用狀態
 const todayAttendances = ref([])
-const cutoffTime = ref('08:00')
 const isSendingLateEmails = ref(false)
 
 const absentStudentsList = computed(() => {
@@ -201,7 +195,6 @@ const verifyPassword = async () => {
 }
 const switchTab = async (tab) => { currentTab.value = tab; await fetchAllData() }
 
-// ==================== 抓取資料 ====================
 const fetchAllData = async () => {
   const { data: attData } = await supabase.from('attendances').select('*').eq('record_date', todayISO)
   if (attData) todayAttendances.value = attData
@@ -235,7 +228,7 @@ const fetchAllData = async () => {
   if (msgLogs) { allMessages.value = msgLogs; scrollToBottom() }
 }
 
-// ==================== 導師手動一鍵發送遲到信 ====================
+// ==================== 導師手動一鍵發送遲到信 (抓取按鈕送出時間) ====================
 const sendLateEmails = async () => {
   const pwd = window.prompt("🔒 準備寄發缺席通知，請輸入導師密碼：")
   if (pwd !== '168168168') return alert('❌ 密碼錯誤，發送取消！')
@@ -244,16 +237,17 @@ const sendLateEmails = async () => {
   let successCount = 0
   let failCount = 0
 
-  for (const student of absentStudentsList.value) {
-    // 收集該學生的所有家長信箱
-    const parentEmails = [student.p1_mail, student.p2_mail, student.p3_mail].filter(e => e && e.trim() !== '')
-    
-    if (parentEmails.length === 0) continue // 沒綁定信箱的跳過不寄
+  // 💡 取得當下按下按鈕的時間 (格式 HH:MM，例如 08:15)
+  const nowTime = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
 
-    const emailContent = `親愛的家長您好：\n\n系統偵測到您的孩子 【${student.real_name}】 於今日 (${todayDisplay}) 結算時間 ${cutoffTime.value} 尚未完成到校打卡，特此通知。\n\n若孩子已請假，請忽略此信件；若孩子已出門，請您留意其通勤安全，並可透過班級系統私訊與導師聯繫。\n\n班級導師 敬上\n(此為系統自動發送，請勿直接回信)`
+  for (const student of absentStudentsList.value) {
+    const parentEmails = [student.p1_mail, student.p2_mail, student.p3_mail].filter(e => e && e.trim() !== '')
+    if (parentEmails.length === 0) continue
+
+    // 💡 信件內容的時間動態寫入 nowTime
+    const emailContent = `親愛的家長您好：\n\n系統偵測到您的孩子 【${student.real_name}】 於今日 (${todayDisplay}) ${nowTime} 尚未完成到校打卡，特此通知。\n\n若孩子已請假，請忽略此信件；若孩子已出門，請您留意其通勤安全，並可透過班級系統私訊與導師聯繫。\n\n班級導師 敬上\n(此為系統自動發送，請勿直接回信)`
 
     try {
-      // 呼叫 Nuxt 內建的 API 寄信 (即時發送)
       const res = await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -266,7 +260,6 @@ const sendLateEmails = async () => {
 
       if (!res.ok) throw new Error('API 寄信失敗')
 
-      // 寫入系統通訊紀錄作為防護鐵證
       await supabase.from('communication_logs').insert({
         student_id: student.id,
         notification_type: '遲到通知 (導師手動)',
@@ -284,21 +277,21 @@ const sendLateEmails = async () => {
 
   alert(`✅ 發送作業完成！\n成功寄出：${successCount} 位學生的通知。\n失敗：${failCount} 筆。`)
   isSendingLateEmails.value = false
-  await fetchAllData() // 刷新紀錄列表
+  await fetchAllData()
 }
 
-// ==================== 其他保留功能 ====================
+// 其他保留功能
 const addAdminNotice = () => adminNotices.value.push(''); const removeAdminNotice = (i) => adminNotices.value.splice(i, 1)
-const saveAdminNotices = async () => { /* 儲存須知，略 */ }
-const sendNoticeEmail = async () => { /* 群發推播，略 */ }
-const markCurrentThreadAsRead = async () => { /* 私訊已讀，略 */ }
-const sendReply = async () => { /* 私訊回覆，略 */ }
-const saveStudent = async (student) => { /* 儲存學生，略 */ }
-const deleteStudent = async (id, name) => { /* 刪除學生，略 */ }
-const exportStudents = (type) => { /* 匯出名單，略 */ }
-const exportToExcel = () => { /* 匯出私訊，略 */ }
+const saveAdminNotices = async () => { /* 略 */ }
+const sendNoticeEmail = async () => { /* 略 */ }
+const markCurrentThreadAsRead = async () => { /* 略 */ }
+const sendReply = async () => { /* 略 */ }
+const saveStudent = async (student) => { /* 略 */ }
+const deleteStudent = async (id, name) => { /* 略 */ }
+const exportStudents = (type) => { /* 略 */ }
+const exportToExcel = () => { /* 略 */ }
 const handleFileUpload = (e) => { const file = e.target.files[0]; if (file) selectedFile.value = file }
-const processImport = async () => { /* 匯入，略 */ }
+const processImport = async () => { /* 略 */ }
 
 const formatTime = (isoString) => new Date(isoString).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 const getStudentName = (id) => studentsMap.value[id] || '未知'
@@ -329,8 +322,6 @@ const scrollToBottom = () => { nextTick(() => { const c = document.getElementByI
 
 /* ================= 遲到手動管理專屬樣式 ================= */
 .attendance-control-panel { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 20px; }
-.time-setting { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; font-weight: bold; color: #92400e; }
-.time-input { width: 120px; font-size: 1.2rem; padding: 5px 10px; border-color: #f59e0b; }
 .absent-list-section { background: white; border-radius: 8px; padding: 15px; margin-bottom: 20px; border: 1px dashed #f59e0b; }
 .absent-list-section h4 { margin: 0 0 15px 0; color: #b45309; }
 .tags-container { display: flex; flex-wrap: wrap; gap: 10px; }
