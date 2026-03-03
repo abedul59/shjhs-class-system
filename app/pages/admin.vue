@@ -41,9 +41,15 @@
 
           <div v-if="absentStudentsList.length > 0">
             <div class="email-editor-section">
-              <h4>📝 編輯信件內容</h4>
+              <div class="editor-header">
+                <h4>📝 編輯信件內容</h4>
+                <button @click="saveEmailTemplate" class="save-template-btn" :disabled="isSavingTemplate">
+                  {{ isSavingTemplate ? '儲存中...' : '💾 儲存為預設範本' }}
+                </button>
+              </div>
+              
               <p class="help-text">💡 可使用以下變數，系統發送時會自動替換：<br/>
-                 <span class="var-tag">{{學生姓名}}</span>、<span class="var-tag">{{今日日期}}</span>、<span class="var-tag">{{當下時間}}</span>
+                 <span class="var-tag" v-pre>{{學生姓名}}</span>、<span class="var-tag" v-pre>{{今日日期}}</span>、<span class="var-tag" v-pre>{{當下時間}}</span>
               </p>
               
               <div class="form-group">
@@ -196,11 +202,11 @@ const isUnlocked = ref(false); const passwordInput = ref(''); const currentTab =
 const boardLogs = ref([]); const commLogs = ref([]); const allMessages = ref([])
 const studentsMap = ref({}); const studentsList = ref([]); const adminStudents = ref([])
 
-// ==================== 手動遲到發信專用狀態 ====================
+// 手動遲到發信與範本專用狀態
 const todayAttendances = ref([])
 const isSendingLateEmails = ref(false)
+const isSavingTemplate = ref(false)
 
-// 信件編輯器預設範本
 const emailSubjectTemplate = ref('⚠️ 學校出缺席通知 - {{學生姓名}} 尚未打卡')
 const emailContentTemplate = ref(`親愛的家長您好：\n\n系統偵測到您的孩子 【{{學生姓名}}】 於今日 ({{今日日期}}) {{當下時間}} 尚未完成到校打卡，特此通知。\n\n若孩子已請假，請忽略此信件；若孩子已出門，請您留意其通勤安全，並可透過班級系統私訊與導師聯繫。\n\n班級導師 敬上\n(此為系統自動發送，請勿直接回信)`)
 
@@ -211,23 +217,16 @@ const absentStudentsList = computed(() => {
   })
 })
 
-// 預覽主旨與內容 (自動替換變數)
 const previewSubject = computed(() => {
   const sampleName = absentStudentsList.value.length > 0 ? absentStudentsList.value[0].real_name : '王小明'
   const nowTime = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
-  return emailSubjectTemplate.value
-    .replace(/{{學生姓名}}/g, sampleName)
-    .replace(/{{今日日期}}/g, todayDisplay)
-    .replace(/{{當下時間}}/g, nowTime)
+  return emailSubjectTemplate.value.replace(/{{學生姓名}}/g, sampleName).replace(/{{今日日期}}/g, todayDisplay).replace(/{{當下時間}}/g, nowTime)
 })
 
 const previewContent = computed(() => {
   const sampleName = absentStudentsList.value.length > 0 ? absentStudentsList.value[0].real_name : '王小明'
   const nowTime = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
-  return emailContentTemplate.value
-    .replace(/{{學生姓名}}/g, sampleName)
-    .replace(/{{今日日期}}/g, todayDisplay)
-    .replace(/{{當下時間}}/g, nowTime)
+  return emailContentTemplate.value.replace(/{{學生姓名}}/g, sampleName).replace(/{{今日日期}}/g, todayDisplay).replace(/{{當下時間}}/g, nowTime)
 })
 
 // ==================== 頁籤其他狀態 ====================
@@ -246,7 +245,15 @@ const verifyPassword = async () => {
 }
 const switchTab = async (tab) => { currentTab.value = tab; await fetchAllData() }
 
+// ==================== 抓取與儲存資料 ====================
 const fetchAllData = async () => {
+  // 💡 抓取自訂的信件範本
+  const { data: tmplData } = await supabase.from('email_templates').select('*').eq('template_id', 'late_notice').single()
+  if (tmplData) {
+    emailSubjectTemplate.value = tmplData.subject
+    emailContentTemplate.value = tmplData.content
+  }
+
   const { data: attData } = await supabase.from('attendances').select('*').eq('record_date', todayISO)
   if (attData) todayAttendances.value = attData
 
@@ -264,7 +271,6 @@ const fetchAllData = async () => {
   if (sData) {
     studentsList.value = sData
     sData.forEach(s => { studentsMap.value[s.id] = s.real_name })
-    
     adminStudents.value = sData.map(student => {
       const parents = pData ? pData.filter(p => p.student_id === student.id) : []
       return {
@@ -279,7 +285,25 @@ const fetchAllData = async () => {
   if (msgLogs) { allMessages.value = msgLogs; scrollToBottom() }
 }
 
-// ==================== 導師手動一鍵發送遲到信 (套用編輯器內容) ====================
+// 💡 儲存範本邏輯
+const saveEmailTemplate = async () => {
+  isSavingTemplate.value = true
+  try {
+    const { error } = await supabase.from('email_templates').upsert({
+      template_id: 'late_notice',
+      subject: emailSubjectTemplate.value,
+      content: emailContentTemplate.value
+    })
+    if (error) throw error
+    alert('✅ 信件範本已永久儲存！明天登入也會是這個版本喔。')
+  } catch (error) {
+    alert('❌ 範本儲存失敗，請確認資料庫。')
+  } finally {
+    isSavingTemplate.value = false
+  }
+}
+
+// 發送遲到信件
 const sendLateEmails = async () => {
   const pwd = window.prompt("🔒 準備寄發缺席通知，請輸入導師密碼：")
   if (pwd !== '168168168') return alert('❌ 密碼錯誤，發送取消！')
@@ -294,43 +318,22 @@ const sendLateEmails = async () => {
     const parentEmails = [student.p1_mail, student.p2_mail, student.p3_mail].filter(e => e && e.trim() !== '')
     if (parentEmails.length === 0) continue
 
-    // 💡 替換該學生的專屬變數
-    const finalSubject = emailSubjectTemplate.value
-      .replace(/{{學生姓名}}/g, student.real_name)
-      .replace(/{{今日日期}}/g, todayDisplay)
-      .replace(/{{當下時間}}/g, nowTime)
-
-    const finalContent = emailContentTemplate.value
-      .replace(/{{學生姓名}}/g, student.real_name)
-      .replace(/{{今日日期}}/g, todayDisplay)
-      .replace(/{{當下時間}}/g, nowTime)
+    const finalSubject = emailSubjectTemplate.value.replace(/{{學生姓名}}/g, student.real_name).replace(/{{今日日期}}/g, todayDisplay).replace(/{{當下時間}}/g, nowTime)
+    const finalContent = emailContentTemplate.value.replace(/{{學生姓名}}/g, student.real_name).replace(/{{今日日期}}/g, todayDisplay).replace(/{{當下時間}}/g, nowTime)
 
     try {
       const res = await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bcc: parentEmails,
-          subject: finalSubject,
-          content: finalContent
-        })
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bcc: parentEmails, subject: finalSubject, content: finalContent })
       })
-
       if (!res.ok) throw new Error('API 寄信失敗')
 
       await supabase.from('communication_logs').insert({
-        student_id: student.id,
-        notification_type: '遲到通知 (導師手動)',
-        sent_by: '導師',
-        recipient_emails: parentEmails.join(', '),
-        message_content: finalContent
+        student_id: student.id, notification_type: '遲到通知 (導師手動)', sent_by: '導師',
+        recipient_emails: parentEmails.join(', '), message_content: finalContent
       })
-      
       successCount++
-    } catch (e) {
-      console.error(`寄送給 ${student.real_name} 失敗`, e)
-      failCount++
-    }
+    } catch (e) { failCount++ }
   }
 
   alert(`✅ 發送作業完成！\n成功寄出：${successCount} 位學生的通知。\n失敗：${failCount} 筆。`)
@@ -388,8 +391,13 @@ const scrollToBottom = () => { nextTick(() => { const c = document.getElementByI
 
 /* 信件編輯與預覽區塊 */
 .email-editor-section { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-.email-editor-section h4 { margin: 0 0 10px 0; color: #334155; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; }
-.help-text { font-size: 0.9rem; color: #64748b; margin-bottom: 15px; line-height: 1.6; }
+.editor-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 10px; }
+.editor-header h4 { margin: 0; color: #334155; }
+.save-template-btn { background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+.save-template-btn:hover:not(:disabled) { background: #059669; }
+.save-template-btn:disabled { background: #9ca3af; cursor: not-allowed; }
+
+.help-text { font-size: 0.95rem; color: #64748b; margin-bottom: 15px; line-height: 1.6; }
 .var-tag { background: #e2e8f0; color: #0f172a; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-weight: bold; }
 .form-group { margin-bottom: 15px; }
 .form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #475569; }
