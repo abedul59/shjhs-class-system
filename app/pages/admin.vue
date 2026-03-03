@@ -24,24 +24,14 @@
 
       <main v-if="currentTab === 'attendance'" class="data-table">
         <div class="table-header">
-          <h3>⏰ 每日遲到名單與通知授權 (Python 排程)</h3>
+          <h3>⏰ 每日遲到名單與通知發送</h3>
           <p class="subtitle">今日日期：{{ todayDisplay }}</p>
         </div>
 
         <div class="attendance-control-panel">
-          <div v-if="dailyControl.is_sent" class="status-banner sent-banner">
-            ✅ 今日遲到通知已由 Python 系統自動發送完畢！
-          </div>
-          <div v-else-if="dailyControl.is_authorized" class="status-banner authorized-banner">
-            ⏳ 已授權！正在等待 Python 排程時間抵達後自動發送...
-          </div>
-          <div v-else class="status-banner pending-banner">
-            ⚠️ 尚未授權。請確認下方名單，並點擊授權以允許系統稍後自動發信。
-          </div>
-
           <div class="time-setting">
             <label>📝 設定信件顯示的遲到結算時間：</label>
-            <input type="time" v-model="dailyControl.cutoff_time" class="edit-input time-input" :disabled="dailyControl.is_authorized || dailyControl.is_sent" />
+            <input type="time" v-model="cutoffTime" class="edit-input time-input" />
           </div>
           
           <div class="absent-list-section">
@@ -54,12 +44,9 @@
             </div>
           </div>
 
-          <div class="action-bar" v-if="!dailyControl.is_sent">
-            <button v-if="!dailyControl.is_authorized" @click="authorizeLateEmails" class="email-btn late-btn" :disabled="absentStudentsList.length === 0">
-              🔓 密碼解鎖：授權 Python 自動寄發今日遲到通知
-            </button>
-            <button v-else @click="cancelAuthorization" class="cancel-auth-btn">
-              🚫 取消授權 (暫停今日自動發信)
+          <div class="action-bar">
+            <button @click="sendLateEmails" class="email-btn late-btn" :disabled="isSendingLateEmails || absentStudentsList.length === 0">
+              {{ isSendingLateEmails ? '正在逐一發送 Email 中，請稍候...' : '📧 密碼解鎖：確認名單並立即發送遲到通知' }}
             </button>
           </div>
         </div>
@@ -187,9 +174,10 @@ const isUnlocked = ref(false); const passwordInput = ref(''); const currentTab =
 const boardLogs = ref([]); const commLogs = ref([]); const allMessages = ref([])
 const studentsMap = ref({}); const studentsList = ref([]); const adminStudents = ref([])
 
-// 遲到授權管理狀態
+// 手動遲到發信專用狀態
 const todayAttendances = ref([])
-const dailyControl = ref({ cutoff_time: '08:00', is_authorized: false, is_sent: false })
+const cutoffTime = ref('08:00')
+const isSendingLateEmails = ref(false)
 
 const absentStudentsList = computed(() => {
   return adminStudents.value.filter(student => {
@@ -215,11 +203,6 @@ const switchTab = async (tab) => { currentTab.value = tab; await fetchAllData() 
 
 // ==================== 抓取資料 ====================
 const fetchAllData = async () => {
-  // 1. 抓取今日授權狀態
-  const { data: ctrlData } = await supabase.from('daily_controls').select('*').eq('record_date', todayISO).single()
-  if (ctrlData) dailyControl.value = ctrlData
-
-  // 2. 抓取打卡紀錄
   const { data: attData } = await supabase.from('attendances').select('*').eq('record_date', todayISO)
   if (attData) todayAttendances.value = attData
 
@@ -252,42 +235,56 @@ const fetchAllData = async () => {
   if (msgLogs) { allMessages.value = msgLogs; scrollToBottom() }
 }
 
-// ==================== 授權 Python 自動發信邏輯 ====================
-const authorizeLateEmails = async () => {
-  const pwd = window.prompt("🔒 確定授權系統執行自動發信？請輸入導師密碼：")
-  if (pwd !== '168168168') return alert('❌ 密碼錯誤，授權取消！')
+// ==================== 導師手動一鍵發送遲到信 ====================
+const sendLateEmails = async () => {
+  const pwd = window.prompt("🔒 準備寄發缺席通知，請輸入導師密碼：")
+  if (pwd !== '168168168') return alert('❌ 密碼錯誤，發送取消！')
 
-  try {
-    const { error } = await supabase.from('daily_controls').upsert({
-      record_date: todayISO,
-      cutoff_time: dailyControl.value.cutoff_time,
-      is_authorized: true,
-      is_sent: false
-    })
+  isSendingLateEmails.value = true
+  let successCount = 0
+  let failCount = 0
 
-    if (error) throw error
-    dailyControl.value.is_authorized = true
-    alert('✅ 已成功授權！Python GitHub Actions 將會在排定的時間自動執行發信作業。')
-  } catch (e) {
-    alert('❌ 授權失敗，請稍後再試。')
+  for (const student of absentStudentsList.value) {
+    // 收集該學生的所有家長信箱
+    const parentEmails = [student.p1_mail, student.p2_mail, student.p3_mail].filter(e => e && e.trim() !== '')
+    
+    if (parentEmails.length === 0) continue // 沒綁定信箱的跳過不寄
+
+    const emailContent = `親愛的家長您好：\n\n系統偵測到您的孩子 【${student.real_name}】 於今日 (${todayDisplay}) 結算時間 ${cutoffTime.value} 尚未完成到校打卡，特此通知。\n\n若孩子已請假，請忽略此信件；若孩子已出門，請您留意其通勤安全，並可透過班級系統私訊與導師聯繫。\n\n班級導師 敬上\n(此為系統自動發送，請勿直接回信)`
+
+    try {
+      // 呼叫 Nuxt 內建的 API 寄信 (即時發送)
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bcc: parentEmails,
+          subject: `⚠️ 學校出缺席通知 - ${student.real_name} 尚未打卡`,
+          content: emailContent
+        })
+      })
+
+      if (!res.ok) throw new Error('API 寄信失敗')
+
+      // 寫入系統通訊紀錄作為防護鐵證
+      await supabase.from('communication_logs').insert({
+        student_id: student.id,
+        notification_type: '遲到通知 (導師手動)',
+        sent_by: '導師',
+        recipient_emails: parentEmails.join(', '),
+        message_content: emailContent
+      })
+      
+      successCount++
+    } catch (e) {
+      console.error(`寄送給 ${student.real_name} 失敗`, e)
+      failCount++
+    }
   }
-}
 
-const cancelAuthorization = async () => {
-  if (!window.confirm("⚠️ 確定要取消今日的自動發信授權嗎？")) return
-  
-  try {
-    await supabase.from('daily_controls').upsert({
-      record_date: todayISO,
-      cutoff_time: dailyControl.value.cutoff_time,
-      is_authorized: false,
-      is_sent: false
-    })
-    dailyControl.value.is_authorized = false
-    alert('🚫 已取消今日發信授權。')
-  } catch (e) {
-    alert('❌ 取消失敗。')
-  }
+  alert(`✅ 發送作業完成！\n成功寄出：${successCount} 位學生的通知。\n失敗：${failCount} 筆。`)
+  isSendingLateEmails.value = false
+  await fetchAllData() // 刷新紀錄列表
 }
 
 // ==================== 其他保留功能 ====================
@@ -330,15 +327,8 @@ const scrollToBottom = () => { nextTick(() => { const c = document.getElementByI
 .table-header h3, .data-table h3 { margin: 0; color: #334155; }
 .subtitle { color: #64748b; margin: 0; font-weight: bold; }
 
-/* ================= 遲到授權管理專屬樣式 ================= */
+/* ================= 遲到手動管理專屬樣式 ================= */
 .attendance-control-panel { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 20px; }
-.status-banner { padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1.1rem; margin-bottom: 20px; text-align: center; }
-.pending-banner { background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
-.authorized-banner { background-color: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; animation: pulse-blue 2s infinite; }
-.sent-banner { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-
-@keyframes pulse-blue { 0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); } 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } }
-
 .time-setting { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; font-weight: bold; color: #92400e; }
 .time-input { width: 120px; font-size: 1.2rem; padding: 5px 10px; border-color: #f59e0b; }
 .absent-list-section { background: white; border-radius: 8px; padding: 15px; margin-bottom: 20px; border: 1px dashed #f59e0b; }
@@ -346,13 +336,10 @@ const scrollToBottom = () => { nextTick(() => { const c = document.getElementByI
 .tags-container { display: flex; flex-wrap: wrap; gap: 10px; }
 .absent-tag { background: #fee2e2; color: #dc2626; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 0.95rem; border: 1px solid #fca5a5; }
 .all-present-msg { color: #16a34a; font-weight: bold; font-size: 1.1rem; }
-
 .action-bar { display: flex; gap: 15px; }
-.late-btn { background-color: #10b981; width: 100%; font-size: 1.2rem; padding: 15px; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-.late-btn:hover:not(:disabled) { background-color: #059669; }
-.late-btn:disabled { background-color: #9ca3af; cursor: not-allowed; }
-.cancel-auth-btn { background-color: #ef4444; width: 100%; font-size: 1.2rem; padding: 15px; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-.cancel-auth-btn:hover { background-color: #dc2626; }
+.late-btn { background-color: #ef4444; width: 100%; font-size: 1.2rem; padding: 15px; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+.late-btn:hover:not(:disabled) { background-color: #dc2626; }
+.late-btn:disabled { background-color: #fca5a5; cursor: not-allowed; }
 
 /* 須知推播專屬樣式 */
 .board-editor-container { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 20px; }
@@ -360,7 +347,6 @@ const scrollToBottom = () => { nextTick(() => { const c = document.getElementByI
 .edit-item { display: flex; align-items: center; gap: 10px; }
 .notice-input { flex: 1; font-size: 1.1rem; padding: 10px 15px; border: 1px solid #94a3b8; border-radius: 6px; background: white; }
 .add-btn { background: #e2e8f0; color: #334155; border: 1px dashed #94a3b8; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; margin-top: 10px; }
-.action-bar { display: flex; justify-content: space-between; align-items: center; border-top: 2px dashed #cbd5e1; padding-top: 20px; gap: 15px; flex-wrap: wrap; }
 .save-btn, .email-btn { color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; }
 .save-btn { background: #3b82f6; } .email-btn { background: #f59e0b; }
 .save-btn:disabled, .email-btn:disabled { background: #9ca3af; cursor: not-allowed; }
