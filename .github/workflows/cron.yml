@@ -1,36 +1,36 @@
-name: 每日早晨遲到通知腳本
+name: Daily Late Notifier
 
 on:
   schedule:
-    # GitHub 使用 UTC 時間。台灣時間 08:15 減去 8 小時 = UTC 的 00:15
-    # 星期 1-5 代表週一到週五執行
-    - cron: '15 0 * * 1-5'
+    # 台灣時間早上 08:17 執行 (UTC 時間 00:17)
+    # 刻意設定 17 分是為了避開全球 00:15 的整點塞車潮
+    # 1-5 代表星期一到星期五執行 (週末不執行)
+    - cron: '30 2 * * 1-5' 
   
-  # 允許您在 GitHub 網頁上手動點擊「Run workflow」進行測試！
+  # 保留這個設定，讓您隨時可以手動點擊 Run workflow 測試
   workflow_dispatch: 
 
 jobs:
-  send_absence_emails:
+  check-and-notify:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 取得程式碼
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🐍 設定 Python 環境
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
-      - name: 📦 安裝套件
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install supabase
+          pip install -r requirements.txt
 
-      - name: 🚀 執行寄信腳本
+      - name: Run Late Notifier Script
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
           SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
-        run: |
-          python scripts/daily_absence.py
+        run: python daily_absence.py
