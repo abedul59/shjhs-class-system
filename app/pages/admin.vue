@@ -39,10 +39,37 @@
             </div>
           </div>
 
-          <div class="action-bar">
-            <button @click="sendLateEmails" class="email-btn late-btn" :disabled="isSendingLateEmails || absentStudentsList.length === 0">
-              {{ isSendingLateEmails ? '正在逐一發送 Email 中，請稍候...' : '📧 密碼解鎖：確認名單並立即發送遲到通知' }}
-            </button>
+          <div v-if="absentStudentsList.length > 0">
+            <div class="email-editor-section">
+              <h4>📝 編輯信件內容</h4>
+              <p class="help-text">💡 可使用以下變數，系統發送時會自動替換：<br/>
+                 <span class="var-tag">{{學生姓名}}</span>、<span class="var-tag">{{今日日期}}</span>、<span class="var-tag">{{當下時間}}</span>
+              </p>
+              
+              <div class="form-group">
+                <label>信件主旨：</label>
+                <input type="text" v-model="emailSubjectTemplate" class="edit-input" />
+              </div>
+              
+              <div class="form-group">
+                <label>信件內容：</label>
+                <textarea v-model="emailContentTemplate" rows="6" class="edit-input textarea-input"></textarea>
+              </div>
+            </div>
+
+            <div class="email-preview-section">
+              <h4>👀 信件預覽 <span class="preview-note">(以第一位未到學生為例)</span></h4>
+              <div class="preview-box">
+                <div class="preview-subject"><strong>主旨：</strong> {{ previewSubject }}</div>
+                <div class="preview-body">{{ previewContent }}</div>
+              </div>
+            </div>
+
+            <div class="action-bar">
+              <button @click="sendLateEmails" class="email-btn late-btn" :disabled="isSendingLateEmails">
+                {{ isSendingLateEmails ? '正在逐一發送 Email 中，請稍候...' : '📧 密碼解鎖：確認名單並立即發送遲到通知' }}
+              </button>
+            </div>
           </div>
         </div>
       </main>
@@ -169,9 +196,13 @@ const isUnlocked = ref(false); const passwordInput = ref(''); const currentTab =
 const boardLogs = ref([]); const commLogs = ref([]); const allMessages = ref([])
 const studentsMap = ref({}); const studentsList = ref([]); const adminStudents = ref([])
 
-// 手動遲到發信專用狀態
+// ==================== 手動遲到發信專用狀態 ====================
 const todayAttendances = ref([])
 const isSendingLateEmails = ref(false)
+
+// 信件編輯器預設範本
+const emailSubjectTemplate = ref('⚠️ 學校出缺席通知 - {{學生姓名}} 尚未打卡')
+const emailContentTemplate = ref(`親愛的家長您好：\n\n系統偵測到您的孩子 【{{學生姓名}}】 於今日 ({{今日日期}}) {{當下時間}} 尚未完成到校打卡，特此通知。\n\n若孩子已請假，請忽略此信件；若孩子已出門，請您留意其通勤安全，並可透過班級系統私訊與導師聯繫。\n\n班級導師 敬上\n(此為系統自動發送，請勿直接回信)`)
 
 const absentStudentsList = computed(() => {
   return adminStudents.value.filter(student => {
@@ -180,6 +211,26 @@ const absentStudentsList = computed(() => {
   })
 })
 
+// 預覽主旨與內容 (自動替換變數)
+const previewSubject = computed(() => {
+  const sampleName = absentStudentsList.value.length > 0 ? absentStudentsList.value[0].real_name : '王小明'
+  const nowTime = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return emailSubjectTemplate.value
+    .replace(/{{學生姓名}}/g, sampleName)
+    .replace(/{{今日日期}}/g, todayDisplay)
+    .replace(/{{當下時間}}/g, nowTime)
+})
+
+const previewContent = computed(() => {
+  const sampleName = absentStudentsList.value.length > 0 ? absentStudentsList.value[0].real_name : '王小明'
+  const nowTime = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return emailContentTemplate.value
+    .replace(/{{學生姓名}}/g, sampleName)
+    .replace(/{{今日日期}}/g, todayDisplay)
+    .replace(/{{當下時間}}/g, nowTime)
+})
+
+// ==================== 頁籤其他狀態 ====================
 const adminNotices = ref([]); const isSavingBoard = ref(false); const isSendingEmail = ref(false)
 const activeChatThread = ref(''); const replyContent = ref(''); const isSending = ref(false)
 const selectedFile = ref(null); const fileInput = ref(null); const isImporting = ref(false)
@@ -228,7 +279,7 @@ const fetchAllData = async () => {
   if (msgLogs) { allMessages.value = msgLogs; scrollToBottom() }
 }
 
-// ==================== 導師手動一鍵發送遲到信 (抓取按鈕送出時間) ====================
+// ==================== 導師手動一鍵發送遲到信 (套用編輯器內容) ====================
 const sendLateEmails = async () => {
   const pwd = window.prompt("🔒 準備寄發缺席通知，請輸入導師密碼：")
   if (pwd !== '168168168') return alert('❌ 密碼錯誤，發送取消！')
@@ -237,15 +288,22 @@ const sendLateEmails = async () => {
   let successCount = 0
   let failCount = 0
 
-  // 💡 取得當下按下按鈕的時間 (格式 HH:MM，例如 08:15)
   const nowTime = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
 
   for (const student of absentStudentsList.value) {
     const parentEmails = [student.p1_mail, student.p2_mail, student.p3_mail].filter(e => e && e.trim() !== '')
     if (parentEmails.length === 0) continue
 
-    // 💡 信件內容的時間動態寫入 nowTime
-    const emailContent = `親愛的家長您好：\n\n系統偵測到您的孩子 【${student.real_name}】 於今日 (${todayDisplay}) ${nowTime} 尚未完成到校打卡，特此通知。\n\n若孩子已請假，請忽略此信件；若孩子已出門，請您留意其通勤安全，並可透過班級系統私訊與導師聯繫。\n\n班級導師 敬上\n(此為系統自動發送，請勿直接回信)`
+    // 💡 替換該學生的專屬變數
+    const finalSubject = emailSubjectTemplate.value
+      .replace(/{{學生姓名}}/g, student.real_name)
+      .replace(/{{今日日期}}/g, todayDisplay)
+      .replace(/{{當下時間}}/g, nowTime)
+
+    const finalContent = emailContentTemplate.value
+      .replace(/{{學生姓名}}/g, student.real_name)
+      .replace(/{{今日日期}}/g, todayDisplay)
+      .replace(/{{當下時間}}/g, nowTime)
 
     try {
       const res = await fetch('/api/send-email', {
@@ -253,8 +311,8 @@ const sendLateEmails = async () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           bcc: parentEmails,
-          subject: `⚠️ 學校出缺席通知 - ${student.real_name} 尚未打卡`,
-          content: emailContent
+          subject: finalSubject,
+          content: finalContent
         })
       })
 
@@ -265,7 +323,7 @@ const sendLateEmails = async () => {
         notification_type: '遲到通知 (導師手動)',
         sent_by: '導師',
         recipient_emails: parentEmails.join(', '),
-        message_content: emailContent
+        message_content: finalContent
       })
       
       successCount++
@@ -327,6 +385,23 @@ const scrollToBottom = () => { nextTick(() => { const c = document.getElementByI
 .tags-container { display: flex; flex-wrap: wrap; gap: 10px; }
 .absent-tag { background: #fee2e2; color: #dc2626; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 0.95rem; border: 1px solid #fca5a5; }
 .all-present-msg { color: #16a34a; font-weight: bold; font-size: 1.1rem; }
+
+/* 信件編輯與預覽區塊 */
+.email-editor-section { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.email-editor-section h4 { margin: 0 0 10px 0; color: #334155; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; }
+.help-text { font-size: 0.9rem; color: #64748b; margin-bottom: 15px; line-height: 1.6; }
+.var-tag { background: #e2e8f0; color: #0f172a; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-weight: bold; }
+.form-group { margin-bottom: 15px; }
+.form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #475569; }
+.textarea-input { resize: vertical; font-family: inherit; line-height: 1.5; }
+
+.email-preview-section { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+.email-preview-section h4 { margin: 0 0 15px 0; color: #3b82f6; }
+.preview-note { font-size: 0.85rem; color: #64748b; font-weight: normal; }
+.preview-box { background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
+.preview-subject { font-size: 1.1rem; color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 12px; }
+.preview-body { font-size: 1rem; color: #334155; line-height: 1.6; white-space: pre-wrap; }
+
 .action-bar { display: flex; gap: 15px; }
 .late-btn { background-color: #ef4444; width: 100%; font-size: 1.2rem; padding: 15px; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
 .late-btn:hover:not(:disabled) { background-color: #dc2626; }
