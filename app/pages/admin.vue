@@ -136,7 +136,7 @@
         </div>
       </main>
 
-      <!-- ==================== 頁籤 3：家長須知管理與推播 (已修復儲存與發信) ==================== -->
+      <!-- ==================== 頁籤 3：家長須知管理與推播 (包含信件編輯與預覽) ==================== -->
       <main v-if="currentTab === 'board'" class="data-table">
         <div class="table-header"><h3>📢 家長須知管理與 Email 推播</h3></div>
         <div class="board-editor-container">
@@ -148,11 +148,34 @@
             </div>
             <button @click="addAdminNotice" class="add-btn">➕ 新增一筆須知</button>
           </div>
+
+          <!-- ✨ 新增：須知推播信件編輯區 -->
+          <div class="email-editor-section" style="margin-top: 30px;">
+            <div class="editor-header">
+              <h4>📝 編輯推播信件內容</h4>
+              <button @click="saveNoticeEmailTemplate" class="save-template-btn" :disabled="isSavingNoticeTemplate">
+                {{ isSavingNoticeTemplate ? '儲存中...' : '💾 儲存為預設範本' }}
+              </button>
+            </div>
+            <p class="help-text">💡 可使用以下變數：<span class="var-tag" v-pre>{{今日日期}}</span>、<span class="var-tag" v-pre>{{須知清單}}</span></p>
+            <div class="form-group"><label>信件主旨：</label><input type="text" v-model="noticeEmailSubjectTemplate" class="edit-input" /></div>
+            <div class="form-group"><label>信件內容：</label><textarea v-model="noticeEmailContentTemplate" rows="8" class="edit-input textarea-input"></textarea></div>
+          </div>
+
+          <!-- ✨ 新增：須知推播信件預覽區 -->
+          <div class="email-preview-section">
+            <h4>👀 信件預覽</h4>
+            <div class="preview-box">
+              <div class="preview-subject"><strong>主旨：</strong> {{ noticePreviewSubject }}</div>
+              <div class="preview-body">{{ noticePreviewContent }}</div>
+            </div>
+          </div>
+
           <div class="action-bar">
             <button @click="saveAdminNotices" class="save-btn" :disabled="isSavingBoard">
-              {{ isSavingBoard ? '儲存中...' : '💾 儲存並同步至前台' }}
+              {{ isSavingBoard ? '儲存中...' : '💾 儲存須知清單並同步至前台' }}
             </button>
-            <button @click="sendNoticeEmail" class="email-btn" :disabled="isSendingEmail">
+            <button @click="sendNoticeEmail" class="email-btn late-btn" :disabled="isSendingEmail">
               {{ isSendingEmail ? '正在推播中...' : '📧 密碼解鎖並推播給全體家長' }}
             </button>
           </div>
@@ -337,7 +360,7 @@ const supabase = useSupabaseClient()
 // 基礎狀態
 const d = new Date(); const todayISO = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 const todayDisplay = d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })
-const isUnlocked = ref(false); const passwordInput = ref(''); const currentTab = ref('board') // 預設跳至須知推播方便測試
+const isUnlocked = ref(false); const passwordInput = ref(''); const currentTab = ref('board')
 const adminStudents = ref([]); const studentsMap = ref({})
 
 // 狀態：遲到與範本
@@ -353,13 +376,17 @@ const isSendingHomework = ref(false); const isSavingHwTemplate = ref(false)
 const hwEmailSubjectTemplate = ref('📚 班級作業繳交通知 - {{學生姓名}}')
 const hwEmailContentTemplate = ref(`親愛的家長您好：\n\n為您彙整 【{{學生姓名}}】 目前的各科作業繳交狀況：\n\n✅ 已交作業：\n{{已交清單}}\n\n❌ 缺交作業：\n{{缺交清單}}\n\n請您協助督促孩子盡速完成缺交作業。若有任何疑問，歡迎透過班級系統私訊聯繫。\n\n班級導師 敬上`)
 
+// 狀態：家長須知與範本
+const adminNotices = ref([]); const boardLogs = ref([]); const assignmentLogs = ref([])
+const isSavingBoard = ref(false); const isSendingEmail = ref(false); const isSavingNoticeTemplate = ref(false)
+const noticeEmailSubjectTemplate = ref('📢 班級須知推播 ({{今日日期}})')
+const noticeEmailContentTemplate = ref(`各位家長您好，今日班級須知推播如下：\n\n{{須知清單}}\n\n班級導師 敬上`)
+
 // 狀態：安全與 IP 規則
 const ipRules = ref([])
 const newRule = ref({ rule_type: '黑名單', ip_range: '', description: '' })
 
-// 狀態：系統紀錄與其他
-const adminNotices = ref([]); const boardLogs = ref([]); const assignmentLogs = ref([])
-const isSavingBoard = ref(false); const isSendingEmail = ref(false)
+// 狀態：私訊與其他
 const allMessages = ref([]); const activeChatThread = ref(''); const replyContent = ref(''); const isSending = ref(false)
 const commLogs = ref([])
 const selectedFile = ref(null); const fileInput = ref(null); const isImporting = ref(false)
@@ -405,6 +432,13 @@ const hwPreviewContent = computed(() => {
   const missingStr = sample && sample.missing.length ? sample.missing.map(a => `[${a.subject_name}] ${a.title}`).join('\n') : '無'
   return hwEmailContentTemplate.value.replace(/{{學生姓名}}/g, sampleName).replace(/{{已交清單}}/g, submittedStr).replace(/{{缺交清單}}/g, missingStr)
 })
+const noticePreviewSubject = computed(() => {
+  return noticeEmailSubjectTemplate.value.replace(/{{今日日期}}/g, todayDisplay)
+})
+const noticePreviewContent = computed(() => {
+  const listStr = adminNotices.value.length > 0 ? adminNotices.value.map(n => '📌 ' + n).join('\n') : '📌 (尚無須知事項)'
+  return noticeEmailContentTemplate.value.replace(/{{須知清單}}/g, listStr)
+})
 
 // === 系統核心方法 ===
 const verifyPassword = async () => {
@@ -420,6 +454,8 @@ const fetchAllData = async () => {
     if (lateTmpl) { emailSubjectTemplate.value = lateTmpl.subject; emailContentTemplate.value = lateTmpl.content }
     const hwTmpl = tmplData.find(t => t.template_id === 'homework_notice')
     if (hwTmpl) { hwEmailSubjectTemplate.value = hwTmpl.subject; hwEmailContentTemplate.value = hwTmpl.content }
+    const noticeTmpl = tmplData.find(t => t.template_id === 'notice_board')
+    if (noticeTmpl) { noticeEmailSubjectTemplate.value = noticeTmpl.subject; noticeEmailContentTemplate.value = noticeTmpl.content }
   }
 
   // 2. 抓取學生與家長資料
@@ -445,7 +481,7 @@ const fetchAllData = async () => {
   const { data: ipData } = await supabase.from('ip_rules').select('*').order('created_at', { ascending: false })
   if (ipData) ipRules.value = ipData
 
-  // 5. 抓取各項紀錄與稽核 (使用 maybeSingle 防止找不到當日資料報錯)
+  // 5. 抓取各項紀錄與稽核
   const { data: boardData } = await supabase.from('contact_books').select('notices').eq('record_date', todayISO).maybeSingle()
   adminNotices.value = boardData?.notices || []
   
@@ -461,22 +497,28 @@ const fetchAllData = async () => {
   if (cLogs) commLogs.value = cLogs
 }
 
-// === 家長須知與推播管理 (已完全修復) ===
+// === 家長須知推播管理 ===
 const addAdminNotice = () => adminNotices.value.push('')
 const removeAdminNotice = (i) => adminNotices.value.splice(i, 1)
+
+const saveNoticeEmailTemplate = async () => {
+  isSavingNoticeTemplate.value = true
+  try {
+    const { error } = await supabase.from('email_templates').upsert({ template_id: 'notice_board', subject: noticeEmailSubjectTemplate.value, content: noticeEmailContentTemplate.value })
+    if (error) throw error
+    alert('✅ 須知推播信件範本已永久儲存！')
+  } catch (error) { alert('❌ 儲存失敗。') } finally { isSavingNoticeTemplate.value = false }
+}
 
 const saveAdminNotices = async () => {
   isSavingBoard.value = true
   try {
     const { error } = await supabase.from('contact_books').upsert(
-      { 
-        record_date: todayISO, 
-        notices: adminNotices.value 
-      },
-      { onConflict: 'record_date' } // 👈 關鍵修復：告訴資料庫用日期當作更新的基準
+      { record_date: todayISO, notices: adminNotices.value },
+      { onConflict: 'record_date' }
     )
     if (error) throw error
-    alert('✅ 須知已成功儲存至資料庫！')
+    alert('✅ 須知已成功儲存至資料庫並同步前台！')
   } catch (error) { 
     alert('❌ 儲存失敗：' + error.message) 
   } finally { 
@@ -490,35 +532,28 @@ const sendNoticeEmail = async () => {
   
   isSendingEmail.value = true
   try {
-    // 撈取全班家長信箱並過濾重複與空值
     const { data: parents } = await supabase.from('parents').select('email')
     const emailList = [...new Set(parents.map(p => p.email).filter(e => e && e.trim() !== ''))]
-    
     if (emailList.length === 0) throw new Error('系統內未建立任何家長信箱')
 
-    const content = `各位家長您好，今日班級須知推播如下：\n\n${adminNotices.value.map(n => '📌 ' + n).join('\n')}\n\n班級導師 敬上`
-    const subject = `📢 班級須知推播 (${todayDisplay})`
+    const subject = noticeEmailSubjectTemplate.value.replace(/{{今日日期}}/g, todayDisplay)
+    const listStr = adminNotices.value.length > 0 ? adminNotices.value.map(n => '📌 ' + n).join('\n') : '📌 (無)'
+    const content = noticeEmailContentTemplate.value.replace(/{{須知清單}}/g, listStr)
 
-    // 呼叫 API 寄信
     const res = await fetch('/api/send-email', { 
       method: 'POST', 
       headers: { 'Content-Type': 'application/json' }, 
       body: JSON.stringify({ bcc: emailList, subject, content }) 
     })
     
-    if (!res.ok) throw new Error('API 發信失敗，請檢查伺服器端設定')
+    if (!res.ok) throw new Error('API 發信失敗，請檢查伺服器設定')
 
-    // 寫入通知紀錄
     await supabase.from('communication_logs').insert({ 
-      student_id: null, // 推播給全班，非特定學生
-      notification_type: '須知推播', 
-      sent_by: '導師', 
-      recipient_emails: '全班家長群發', 
-      message_content: content 
+      student_id: null, notification_type: '須知推播', sent_by: '導師', recipient_emails: '全班家長群發', message_content: content 
     })
     
-    alert(`✅ 已成功推播給 ${emailList.length} 位家長！`)
-    await fetchAllData() // 更新畫面上的發信紀錄表
+    alert(`✅ 已成功套用範本並推播給 ${emailList.length} 位家長！`)
+    await fetchAllData() 
   } catch (error) { 
     alert('❌ 推播失敗：' + error.message) 
   } finally { 
@@ -526,14 +561,11 @@ const sendNoticeEmail = async () => {
   }
 }
 
-// === IP 安全規則方法 ===
+// === IP 安全規則 ===
 const addRule = async () => {
   if (!newRule.value.ip_range) return alert('請輸入 IP 範圍')
   const { data, error } = await supabase.from('ip_rules').insert([newRule.value]).select().single()
-  if (!error && data) { 
-    ipRules.value.unshift(data)
-    newRule.value.ip_range = ''; newRule.value.description = '' 
-  }
+  if (!error && data) { ipRules.value.unshift(data); newRule.value.ip_range = ''; newRule.value.description = '' }
 }
 const deleteRule = async (id) => {
   if (!confirm('確定刪除此 IP 規則？')) return
@@ -541,7 +573,7 @@ const deleteRule = async (id) => {
   ipRules.value = ipRules.value.filter(r => r.id !== id)
 }
 
-// === 信件範本儲存 ===
+// === 信件範本與寄信 (遲到 & 作業) ===
 const saveEmailTemplate = async () => {
   isSavingTemplate.value = true
   try {
@@ -552,31 +584,11 @@ const saveEmailTemplate = async () => {
 const saveHwEmailTemplate = async () => {
   isSavingHwTemplate.value = true
   try {
-    const { error } = await supabase.from('email_templates').upsert({ template_id: 'homework_notice', subject: hwEmailSubjectTemplate.value, content: hwEmailContentTemplate.value })
-    if (error) throw error
+    await supabase.from('email_templates').upsert({ template_id: 'homework_notice', subject: hwEmailSubjectTemplate.value, content: hwEmailContentTemplate.value })
     alert('✅ 作業信件範本已永久儲存！')
   } catch (error) { alert('❌ 範本儲存失敗。') } finally { isSavingHwTemplate.value = false }
 }
 
-// === 作業與科任管理 ===
-const addTeacher = async () => {
-  if (!newTeacher.value.subject || !newTeacher.value.password) return
-  const { data, error } = await supabase.from('subject_teachers').insert({ 
-    subject_name: newTeacher.value.subject, password: newTeacher.value.password, assistant_password: newTeacher.value.assistant_password 
-  }).select().single()
-  if (!error && data) { subjectTeachers.value.push(data); newTeacher.value = { subject: '', password: '', assistant_password: '' } }
-}
-const saveTeacher = async (t) => {
-  await supabase.from('subject_teachers').update({ subject_name: t.subject_name, password: t.password, assistant_password: t.assistant_password }).eq('id', t.id)
-  alert(`✅ ${t.subject_name} 資料更新成功！`)
-}
-const deleteTeacher = async (id) => {
-  if (!window.confirm('確定刪除此科目？')) return
-  await supabase.from('subject_teachers').delete().eq('id', id)
-  subjectTeachers.value = subjectTeachers.value.filter(t => t.id !== id)
-}
-
-// === 寄發信件 (遲到 & 作業) ===
 const sendLateEmails = async () => {
   const pwd = window.prompt("🔒 準備寄發缺席通知，請輸入導師密碼：")
   if (pwd !== '168168168') return alert('❌ 密碼錯誤，發送取消！')
@@ -622,6 +634,61 @@ const sendHomeworkEmails = async () => {
   alert(`✅ 發送完成！\n成功：${successCount} 位\n失敗：${failCount} 位`); isSendingHomework.value = false; await fetchAllData()
 }
 
+// === 作業與科任管理 ===
+const addTeacher = async () => {
+  if (!newTeacher.value.subject || !newTeacher.value.password) return
+  const { data, error } = await supabase.from('subject_teachers').insert({ subject_name: newTeacher.value.subject, password: newTeacher.value.password, assistant_password: newTeacher.value.assistant_password }).select().single()
+  if (!error && data) { subjectTeachers.value.push(data); newTeacher.value = { subject: '', password: '', assistant_password: '' } }
+}
+const saveTeacher = async (t) => {
+  await supabase.from('subject_teachers').update({ subject_name: t.subject_name, password: t.password, assistant_password: t.assistant_password }).eq('id', t.id)
+  alert(`✅ ${t.subject_name} 資料更新成功！`)
+}
+const deleteTeacher = async (id) => {
+  if (!window.confirm('確定刪除此科目？')) return
+  await supabase.from('subject_teachers').delete().eq('id', id)
+  subjectTeachers.value = subjectTeachers.value.filter(t => t.id !== id)
+}
+
+// === 學生與家長雙向資料儲存修復 ===
+const saveStudent = async (student) => {
+  try {
+    // 1. 更新學生本身資料
+    const { error: sError } = await supabase.from('students').update({ 
+      seat_number: student.seat_number, 
+      real_name: student.real_name, 
+      hidden_name: student.hidden_name, 
+      birthday: student.birthday, 
+      id_last_5: student.id_last_5 
+    }).eq('id', student.id)
+    if (sError) throw sError
+
+    // 2. 重建家長資料 (先刪除舊有，再插入新編輯的有效資料)
+    await supabase.from('parents').delete().eq('student_id', student.id)
+    
+    const parentsToInsert = []
+    if (student.p1_rel || student.p1_tel || student.p1_mail) parentsToInsert.push({ student_id: student.id, relationship: student.p1_rel, phone: student.p1_tel, email: student.p1_mail })
+    if (student.p2_rel || student.p2_tel || student.p2_mail) parentsToInsert.push({ student_id: student.id, relationship: student.p2_rel, phone: student.p2_tel, email: student.p2_mail })
+    if (student.p3_rel || student.p3_tel || student.p3_mail) parentsToInsert.push({ student_id: student.id, relationship: student.p3_rel, phone: student.p3_tel, email: student.p3_mail })
+    
+    if (parentsToInsert.length > 0) {
+      const { error: pError } = await supabase.from('parents').insert(parentsToInsert)
+      if (pError) throw pError
+    }
+
+    alert(`✅ ${student.real_name} 學生與家長聯絡資料儲存成功！`)
+    await fetchAllData() // 確保 UI 與資料庫完全同步
+  } catch(e) { 
+    alert('❌ 儲存失敗：' + e.message) 
+  }
+}
+const deleteStudent = async (id, name) => {
+  if (confirm(`⚠️ 確定要刪除學生 ${name} 嗎？`)) { await supabase.from('students').delete().eq('id', id); await fetchAllData() }
+}
+const exportStudents = (type) => { alert(`📂 準備匯出 ${type.toUpperCase()} 格式名單...`) }
+const handleFileUpload = (e) => { const file = e.target.files[0]; if (file) selectedFile.value = file }
+const processImport = async () => { alert('🚀 開始解析檔案並匯入資料庫...') }
+
 // === 其他系統功能 ===
 const markCurrentThreadAsRead = async () => { scrollToBottom() }
 const sendReply = async () => {
@@ -634,19 +701,6 @@ const sendReply = async () => {
 }
 const exportToExcel = () => { alert('📊 私訊匯出準備中...') }
 const scrollToBottom = () => { nextTick(() => { const c = document.getElementById('adminChatContainer'); if (c) c.scrollTop = c.scrollHeight }) }
-
-const saveStudent = async (student) => {
-  try {
-    await supabase.from('students').update({ seat_number: student.seat_number, real_name: student.real_name, hidden_name: student.hidden_name, birthday: student.birthday, id_last_5: student.id_last_5 }).eq('id', student.id)
-    alert(`✅ ${student.real_name} 資料儲存成功！`)
-  } catch(e) { alert('❌ 儲存失敗') }
-}
-const deleteStudent = async (id, name) => {
-  if (confirm(`⚠️ 確定要刪除學生 ${name} 嗎？`)) { await supabase.from('students').delete().eq('id', id); await fetchAllData() }
-}
-const exportStudents = (type) => { alert(`📂 準備匯出 ${type.toUpperCase()} 格式名單...`) }
-const handleFileUpload = (e) => { const file = e.target.files[0]; if (file) selectedFile.value = file }
-const processImport = async () => { alert('🚀 開始解析檔案並匯入資料庫...') }
 
 const formatTime = (isoString) => new Date(isoString).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 const getStudentName = (id) => studentsMap.value[id] || ''
@@ -731,7 +785,7 @@ table.ip-table { width: 100%; border-collapse: collapse; text-align: left; backg
 
 /* ================= 其他共用 (推播, 私訊, 稽核) ================= */
 .board-editor-container { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 20px; }
-.notice-edit-list { display: flex; flex-direction: column; gap: 15px; margin-bottom: 25px; }
+.notice-edit-list { display: flex; flex-direction: column; gap: 15px; }
 .edit-item { display: flex; align-items: center; gap: 10px; }
 .notice-input { flex: 1; font-size: 1.1rem; padding: 10px 15px; border: 1px solid #94a3b8; border-radius: 6px; }
 .add-btn { background: #e2e8f0; color: #334155; border: 1px dashed #94a3b8; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px; }
