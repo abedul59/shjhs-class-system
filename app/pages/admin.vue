@@ -468,10 +468,13 @@ const removeAdminNotice = (i) => adminNotices.value.splice(i, 1)
 const saveAdminNotices = async () => {
   isSavingBoard.value = true
   try {
-    const { error } = await supabase.from('contact_books').upsert({ 
-      record_date: todayISO, 
-      notices: adminNotices.value 
-    })
+    const { error } = await supabase.from('contact_books').upsert(
+      { 
+        record_date: todayISO, 
+        notices: adminNotices.value 
+      },
+      { onConflict: 'record_date' } // 👈 關鍵修復：告訴資料庫用日期當作更新的基準
+    )
     if (error) throw error
     alert('✅ 須知已成功儲存至資料庫！')
   } catch (error) { 
