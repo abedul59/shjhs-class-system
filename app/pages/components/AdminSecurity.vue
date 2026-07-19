@@ -21,19 +21,11 @@
 
       <table class="ip-table">
         <thead>
-          <tr>
-            <th width="120">類型</th>
-            <th width="200">IP / 網域前綴</th>
-            <th>備註說明</th>
-            <th width="180">建立時間</th>
-            <th width="80">操作</th>
-          </tr>
+          <tr><th width="120">類型</th><th width="200">IP / 網域前綴</th><th>備註說明</th><th width="180">建立時間</th><th width="80">操作</th></tr>
         </thead>
         <tbody>
           <tr v-for="rule in ipRules" :key="rule.id">
-            <td>
-              <span :class="['badge', rule.rule_type === '黑名單' ? 'badge-black' : 'badge-white']">{{ rule.rule_type }}</span>
-            </td>
+            <td><span :class="['badge', rule.rule_type === '黑名單' ? 'badge-black' : 'badge-white']">{{ rule.rule_type }}</span></td>
             <td class="ip-text"><strong>{{ rule.ip_range }}</strong></td>
             <td>{{ rule.description }}</td>
             <td class="time-text">{{ formatTime(rule.created_at) }}</td>
@@ -53,10 +45,12 @@ const supabase = useSupabaseClient()
 const ipRules = ref([])
 const newRule = ref({ rule_type: '黑名單', ip_range: '', description: '' })
 
-onMounted(async () => {
+const fetchRules = async () => {
   const { data } = await supabase.from('ip_rules').select('*').order('created_at', { ascending: false })
   if (data) ipRules.value = data
-})
+}
+
+onMounted(() => { fetchRules() })
 
 const addRule = async () => {
   if (!newRule.value.ip_range) return alert('請輸入 IP 範圍')
@@ -83,22 +77,17 @@ const formatTime = (isoString) => new Date(isoString).toLocaleString('zh-TW', { 
 .security-section { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 20px; }
 .security-section h4 { margin: 0 0 10px 0; color: #1e293b; }
 .help-text { font-size: 0.95rem; color: #64748b; margin-bottom: 20px; line-height: 1.5; }
-
 .add-rule-box { display: flex; gap: 10px; margin-bottom: 20px; background: white; padding: 15px; border-radius: 8px; border: 1px dashed #cbd5e1; }
 .edit-input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 1rem; }
-.type-select { width: 150px; }
-.ip-input { width: 220px; font-family: monospace; font-size: 1.1rem; }
-.desc-input { flex: 1; }
+.type-select { width: 150px; } .ip-input { width: 220px; font-family: monospace; font-size: 1.1rem; } .desc-input { flex: 1; }
 .add-btn { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; }
-
 table.ip-table { width: 100%; border-collapse: collapse; text-align: left; background: white; }
-th, td { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; }
-th { background-color: #f1f5f9; color: #475569; font-weight: bold; }
+.ip-table th, .ip-table td { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; }
+.ip-table th { background-color: #f1f5f9; color: #475569; font-weight: bold; }
 .ip-text { font-family: monospace; font-size: 1.1rem; color: #0f172a; }
 .time-text { font-size: 0.85rem; color: #64748b; }
 .badge { padding: 5px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; }
-.badge-black { background: #fee2e2; color: #991b1b; }
-.badge-white { background: #dcfce7; color: #166534; }
+.badge-black { background: #fee2e2; color: #991b1b; } .badge-white { background: #dcfce7; color: #166534; }
 .del-row-btn { background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
 .empty { text-align: center; color: #94a3b8; padding: 30px; font-style: italic; }
 </style>
