@@ -17,6 +17,7 @@
           <button @click="switchTab('board')" :class="{ active: currentTab === 'board' }">📢 須知推播</button>
           <button @click="switchTab('messages')" :class="{ active: currentTab === 'messages' }">💬 私訊管理</button>
           <button @click="switchTab('students')" :class="{ active: currentTab === 'students' }">👩‍🎓 學生管理</button>
+          <!-- 👇 這顆按鈕就是關鍵！確認它有在程式碼裡 -->
           <button @click="switchTab('security')" :class="{ active: currentTab === 'security' }">🛡️ 安全與 IP</button>
           <button @click="switchTab('audit')" :class="{ active: currentTab === 'audit' }">🕵️ 系統稽核</button>
           <button @click="switchTab('communication')" :class="{ active: currentTab === 'communication' }">📨 通知紀錄</button>
@@ -24,12 +25,12 @@
         </div>
       </header>
 
-      <!-- ✨ 模組化匯入：作業管理 -->
+      <!-- ✨ 自動引入元件：作業管理 (對應 components/AdminHomework.vue) -->
       <main v-if="currentTab === 'homework'">
         <AdminHomework />
       </main>
 
-      <!-- ✨ 模組化匯入：安全與 IP 黑名單 -->
+      <!-- ✨ 自動引入元件：安全與 IP 黑名單 (對應 components/AdminSecurity.vue) -->
       <main v-if="currentTab === 'security'">
         <AdminSecurity />
       </main>
@@ -172,20 +173,7 @@
       <!-- 頁籤：系統稽核 -->
       <main v-if="currentTab === 'audit'" class="data-table">
         <div class="table-header"><h3>🕵️ 系統稽核中心</h3></div>
-        <div class="homework-section">
-          <h4>📝 班級作業操作紀錄 (誰動了作業？)</h4>
-          <table>
-            <thead><tr><th width="150">時間</th><th width="120">科目</th><th width="100">操作身分</th><th width="120">動作</th><th>詳細內容</th></tr></thead>
-            <tbody>
-              <tr v-for="log in assignmentLogs" :key="log.id">
-                <td>{{ formatTime(log.created_at) }}</td><td><span class="badge">{{ log.subject_name }}</span></td>
-                <td :class="log.operator_role === '小老師' ? 'role-student' : 'role-teacher'">{{ log.operator_role }}</td>
-                <td><strong>{{ log.action_type }}</strong></td><td>{{ log.details }}</td>
-              </tr>
-              <tr v-if="assignmentLogs.length === 0"><td colspan="5" class="empty">目前無作業系統操作紀錄</td></tr>
-            </tbody>
-          </table>
-        </div>
+        
         <div class="homework-section" style="margin-top: 30px;">
           <h4>✏️ 聯絡簿黑板編輯紀錄</h4>
           <table>
@@ -223,8 +211,6 @@
 
 <script setup>
 import { ref, computed, nextTick } from 'vue'
-import AdminHomework from '~/components/AdminHomework.vue'
-import AdminSecurity from '~/components/AdminSecurity.vue'
 const supabase = useSupabaseClient()
 
 const d = new Date(); const todayISO = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
@@ -237,7 +223,7 @@ const todayAttendances = ref([]); const isSendingLateEmails = ref(false); const 
 const emailSubjectTemplate = ref('⚠️ 學校出缺席通知 - {{學生姓名}} 尚未打卡')
 const emailContentTemplate = ref(`親愛的家長您好：\n\n系統偵測到您的孩子 【{{學生姓名}}】 於今日 ({{今日日期}}) {{當下時間}} 尚未完成到校打卡，特此通知。\n\n班級導師 敬上`)
 
-const adminNotices = ref([]); const boardLogs = ref([]); const assignmentLogs = ref([])
+const adminNotices = ref([]); const boardLogs = ref([]);
 const isSavingBoard = ref(false); const isSendingEmail = ref(false)
 const allMessages = ref([]); const activeChatThread = ref(''); const replyContent = ref(''); const isSending = ref(false)
 const commLogs = ref([])
@@ -283,8 +269,6 @@ const fetchAllData = async () => {
     })
   }
 
-  const { data: alData } = await supabase.from('assignment_audit_logs').select('*').order('created_at', { ascending: false }).limit(50)
-  if (alData) assignmentLogs.value = alData
   const { data: boardData } = await supabase.from('contact_books').select('notices').eq('record_date', todayISO).single()
   adminNotices.value = boardData?.notices || []
   const { data: bLogs } = await supabase.from('board_edit_logs').select('*').order('edited_at', { ascending: false }).limit(50)
@@ -400,6 +384,7 @@ const getStudentName = (id) => studentsMap.value[id] || '未知'
 .absent-list-section h4 { margin: 0 0 15px 0; color: #b45309; }
 .tags-container { display: flex; flex-wrap: wrap; gap: 10px; }
 .absent-tag { background: #fee2e2; color: #dc2626; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 0.95rem; border: 1px solid #fca5a5; }
+.all-present-msg { color: #16a34a; font-weight: bold; font-size: 1.1rem; }
 
 /* 須知推播 */
 .board-editor-container { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 20px; }
