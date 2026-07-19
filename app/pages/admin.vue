@@ -136,7 +136,7 @@
         </div>
       </main>
 
-      <!-- ==================== 頁籤 3：家長須知管理與推播 ==================== -->
+      <!-- ==================== 頁籤 3：家長須知管理與推播 (已修復儲存與發信) ==================== -->
       <main v-if="currentTab === 'board'" class="data-table">
         <div class="table-header"><h3>📢 家長須知管理與 Email 推播</h3></div>
         <div class="board-editor-container">
@@ -149,8 +149,12 @@
             <button @click="addAdminNotice" class="add-btn">➕ 新增一筆須知</button>
           </div>
           <div class="action-bar">
-            <button @click="saveAdminNotices" class="save-btn" :disabled="isSavingBoard">{{ isSavingBoard ? '儲存中...' : '💾 儲存並同步' }}</button>
-            <button @click="sendNoticeEmail" class="email-btn" :disabled="isSendingEmail">{{ isSendingEmail ? '寄送中...' : '📧 密碼解鎖並推播 (Bcc)' }}</button>
+            <button @click="saveAdminNotices" class="save-btn" :disabled="isSavingBoard">
+              {{ isSavingBoard ? '儲存中...' : '💾 儲存並同步至前台' }}
+            </button>
+            <button @click="sendNoticeEmail" class="email-btn" :disabled="isSendingEmail">
+              {{ isSendingEmail ? '正在推播中...' : '📧 密碼解鎖並推播給全體家長' }}
+            </button>
           </div>
         </div>
       </main>
@@ -314,7 +318,7 @@
           <tbody>
             <tr v-for="log in commLogs" :key="log.id">
               <td>{{ formatTime(log.sent_at) }}</td>
-              <td>{{ getStudentName(log.student_id) }}</td>
+              <td>{{ getStudentName(log.student_id) || '全班群發' }}</td>
               <td><span class="badge notice">{{ log.notification_type }}</span></td>
               <td class="email-text">{{ log.recipient_emails }}</td>
             </tr>
@@ -333,7 +337,7 @@ const supabase = useSupabaseClient()
 // 基礎狀態
 const d = new Date(); const todayISO = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 const todayDisplay = d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })
-const isUnlocked = ref(false); const passwordInput = ref(''); const currentTab = ref('security') // 預設跳至安全設定
+const isUnlocked = ref(false); const passwordInput = ref(''); const currentTab = ref('board') // 預設跳至須知推播方便測試
 const adminStudents = ref([]); const studentsMap = ref({})
 
 // 狀態：遲到與範本
@@ -441,11 +445,12 @@ const fetchAllData = async () => {
   const { data: ipData } = await supabase.from('ip_rules').select('*').order('created_at', { ascending: false })
   if (ipData) ipRules.value = ipData
 
-  // 5. 抓取各項紀錄與稽核
+  // 5. 抓取各項紀錄與稽核 (使用 maybeSingle 防止找不到當日資料報錯)
+  const { data: boardData } = await supabase.from('contact_books').select('notices').eq('record_date', todayISO).maybeSingle()
+  adminNotices.value = boardData?.notices || []
+  
   const { data: alData } = await supabase.from('assignment_audit_logs').select('*').order('created_at', { ascending: false }).limit(50)
   if (alData) assignmentLogs.value = alData
-  const { data: boardData } = await supabase.from('contact_books').select('notices').eq('record_date', todayISO).single()
-  adminNotices.value = boardData?.notices || []
   const { data: bLogs } = await supabase.from('board_edit_logs').select('*').order('edited_at', { ascending: false }).limit(50)
   if (bLogs) boardLogs.value = bLogs
   const { data: attData } = await supabase.from('attendances').select('*').eq('record_date', todayISO)
@@ -454,6 +459,68 @@ const fetchAllData = async () => {
   if (msgLogs) { allMessages.value = msgLogs; scrollToBottom() }
   const { data: cLogs } = await supabase.from('communication_logs').select('*').order('sent_at', { ascending: false }).limit(50)
   if (cLogs) commLogs.value = cLogs
+}
+
+// === 家長須知與推播管理 (已完全修復) ===
+const addAdminNotice = () => adminNotices.value.push('')
+const removeAdminNotice = (i) => adminNotices.value.splice(i, 1)
+
+const saveAdminNotices = async () => {
+  isSavingBoard.value = true
+  try {
+    const { error } = await supabase.from('contact_books').upsert({ 
+      record_date: todayISO, 
+      notices: adminNotices.value 
+    })
+    if (error) throw error
+    alert('✅ 須知已成功儲存至資料庫！')
+  } catch (error) { 
+    alert('❌ 儲存失敗：' + error.message) 
+  } finally { 
+    isSavingBoard.value = false 
+  }
+}
+
+const sendNoticeEmail = async () => {
+  const pwd = window.prompt("🔒 準備推播家長須知，請輸入導師密碼：")
+  if (pwd !== '168168168') return alert('❌ 密碼錯誤，推播取消！')
+  
+  isSendingEmail.value = true
+  try {
+    // 撈取全班家長信箱並過濾重複與空值
+    const { data: parents } = await supabase.from('parents').select('email')
+    const emailList = [...new Set(parents.map(p => p.email).filter(e => e && e.trim() !== ''))]
+    
+    if (emailList.length === 0) throw new Error('系統內未建立任何家長信箱')
+
+    const content = `各位家長您好，今日班級須知推播如下：\n\n${adminNotices.value.map(n => '📌 ' + n).join('\n')}\n\n班級導師 敬上`
+    const subject = `📢 班級須知推播 (${todayDisplay})`
+
+    // 呼叫 API 寄信
+    const res = await fetch('/api/send-email', { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify({ bcc: emailList, subject, content }) 
+    })
+    
+    if (!res.ok) throw new Error('API 發信失敗，請檢查伺服器端設定')
+
+    // 寫入通知紀錄
+    await supabase.from('communication_logs').insert({ 
+      student_id: null, // 推播給全班，非特定學生
+      notification_type: '須知推播', 
+      sent_by: '導師', 
+      recipient_emails: '全班家長群發', 
+      message_content: content 
+    })
+    
+    alert(`✅ 已成功推播給 ${emailList.length} 位家長！`)
+    await fetchAllData() // 更新畫面上的發信紀錄表
+  } catch (error) { 
+    alert('❌ 推播失敗：' + error.message) 
+  } finally { 
+    isSendingEmail.value = false 
+  }
 }
 
 // === IP 安全規則方法 ===
@@ -553,16 +620,6 @@ const sendHomeworkEmails = async () => {
 }
 
 // === 其他系統功能 ===
-const addAdminNotice = () => adminNotices.value.push('')
-const removeAdminNotice = (i) => adminNotices.value.splice(i, 1)
-const saveAdminNotices = async () => {
-  isSavingBoard.value = true
-  const { error } = await supabase.from('contact_books').upsert({ record_date: todayISO, notices: adminNotices.value })
-  if (!error) alert('✅ 須知儲存成功！')
-  isSavingBoard.value = false
-}
-const sendNoticeEmail = async () => { alert('💡 發送推播功能準備中...') }
-
 const markCurrentThreadAsRead = async () => { scrollToBottom() }
 const sendReply = async () => {
   if (!replyContent.value || !activeChatThread.value) return
@@ -589,7 +646,7 @@ const handleFileUpload = (e) => { const file = e.target.files[0]; if (file) sele
 const processImport = async () => { alert('🚀 開始解析檔案並匯入資料庫...') }
 
 const formatTime = (isoString) => new Date(isoString).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-const getStudentName = (id) => studentsMap.value[id] || '未知'
+const getStudentName = (id) => studentsMap.value[id] || ''
 </script>
 
 <style scoped>
