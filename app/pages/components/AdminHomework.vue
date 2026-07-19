@@ -23,14 +23,12 @@
 
     <div class="homework-section">
       <h4>📊 全班學生作業繳交總覽與通知發送</h4>
-      <p class="help-text">系統會為每位學生獨立生成一封信並單獨發送給其家長，保證隱私絕對隔離，不會看到其他學生的資料。</p>
+      <p class="help-text">系統會為每位學生獨立生成一封信並單獨發送給其家長，保證隱私絕對隔離。</p>
 
       <div class="email-editor-section">
         <div class="editor-header">
           <h4>📝 編輯作業信件內容</h4>
-          <button @click="saveHwEmailTemplate" class="save-template-btn" :disabled="isSavingHwTemplate">
-            {{ isSavingHwTemplate ? '儲存中...' : '💾 儲存為預設範本' }}
-          </button>
+          <button @click="saveHwEmailTemplate" class="save-template-btn" :disabled="isSavingHwTemplate">{{ isSavingHwTemplate ? '儲存中...' : '💾 儲存為預設範本' }}</button>
         </div>
         <p class="help-text">💡 可使用以下變數：<span class="var-tag" v-pre>{{學生姓名}}</span>、<span class="var-tag" v-pre>{{已交清單}}</span>、<span class="var-tag" v-pre>{{缺交清單}}</span></p>
         <div class="form-group"><label>信件主旨：</label><input type="text" v-model="hwEmailSubjectTemplate" class="edit-input" /></div>
@@ -46,9 +44,7 @@
       </div>
 
       <div class="action-bar" style="margin-bottom: 25px;">
-        <button @click="sendHomeworkEmails" class="email-btn late-btn" :disabled="isSendingHomework">
-          {{ isSendingHomework ? '正在逐一發送作業報表，請稍候...' : '📧 密碼解鎖：確認無誤並一鍵發送全班作業通知' }}
-        </button>
+        <button @click="sendHomeworkEmails" class="email-btn late-btn" :disabled="isSendingHomework">{{ isSendingHomework ? '正在逐一發送作業報表...' : '📧 密碼解鎖：確認無誤並一鍵發送全班作業通知' }}</button>
       </div>
       
       <div class="student-homework-grid">
@@ -81,13 +77,12 @@ const supabase = useSupabaseClient()
 const adminStudents = ref([]); const subjectTeachers = ref([])
 const newTeacher = ref({ subject: '', password: '', assistant_password: '' })
 const allAssignments = ref([]); const allSubmissions = ref([])
-const isSendingHomework = ref(false)
+const isSendingHomework = ref(false); const isSavingHwTemplate = ref(false)
 
 const hwEmailSubjectTemplate = ref('📚 班級作業繳交通知 - {{學生姓名}}')
 const hwEmailContentTemplate = ref(`親愛的家長您好：\n\n為您彙整 【{{學生姓名}}】 目前的作業繳交狀況：\n\n✅ 已交作業：\n{{已交清單}}\n\n❌ 缺交作業：\n{{缺交清單}}\n\n班級導師 敬上`)
-const isSavingHwTemplate = ref(false)
 
-onMounted(async () => {
+const fetchData = async () => {
   const { data: tmplData } = await supabase.from('email_templates').select('*').eq('template_id', 'homework_notice').single()
   if (tmplData) { hwEmailSubjectTemplate.value = tmplData.subject; hwEmailContentTemplate.value = tmplData.content }
 
@@ -104,7 +99,9 @@ onMounted(async () => {
   if (aData) allAssignments.value = aData
   const { data: subData } = await supabase.from('assignment_submissions').select('*')
   if (subData) allSubmissions.value = subData
-})
+}
+
+onMounted(() => { fetchData() })
 
 const studentAssignmentStats = computed(() => {
   return adminStudents.value.map(student => {
@@ -120,7 +117,6 @@ const hwPreviewSubject = computed(() => {
   const sampleName = studentAssignmentStats.value.length > 0 ? studentAssignmentStats.value[0].real_name : '王小明'
   return hwEmailSubjectTemplate.value.replace(/{{學生姓名}}/g, sampleName)
 })
-
 const hwPreviewContent = computed(() => {
   const sample = studentAssignmentStats.value.length > 0 ? studentAssignmentStats.value[0] : null
   const sampleName = sample ? sample.real_name : '王小明'
@@ -172,7 +168,7 @@ const sendHomeworkEmails = async () => {
       successCount++
     } catch (e) { failCount++ }
   }
-  alert(`✅ 發送完成！\n成功：${successCount} 位\n失敗：${failCount} 位`); isSendingHomework.value = false
+  alert(`✅ 發送完成！\n成功：${successCount} 位\n失敗：${failCount} 位`); isSendingHomework.value = false; await fetchData()
 }
 </script>
 
@@ -213,4 +209,5 @@ const sendHomeworkEmails = async () => {
 .hw-list ul { margin: 0; padding-left: 20px; font-size: 0.85rem; color: #475569; }
 .none-text { list-style: none; color: #94a3b8; font-style: italic; margin-left: -20px; }
 .missing-list .hw-title { color: #dc2626; } .submitted-list .hw-title { color: #16a34a; }
+.help-text { font-size: 0.95rem; color: #64748b; margin-bottom: 20px; line-height: 1.5; }
 </style>
