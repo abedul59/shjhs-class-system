@@ -23,6 +23,7 @@
             <NuxtLink to="/admin" class="nav-btn admin-btn">
               ⚙️ 後台 <span v-if="unreadCount > 0" class="notification-badge">{{ unreadCount }}</span>
             </NuxtLink>
+            <NuxtLink to="/assignments" class="nav-btn assign-btn">📚 作業繳交登記系統</NuxtLink>
             <button @click="openEmergencyModal" class="nav-btn emergency-btn">🚨 緊急通知</button>
           </div>
         </div>
@@ -284,6 +285,7 @@ onUnmounted(() => clearInterval(timer))
 
 <style scoped>
 /* 原本的排版樣式維持不變 */
+.assign-btn { background-color: #8b5cf6; } /* 紫色作業按鈕 */
 .dashboard-container { display: flex; flex-direction: column; gap: 20px; padding: 20px; background-color: #f5f7fa; min-height: 100vh; font-family: 'sans-serif'; }
 .main-content { display: flex; gap: 20px; }
 .left-panel, .right-panel { flex: 1; display: flex; flex-direction: column; gap: 20px; }
