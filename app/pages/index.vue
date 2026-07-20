@@ -145,7 +145,7 @@ const officerPasswords = ref({ academic: '', counseling: '' })
 // 編輯模式狀態與當前編輯者身分
 const isEditingContact = ref(false)
 const editingContactItems = ref([])
-const currentEditorRole = ref('') // 記錄是哪個股長登入
+const currentEditorRole = ref('') // 用來記錄是導師還是股長
 
 // --- 出缺席狀態管理 ---
 const allStudents = ref([])
@@ -153,7 +153,6 @@ const todayAttendances = ref([])
 
 const expectedCount = computed(() => allStudents.value.length)
 const presentCount = computed(() => todayAttendances.value.filter(a => a.status === '已到').length)
-// 若資料庫內無打卡紀錄，視為未到
 const absentStudentsList = computed(() => {
   return allStudents.value.filter(s => {
     const record = todayAttendances.value.find(a => a.student_id === s.id)
@@ -208,21 +207,20 @@ const unlockContactEdit = () => {
   const pwd = window.prompt("🔒 進入編輯模式，請輸入「學藝股長」或「輔導股長」密碼：")
   if (!pwd) return
   
-  // 驗證並記錄登入者身分
-  if (officerPasswords.value.academic && pwd === officerPasswords.value.academic) {
-    currentEditorRole.value = '學藝股長'
-    isEditingContact.value = true
-    editingContactItems.value = [...contactBookItems.value] 
-  } else if (officerPasswords.value.counseling && pwd === officerPasswords.value.counseling) {
-    currentEditorRole.value = '輔導股長'
+  // 驗證密碼，並將身分精準設定為符合截圖格式的「股長」或「導師」
+  if (
+    (officerPasswords.value.academic && pwd === officerPasswords.value.academic) || 
+    (officerPasswords.value.counseling && pwd === officerPasswords.value.counseling)
+  ) {
+    currentEditorRole.value = '股長'
     isEditingContact.value = true
     editingContactItems.value = [...contactBookItems.value] 
   } else if (pwd === '168168168') {
-    currentEditorRole.value = '導師 (萬用密碼)'
+    currentEditorRole.value = '導師'
     isEditingContact.value = true
     editingContactItems.value = [...contactBookItems.value] 
   } else {
-    alert("❌ 密碼錯誤！請確認密碼是否正確，或請導師確認是否已於後台設定密碼。")
+    alert("❌ 密碼錯誤！請確認密碼是否正確。")
   }
 }
 
@@ -232,27 +230,42 @@ const removeContactItem = (i) => editingContactItems.value.splice(i, 1)
 // --- 儲存聯絡簿與寫入稽核紀錄 ---
 const saveContactItems = async () => {
   try {
-    // 1. 更新聯絡簿事項
+    // 1. 寫入聯絡簿資料
     const { error } = await supabase.from('contact_books').upsert({
       record_date: todayISO, 
-      notices: parentNotices.value, // 保留原有的家長須知不被洗掉
+      notices: parentNotices.value, 
       contact_items: editingContactItems.value
     }, { onConflict: 'record_date' })
     
     if (error) throw error
 
-    // 2. 寫入黑板編輯稽核紀錄，供 AdminAudit.vue 後台查閱
-    await supabase.from('board_edit_logs').insert({
-      board_type: '今日聯絡簿',
-      editor_role: currentEditorRole.value,
-      action_details: `前台更新了 ${editingContactItems.value.length} 筆聯絡簿事項`,
-      ip_address: '前台系統'
+    // 2. 獲取真實用戶 IP
+    let clientIp = null
+    try {
+      const ipRes = await fetch('https://api.ipify.org?format=json')
+      const ipData = await ipRes.json()
+      clientIp = ipData.ip
+    } catch (e) {
+      console.warn("無法取得真實 IP，將以空值寫入", e)
+    }
+
+    // 3. 寫入稽核紀錄 (字串完全對齊後台：'聯絡簿'、'股長'或'導師')
+    // 💡 註：假設您的資料表名稱為 board_edit_logs，欄位包含 board_type, editor_role, ip_address
+    // 若您的後台實際欄位名稱是 section, role, ip 等，請在下方對應修改！
+    const { error: logError } = await supabase.from('board_edit_logs').insert({
+      board_type: '聯絡簿', 
+      editor_role: currentEditorRole.value, 
+      ip_address: clientIp
     })
 
-    // 3. 更新前端畫面狀態
+    if (logError) {
+      console.error("稽核紀錄寫入失敗 (可能為資料表或欄位名稱不符):", logError)
+    }
+
+    // 4. 更新畫面
     contactBookItems.value = [...editingContactItems.value]
     isEditingContact.value = false
-    alert("✅ 聯絡簿已成功更新，並已寫入系統稽核紀錄！")
+    alert("✅ 聯絡簿已成功更新發布！")
   } catch (error) {
     alert("❌ 儲存失敗：" + error.message)
   }
