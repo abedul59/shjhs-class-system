@@ -145,7 +145,7 @@ const officerPasswords = ref({ academic: '', counseling: '' })
 // 編輯模式狀態與當前編輯者身分
 const isEditingContact = ref(false)
 const editingContactItems = ref([])
-const currentEditorRole = ref('') // 用來記錄是導師還是股長
+const currentEditorRole = ref('') // 用來精準記錄是導師還是股長
 
 // --- 出缺席狀態管理 ---
 const allStudents = ref([])
@@ -207,7 +207,7 @@ const unlockContactEdit = () => {
   const pwd = window.prompt("🔒 進入編輯模式，請輸入「學藝股長」或「輔導股長」密碼：")
   if (!pwd) return
   
-  // 驗證密碼，並將身分精準設定為符合截圖格式的「股長」或「導師」
+  // 驗證密碼，並將身分精準設定為符合您截圖格式的「股長」或「導師」
   if (
     (officerPasswords.value.academic && pwd === officerPasswords.value.academic) || 
     (officerPasswords.value.counseling && pwd === officerPasswords.value.counseling)
@@ -231,13 +231,13 @@ const removeContactItem = (i) => editingContactItems.value.splice(i, 1)
 const saveContactItems = async () => {
   try {
     // 1. 寫入聯絡簿資料
-    const { error } = await supabase.from('contact_books').upsert({
+    const { error: upsertError } = await supabase.from('contact_books').upsert({
       record_date: todayISO, 
       notices: parentNotices.value, 
       contact_items: editingContactItems.value
     }, { onConflict: 'record_date' })
     
-    if (error) throw error
+    if (upsertError) throw upsertError
 
     // 2. 獲取真實用戶 IP
     let clientIp = null
@@ -246,28 +246,30 @@ const saveContactItems = async () => {
       const ipData = await ipRes.json()
       clientIp = ipData.ip
     } catch (e) {
-      console.warn("無法取得真實 IP，將以空值寫入", e)
+      console.warn("無法取得真實 IP", e)
     }
 
-    // 3. 寫入稽核紀錄 (字串完全對齊後台：'聯絡簿'、'股長'或'導師')
-    // 💡 註：假設您的資料表名稱為 board_edit_logs，欄位包含 board_type, editor_role, ip_address
-    // 若您的後台實際欄位名稱是 section, role, ip 等，請在下方對應修改！
+    // 3. 寫入稽核紀錄 (將所有可能的欄位補齊，並捕捉錯誤)
     const { error: logError } = await supabase.from('board_edit_logs').insert({
       board_type: '聯絡簿', 
       editor_role: currentEditorRole.value, 
+      action_details: '前台編輯聯絡簿',
       ip_address: clientIp
     })
 
+    // 💡 關鍵防呆：如果有錯誤，直接在畫面上彈出具體原因
     if (logError) {
-      console.error("稽核紀錄寫入失敗 (可能為資料表或欄位名稱不符):", logError)
+      console.error("稽核紀錄寫入失敗:", logError)
+      alert(`⚠️ 聯絡簿事項已儲存，但「稽核紀錄」寫入失敗！\n\n系統訊息：${logError.message}\n\n這通常代表 Supabase 的 RLS 權限阻擋了前台寫入，或您的資料表缺乏 action_details 欄位。`)
+    } else {
+      alert("✅ 聯絡簿已成功更新發布！(稽核紀錄亦已同步更新)")
     }
 
     // 4. 更新畫面
     contactBookItems.value = [...editingContactItems.value]
     isEditingContact.value = false
-    alert("✅ 聯絡簿已成功更新發布！")
   } catch (error) {
-    alert("❌ 儲存失敗：" + error.message)
+    alert("❌ 聯絡簿儲存失敗：" + error.message)
   }
 }
 </script>
