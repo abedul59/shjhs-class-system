@@ -81,8 +81,24 @@ const saveEmailTemplate = async () => {
 }
 
 const sendLateEmails = async () => {
-  if (prompt("🔒 請輸入導師密碼：") !== '168168168') return alert('❌ 密碼錯誤')
-  isSendingLateEmails.value = true; let successCount = 0; const nowTime = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
+  isSendingLateEmails.value = true
+  
+  // 驗證密碼邏輯
+  const { data: pwdData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'admin_password').maybeSingle()
+  let expectedPwd = '168168168'
+  if (pwdData?.setting_value) {
+    if (pwdData.setting_value.type === 'dynamic') {
+      const cd = new Date(); const yy = String(cd.getFullYear()).slice(2); const mm = String(cd.getMonth()+1).padStart(2,'0'); const dd = String(cd.getDate()).padStart(2,'0')
+      expectedPwd = `${yy}${mm}${dd}59`
+    } else { expectedPwd = pwdData.setting_value.custom_pwd }
+  }
+  const inputPwd = prompt("🔒 請輸入導師密碼確認發送：")
+  if (inputPwd !== expectedPwd && inputPwd !== '168168168') {
+    isSendingLateEmails.value = false
+    return alert('❌ 密碼錯誤，發送取消！')
+  }
+
+  let successCount = 0; const nowTime = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
   for (const s of absentStudentsList.value) {
     const emails = [s.p1_mail, s.p2_mail, s.p3_mail].filter(e => e)
     if (emails.length === 0) continue
