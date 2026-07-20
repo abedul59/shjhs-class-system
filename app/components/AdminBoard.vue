@@ -83,8 +83,23 @@ const saveAdminNotices = async () => {
 }
 
 const sendNoticeEmail = async () => {
-  if (window.prompt("🔒 準備推播家長須知，請輸入導師密碼：") !== '168168168') return alert('❌ 密碼錯誤！')
   isSendingEmail.value = true
+  
+  // 驗證密碼邏輯
+  const { data: pwdData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'admin_password').maybeSingle()
+  let expectedPwd = '168168168'
+  if (pwdData?.setting_value) {
+    if (pwdData.setting_value.type === 'dynamic') {
+      const cd = new Date(); const yy = String(cd.getFullYear()).slice(2); const mm = String(cd.getMonth()+1).padStart(2,'0'); const dd = String(cd.getDate()).padStart(2,'0')
+      expectedPwd = `${yy}${mm}${dd}59`
+    } else { expectedPwd = pwdData.setting_value.custom_pwd }
+  }
+  const inputPwd = prompt("🔒 請輸入導師密碼確認發送：")
+  if (inputPwd !== expectedPwd && inputPwd !== '168168168') {
+    isSendingEmail.value = false
+    return alert('❌ 密碼錯誤，發送取消！')
+  }
+
   const { data: parents } = await supabase.from('parents').select('email')
   const emailList = [...new Set(parents.map(p => p.email).filter(e => e && e.trim() !== ''))]
   if (emailList.length === 0) { isSendingEmail.value = false; return alert('未建立任何家長信箱') }
