@@ -9,6 +9,7 @@
         <!-- 區塊 A：家長須知 (支援信件推播) -->
         <div class="editor-panel">
           <h4 class="section-title">📢 家長須知 (Email推播)</h4>
+          <p class="help-text">⚠️ 此區塊僅限導師編輯與推播。</p>
           <div class="notice-edit-list">
             <div v-for="(notice, index) in adminNotices" :key="'n-'+index" class="edit-item">
               <span class="bullet">📌</span>
@@ -18,7 +19,7 @@
             <button @click="addNotice" class="add-btn">➕ 新增家長須知</button>
           </div>
 
-          <!-- 推播編輯區 -->
+          <!-- 推播編輯與預覽區 -->
           <div class="email-editor-section" style="margin-top: 20px;">
             <div class="editor-header">
               <h4>📝 編輯推播信件</h4>
@@ -28,16 +29,26 @@
             </div>
             <div class="form-group"><label>信件主旨：</label><input type="text" v-model="noticeEmailSubjectTemplate" class="edit-input" /></div>
             <div class="form-group"><label>信件內容：(變數: <span v-pre>{{須知清單}}</span>)</label><textarea v-model="noticeEmailContentTemplate" rows="4" class="edit-input textarea-input"></textarea></div>
-            <button @click="sendNoticeEmail" class="email-btn late-btn" style="margin-top: 10px;" :disabled="isSendingEmail">
-              {{ isSendingEmail ? '正在推播中...' : '📧 解鎖並推播須知' }}
+            
+            <!-- ✨ 救回的預覽畫面 -->
+            <div class="email-preview-section">
+              <h5>👀 信件預覽</h5>
+              <div class="preview-box">
+                <div class="preview-subject"><strong>主旨：</strong> {{ noticePreviewSubject }}</div>
+                <div class="preview-body">{{ noticePreviewContent }}</div>
+              </div>
+            </div>
+
+            <button @click="sendNoticeEmail" class="email-btn late-btn" style="margin-top: 15px;" :disabled="isSendingEmail">
+              {{ isSendingEmail ? '正在推播中...' : '📧 解鎖並推播須知給家長' }}
             </button>
           </div>
         </div>
 
-        <!-- 區塊 B：聯絡簿事項 (僅展示於前台) -->
+        <!-- 區塊 B：聯絡簿事項 (前台展示與股長密碼) -->
         <div class="editor-panel">
           <h4 class="section-title">📝 聯絡簿事項 (前台黑板)</h4>
-          <p class="help-text">用於記錄每日作業、明日攜帶物品或常規小提醒。</p>
+          <p class="help-text">用於記錄每日作業、明日攜帶物品。前台可由股長登入編輯。</p>
           <div class="notice-edit-list">
             <div v-for="(item, index) in contactBookItems" :key="'c-'+index" class="edit-item">
               <span class="bullet">✏️</span>
@@ -45,6 +56,26 @@
               <button @click="removeContactItem(index)" class="del-row-btn">🗑️</button>
             </div>
             <button @click="addContactItem" class="add-btn">➕ 新增聯絡簿事項</button>
+          </div>
+
+          <!-- ✨ 新增的股長密碼設定區 -->
+          <div class="officer-pwd-section">
+            <h5>🔒 股長聯絡簿編輯密碼設定</h5>
+            <div class="form-group">
+              <label>學藝股長密碼：</label>
+              <div class="pwd-input-group">
+                <input type="text" v-model="officerPasswords.academic" class="edit-input" placeholder="尚未設定..." />
+              </div>
+            </div>
+            <div class="form-group">
+              <label>輔導股長密碼：</label>
+              <div class="pwd-input-group">
+                <input type="text" v-model="officerPasswords.counseling" class="edit-input" placeholder="尚未設定..." />
+              </div>
+            </div>
+            <button @click="saveOfficerPasswords" class="save-template-btn small-btn pwd-btn" :disabled="isSavingPwd">
+              {{ isSavingPwd ? '儲存中...' : '💾 儲存股長密碼' }}
+            </button>
           </div>
         </div>
 
@@ -86,10 +117,10 @@
           </div>
         </div>
 
-        <!-- 右側：選定日期的紀錄詳情 (分開顯示) -->
+        <!-- 右側：選定日期的紀錄詳情 -->
         <div class="history-detail-box">
           <div v-if="!selectedHistoryDate" class="empty-detail">
-            👈 請從左側月曆點選日期以查看歷史紀錄
+            👈 請從上方/左側月曆點選日期以查看歷史紀錄
           </div>
           <div v-else class="detail-content">
             <h5 class="detail-title">🗓️ {{ selectedHistoryDate }} 歷史紀錄</h5>
@@ -127,8 +158,9 @@ const todayDisplay = d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'lo
 // --- 雙向狀態分離 ---
 const adminNotices = ref([]) // 家長須知
 const contactBookItems = ref([]) // 聯絡簿事項
+const officerPasswords = ref({ academic: '', counseling: '' }) // 股長密碼
 
-const isSavingBoard = ref(false); const isSendingEmail = ref(false); const isSavingNoticeTemplate = ref(false)
+const isSavingBoard = ref(false); const isSendingEmail = ref(false); const isSavingNoticeTemplate = ref(false); const isSavingPwd = ref(false)
 const noticeEmailSubjectTemplate = ref('📢 班級須知推播 ({{今日日期}})')
 const noticeEmailContentTemplate = ref(`各位家長您好，今日班級重要須知推播如下：\n\n{{須知清單}}\n\n班級導師 敬上`)
 
@@ -149,15 +181,36 @@ const fetchData = async () => {
   const { data: tmplData } = await supabase.from('email_templates').select('*').eq('template_id', 'notice_board').maybeSingle()
   if (tmplData) { noticeEmailSubjectTemplate.value = tmplData.subject; noticeEmailContentTemplate.value = tmplData.content }
   
+  // 3. 抓取股長密碼
+  const { data: pwdData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'board_officer_passwords').maybeSingle()
+  if (pwdData?.setting_value) { officerPasswords.value = pwdData.setting_value }
+
   await fetchMonthRecords()
 }
 onMounted(() => fetchData())
 
-// --- 雙向列表操作 ---
+// --- 預覽畫面計算 ---
+const noticePreviewSubject = computed(() => noticeEmailSubjectTemplate.value.replace(/{{今日日期}}/g, todayDisplay))
+const noticePreviewContent = computed(() => {
+  const listStr = adminNotices.value.length > 0 ? adminNotices.value.map(n => '📌 ' + n).join('\n') : '📌 (尚無須知事項)'
+  return noticeEmailContentTemplate.value.replace(/{{須知清單}}/g, listStr)
+})
+
+// --- 雙向列表與密碼操作 ---
 const addNotice = () => adminNotices.value.push('')
 const removeNotice = (i) => adminNotices.value.splice(i, 1)
 const addContactItem = () => contactBookItems.value.push('')
 const removeContactItem = (i) => contactBookItems.value.splice(i, 1)
+
+const saveOfficerPasswords = async () => {
+  isSavingPwd.value = true
+  await supabase.from('system_settings').upsert({ 
+    setting_key: 'board_officer_passwords', 
+    setting_value: officerPasswords.value 
+  }, { onConflict: 'setting_key' })
+  alert('✅ 股長密碼已成功更新！')
+  isSavingPwd.value = false
+}
 
 // --- 共用儲存 ---
 const saveBothBoards = async () => {
@@ -248,17 +301,17 @@ const viewHistory = (day) => {
 <style scoped>
 .table-header { border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; } 
 .table-header h3 { margin: 0; color: #334155; }
-.section-title { margin: 0 0 15px 0; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; font-size: 1.15rem; }
+.section-title { margin: 0 0 10px 0; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; font-size: 1.15rem; }
 
-/* 雙向版面佈局 */
+/* 雙向版面佈局 (加入手機 RWD) */
 .board-editor-container, .history-calendar-container { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 20px; }
-.split-layout { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
-.editor-panel { flex: 1; min-width: 320px; background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
+.split-layout { display: flex; gap: 20px; flex-wrap: nowrap; margin-bottom: 20px; }
+.editor-panel { flex: 1; min-width: 0; background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
 
 .notice-edit-list { display: flex; flex-direction: column; gap: 12px; }
 .edit-item { display: flex; align-items: center; gap: 10px; }
-.notice-input { flex: 1; font-size: 1.05rem; padding: 10px 12px; border: 1px solid #94a3b8; border-radius: 6px; }
-.add-btn { background: #e2e8f0; color: #334155; border: 1px dashed #94a3b8; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 5px; }
+.notice-input { flex: 1; font-size: 1.05rem; padding: 10px 12px; border: 1px solid #94a3b8; border-radius: 6px; width: 100%; box-sizing: border-box;}
+.add-btn { background: #e2e8f0; color: #334155; border: 1px dashed #94a3b8; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 5px; width: 100%; }
 .del-row-btn { background: #ef4444; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; }
 
 .full-width-action { display: flex; justify-content: center; padding-top: 15px; border-top: 2px dashed #cbd5e1; }
@@ -266,9 +319,9 @@ const viewHistory = (day) => {
 .save-btn { background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; } 
 .email-btn { background: #f59e0b; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; }
 
-/* 信件編輯區 */
+/* 信件編輯區與預覽 */
 .email-editor-section { background: #f1f5f9; border-radius: 8px; padding: 15px; border: 1px solid #cbd5e1; }
-.editor-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 10px; }
+.editor-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;}
 .editor-header h4 { margin: 0; font-size: 1rem; color: #1e293b; }
 .save-template-btn.small-btn { padding: 6px 12px; font-size: 0.9rem; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; }
 .form-group { margin-bottom: 10px; } .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #475569; font-size: 0.9rem; }
@@ -276,10 +329,22 @@ const viewHistory = (day) => {
 .textarea-input { resize: vertical; font-family: inherit; line-height: 1.5; }
 .help-text { font-size: 0.9rem; color: #64748b; margin-bottom: 15px; }
 
-/* 月曆與詳情 */
-.calendar-layout { display: flex; gap: 20px; flex-wrap: wrap; }
-.calendar-box { flex: 1; min-width: 300px; background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; }
-.history-detail-box { flex: 1; min-width: 300px; background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
+.email-preview-section { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 12px; margin-top: 15px; }
+.email-preview-section h5 { margin: 0 0 8px 0; color: #334155; }
+.preview-box { background: white; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; }
+.preview-subject { font-size: 0.95rem; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; margin-bottom: 8px; }
+.preview-body { font-size: 0.9rem; color: #475569; line-height: 1.5; white-space: pre-wrap; }
+
+/* 股長密碼設定區 */
+.officer-pwd-section { margin-top: 25px; padding-top: 15px; border-top: 2px dashed #cbd5e1; }
+.officer-pwd-section h5 { margin: 0 0 10px 0; font-size: 1.05rem; color: #1e293b; }
+.pwd-input-group { display: flex; gap: 10px; }
+.pwd-btn { margin-top: 10px; width: 100%; padding: 10px; font-size: 1rem; }
+
+/* 月曆與詳情 (加入手機 RWD) */
+.calendar-layout { display: flex; gap: 20px; flex-wrap: nowrap; }
+.calendar-box { flex: 1; min-width: 0; background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; }
+.history-detail-box { flex: 1; min-width: 0; background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
 
 .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
 .cal-nav-btn { background: #f1f5f9; border: 1px solid #cbd5e1; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; color: #475569; }
@@ -298,6 +363,16 @@ const viewHistory = (day) => {
 .detail-title { margin: 0 0 15px 0; font-size: 1.2rem; color: #1e293b; border-bottom: 1px dashed #cbd5e1; padding-bottom: 10px; }
 .history-section h6 { font-size: 1.05rem; color: #475569; margin: 0 0 10px 0; }
 .history-list { display: flex; flex-direction: column; gap: 8px; }
-.history-item { font-size: 1.05rem; color: #334155; line-height: 1.4; }
+.history-item { font-size: 1.05rem; color: #334155; line-height: 1.4; word-break: break-all; }
 .empty-text { color: #94a3b8; font-style: italic; }
+
+/* 📱 手機版 RWD (小於 768px 時觸發上下排列) */
+@media (max-width: 768px) {
+  .split-layout { flex-direction: column; }
+  .calendar-layout { flex-direction: column; }
+  .editor-panel { padding: 15px; }
+  .calendar-box, .history-detail-box { padding: 15px; }
+  .lg-btn { font-size: 1.05rem; padding: 12px; }
+  .board-editor-container, .history-calendar-container { padding: 10px; }
+}
 </style>
