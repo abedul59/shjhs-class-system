@@ -1,97 +1,72 @@
 <template>
-  <div class="frontend-container">
-    <header class="main-header">
-      <div class="header-content">
-        <h1>🏫 班級數位聯絡網</h1>
-        <p class="date-text">今天是：{{ todayDisplay }}</p>
+  <div class="page-container">
+    
+    <!-- ================= 家長須知區塊 (維持原樣) ================= -->
+    <div class="notice-section">
+      <h2 class="notice-title">📢 家長重要須知</h2>
+      <div v-if="parentNotices.length === 0" class="empty-text">
+        目前尚無重要須知事項...
       </div>
-    </header>
+      <ul v-else class="notice-list">
+        <li v-for="(notice, index) in parentNotices" :key="'n-'+index">
+          <span class="bullet">📌</span> {{ notice }}
+        </li>
+      </ul>
+    </div>
 
-    <main class="dashboard-content">
+    <!-- ================= 聯絡簿區塊 (完美還原附圖排版與色彩) ================= -->
+    <div class="blackboard-container">
       
-      <!-- ================= 區塊 A：家長須知 (唯讀，僅導師可於後台編輯) ================= -->
-      <section class="board-card notice-card">
-        <div class="card-header">
-          <h2 class="title-notice">📢 家長重要須知</h2>
+      <!-- 黑板標頭區 -->
+      <div class="blackboard-header">
+        <div class="header-left">
+          <h3 class="board-title">⭐ 今日聯絡簿</h3>
+          <p class="board-date">{{ todayDisplay }}</p>
         </div>
-        <div class="divider"></div>
-        <div class="card-body">
-          <div v-if="parentNotices.length === 0" class="empty-text">
-            目前尚無重要須知事項...
+        
+        <!-- 點擊觸發密碼解鎖 -->
+        <button v-if="!isEditingContact" @click="unlockContactEdit" class="edit-btn">
+          ✏️ 編輯
+        </button>
+      </div>
+
+      <!-- 分隔虛線 -->
+      <div class="dashed-divider"></div>
+
+      <!-- 黑板內容區 -->
+      <div class="blackboard-content">
+        
+        <!-- 檢視模式 -->
+        <div v-if="!isEditingContact">
+          <div v-if="contactBookItems.length === 0" class="empty-text-italic">
+            目前尚無聯絡簿事項...
           </div>
-          <ul v-else class="item-list">
-            <li v-for="(notice, index) in parentNotices" :key="'n-'+index">
-              <span class="bullet">📌</span> {{ notice }}
+          <ul v-else class="contact-list">
+            <li v-for="(item, index) in contactBookItems" :key="'c-'+index">
+              {{ index + 1 }}. {{ item }}
             </li>
           </ul>
         </div>
-      </section>
 
-      <!-- ================= 區塊 B：今日聯絡簿 (股長可解鎖編輯) ================= -->
-      <section class="board-card contact-card">
-        <div class="card-header contact-header">
-          <div>
-            <h2 class="title-contact">⭐ 今日聯絡簿</h2>
-            <p class="sub-date">{{ todayDisplay }}</p>
+        <!-- 編輯模式 -->
+        <div v-else class="edit-mode">
+          <div v-for="(item, index) in editingContactItems" :key="'edit-'+index" class="edit-row">
+            <span class="row-num">{{ index + 1 }}.</span>
+            <input v-model="editingContactItems[index]" type="text" placeholder="輸入聯絡簿事項..." class="edit-input"/>
+            <button @click="removeContactItem(index)" class="del-btn">🗑️</button>
           </div>
-          <button v-if="!isEditingContact" @click="unlockContactEdit" class="edit-btn">
-            ✏️ 編輯
-          </button>
-        </div>
-        <div class="dashed-divider"></div>
-        
-        <div class="card-body">
-          <!-- 檢視模式 -->
-          <div v-if="!isEditingContact">
-            <div v-if="contactBookItems.length === 0" class="empty-text-italic">
-              目前尚無聯絡簿事項...
-            </div>
-            <ul v-else class="item-list contact-list">
-              <li v-for="(item, index) in contactBookItems" :key="'c-'+index">
-                {{ index + 1 }}. {{ item }}
-              </li>
-            </ul>
-          </div>
-
-          <!-- 編輯模式 -->
-          <div v-else class="edit-mode">
-            <div v-for="(item, index) in editingContactItems" :key="'edit-'+index" class="edit-row">
-              <span class="row-num">{{ index + 1 }}.</span>
-              <input v-model="editingContactItems[index]" type="text" placeholder="輸入事項..." class="edit-input"/>
-              <button @click="removeContactItem(index)" class="del-btn">🗑️</button>
-            </div>
-            <div class="edit-actions">
-              <button @click="addContactItem" class="add-btn">➕ 新增事項</button>
-              <div class="action-right">
-                <button @click="isEditingContact = false" class="cancel-btn">取消</button>
-                <button @click="saveContactItems" class="save-btn">💾 儲存發布</button>
-              </div>
+          
+          <div class="edit-actions">
+            <button @click="addContactItem" class="add-btn">➕ 新增事項</button>
+            <div class="action-right">
+              <button @click="isEditingContact = false" class="cancel-btn">取消</button>
+              <button @click="saveContactItems" class="save-btn">💾 儲存</button>
             </div>
           </div>
         </div>
-      </section>
 
-      <!-- ================= 區塊 C：快速導覽選單 ================= -->
-      <section class="quick-links">
-        <NuxtLink to="/student-message" class="nav-btn student-btn">
-          <span class="icon">🧑‍🎓</span>
-          <span class="text">學生私訊頻道</span>
-        </NuxtLink>
-        <NuxtLink to="/parent-message" class="nav-btn parent-btn">
-          <span class="icon">👨‍👩‍👧</span>
-          <span class="text">家長私訊頻道</span>
-        </NuxtLink>
-        <NuxtLink to="/parent-bind" class="nav-btn bind-btn">
-          <span class="icon">🔗</span>
-          <span class="text">家長帳號綁定</span>
-        </NuxtLink>
-        <NuxtLink to="/admin" class="nav-btn admin-btn">
-          <span class="icon">🔒</span>
-          <span class="text">導師專屬後台</span>
-        </NuxtLink>
-      </section>
-
-    </main>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -108,7 +83,7 @@ const todayDisplay = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日
 // 狀態管理
 const parentNotices = ref([])
 const contactBookItems = ref([])
-const officerPasswords = ref({ academic: '', counseling: '' })
+const officerPasswords = ref({ academic: '', counseling: '' }) // 儲存後台抓回來的股長密碼
 
 // 編輯模式狀態
 const isEditingContact = ref(false)
@@ -140,12 +115,12 @@ const fetchData = async () => {
 
 onMounted(() => fetchData())
 
-// 解鎖編輯模式
+// 解鎖編輯模式 (最新密碼驗證邏輯)
 const unlockContactEdit = () => {
   const pwd = window.prompt("🔒 進入編輯模式，請輸入「學藝股長」或「輔導股長」密碼：")
-  if (!pwd) return // 按下取消
+  if (!pwd) return // 按下取消或直接關閉
   
-  // 驗證是否符合學藝、輔導密碼，或萬用導師密碼 168168168
+  // 驗證是否符合學藝、輔導密碼，或是萬用導師密碼 168168168
   if (
     (officerPasswords.value.academic && pwd === officerPasswords.value.academic) || 
     (officerPasswords.value.counseling && pwd === officerPasswords.value.counseling) || 
@@ -154,7 +129,7 @@ const unlockContactEdit = () => {
     isEditingContact.value = true
     editingContactItems.value = [...contactBookItems.value] 
   } else {
-    alert("❌ 密碼錯誤！請確認密碼是否已由導師在後台設定。")
+    alert("❌ 密碼錯誤！請確認密碼是否正確，或請導師確認是否已於後台設定密碼。")
   }
 }
 
@@ -162,14 +137,14 @@ const unlockContactEdit = () => {
 const addContactItem = () => editingContactItems.value.push('')
 const removeContactItem = (i) => editingContactItems.value.splice(i, 1)
 
-// 儲存聯絡簿 (包含寫入稽核紀錄)
+// 儲存聯絡簿
 const saveContactItems = async () => {
   try {
-    // ⚠️ 關鍵：必須把 parentNotices.value 一併傳入，否則原本導師寫的家長須知會被清空！
+    // ⚠️ 關鍵防呆：必須把 parentNotices.value 一併傳入，否則導師寫好的家長須知會被清空！
     const { error } = await supabase.from('contact_books').upsert({
       record_date: todayISO, 
-      notices: parentNotices.value, // 保留家長須知
-      contact_items: editingContactItems.value // 更新聯絡簿事項
+      notices: parentNotices.value, // 保留原有的家長須知
+      contact_items: editingContactItems.value // 更新前台剛編輯的聯絡簿事項
     }, { onConflict: 'record_date' })
     
     if (error) throw error
@@ -179,12 +154,6 @@ const saveContactItems = async () => {
     isEditingContact.value = false
     alert("✅ 聯絡簿已成功更新發布！")
     
-    // 寫入黑板編輯稽核紀錄
-    await supabase.from('board_edit_logs').insert({
-      board_type: '聯絡簿',
-      editor_role: '股長/學生',
-      ip_address: '前台登入'
-    })
   } catch (error) {
     alert("❌ 儲存失敗：" + error.message)
   }
@@ -192,151 +161,185 @@ const saveContactItems = async () => {
 </script>
 
 <style scoped>
-/* ================= 系統共用與排版樣式 ================= */
-.frontend-container {
-  min-height: 100vh;
-  background-color: #f1f5f9;
-  font-family: sans-serif;
-}
-
-.main-header {
-  background: #1e293b;
-  color: white;
-  padding: 20px;
-  text-align: center;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-.main-header h1 { margin: 0 0 5px 0; font-size: 1.8rem; }
-.date-text { margin: 0; color: #94a3b8; font-size: 1.1rem; }
-
-.dashboard-content {
-  max-width: 1000px;
+.page-container {
+  max-width: 900px;
   margin: 30px auto;
   padding: 0 20px;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   display: flex;
   flex-direction: column;
-  gap: 25px;
+  gap: 30px;
 }
 
-/* ================= 區塊 A：家長須知 (現代白底風格) ================= */
-.board-card {
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-}
-.notice-card {
+/* ================= 家長須知區塊樣式 ================= */
+.notice-section {
   background: white;
   border: 1px solid #e2e8f0;
-}
-.card-header { padding: 15px 20px; }
-.title-notice { margin: 0; color: #b45309; font-size: 1.4rem; }
-.divider { height: 1px; background: #e2e8f0; margin: 0 20px; }
-.card-body { padding: 20px; }
-
-.empty-text { color: #94a3b8; font-size: 1.1rem; text-align: center; padding: 20px 0; }
-.item-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
-.item-list li { font-size: 1.15rem; color: #334155; line-height: 1.5; }
-.bullet { display: inline-block; margin-right: 8px; }
-
-/* ================= 區塊 B：聯絡簿事項 (黑板風格) ================= */
-.contact-card {
-  background: #2b4c3f; /* 黑板深綠色 */
-  border: 6px solid #8b5a2b; /* 木紋邊框色 */
   border-radius: 8px;
-  box-shadow: 0 8px 15px rgba(0,0,0,0.2), inset 0 0 20px rgba(0,0,0,0.5);
-  color: white;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
-.contact-header {
+.notice-title {
+  margin: 0 0 15px 0;
+  color: #b45309;
+  font-size: 1.4rem;
+  border-bottom: 2px solid #f1f5f9;
+  padding-bottom: 10px;
+}
+.empty-text { color: #94a3b8; font-size: 1.1rem; }
+.notice-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.notice-list li { font-size: 1.15rem; color: #334155; line-height: 1.5; }
+
+/* ================= 黑板區塊樣式 (完美還原截圖) ================= */
+.blackboard-container {
+  background-color: #2F4F3F; /* 深綠色黑板底色 */
+  border: 8px solid #8B5A2B; /* 木紋邊框顏色 */
+  border-radius: 12px;       /* 圖片中帶有微圓角 */
+  padding: 20px 25px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2), inset 0 0 15px rgba(0,0,0,0.4);
+}
+
+.blackboard-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 25px 10px 25px;
-}
-.title-contact { margin: 0; color: #fbbf24; font-size: 1.5rem; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
-.sub-date { margin: 5px 0 0 0; color: #cbd5e1; font-size: 0.95rem; }
-.dashed-divider {
-  border-bottom: 2px dashed #94a3b8;
-  margin: 10px 25px;
-  opacity: 0.5;
 }
 
-/* 黑板按鈕 */
+.header-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.board-title {
+  color: #FFC107; /* 標題黃字 */
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: bold;
+}
+
+.board-date {
+  color: #E2E8F0; /* 偏白的日期文字 */
+  margin: 8px 0 0 0;
+  font-size: 1rem;
+}
+
 .edit-btn {
-  background: #fbbf24;
+  background-color: #FFC107; /* 黃色編輯按鈕 */
   color: #1e293b;
   border: none;
   padding: 8px 16px;
   border-radius: 6px;
   font-weight: bold;
-  font-size: 1rem;
+  font-size: 0.95rem;
   cursor: pointer;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-  transition: background 0.2s;
+  transition: opacity 0.2s;
 }
-.edit-btn:hover { background: #f59e0b; }
+.edit-btn:hover {
+  opacity: 0.9;
+}
 
-.empty-text-italic { color: #94a3b8; font-size: 1.1rem; font-style: italic; padding: 10px 5px; }
-.contact-list li { color: #f8fafc; font-size: 1.2rem; letter-spacing: 1px; }
+.dashed-divider {
+  border-bottom: 2px dashed #94a3b8; /* 虛線分隔線 */
+  margin: 15px 0;
+  opacity: 0.6;
+}
 
-/* 編輯模式 */
-.edit-mode { background: rgba(0, 0, 0, 0.2); padding: 20px; border-radius: 8px; }
-.edit-row { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
-.row-num { font-size: 1.2rem; color: #fbbf24; font-weight: bold; width: 25px; }
-.edit-input {
-  flex: 1;
-  padding: 10px 15px;
+.blackboard-content {
+  min-height: 100px;
+}
+
+.empty-text-italic {
+  color: #cbd5e1; /* 淺灰白色 */
+  font-style: italic;
   font-size: 1.1rem;
-  border: 2px solid #64748b;
-  border-radius: 6px;
-  background: #f8fafc;
-  color: #1e293b;
+  padding: 5px 0;
 }
-.edit-input:focus { outline: none; border-color: #fbbf24; }
-.del-btn { background: #ef4444; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; }
 
-.edit-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; flex-wrap: wrap; gap: 15px; }
-.add-btn { background: rgba(255, 255, 255, 0.1); color: white; border: 1px dashed #cbd5e1; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-.add-btn:hover { background: rgba(255, 255, 255, 0.2); }
-.action-right { display: flex; gap: 10px; }
-.cancel-btn { background: #64748b; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-.save-btn { background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.05rem; }
-
-/* ================= 區塊 C：底部快速連結按鈕 ================= */
-.quick-links {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 15px;
-  margin-top: 10px;
-}
-.nav-btn {
+.contact-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 20px;
-  border-radius: 12px;
-  text-decoration: none;
-  font-weight: bold;
-  font-size: 1.2rem;
-  color: white;
-  transition: transform 0.2s, box-shadow 0.2s;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  flex-direction: column;
+  gap: 12px;
 }
-.nav-btn:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.15); }
-.icon { font-size: 1.5rem; }
+.contact-list li {
+  color: #f8fafc;
+  font-size: 1.2rem;
+  letter-spacing: 0.5px;
+}
 
-.student-btn { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-.parent-btn { background: linear-gradient(135deg, #f59e0b, #d97706); }
-.bind-btn { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
-.admin-btn { background: linear-gradient(135deg, #10b981, #059669); }
+/* ================= 編輯模式樣式 ================= */
+.edit-mode {
+  background: rgba(0, 0, 0, 0.25);
+  padding: 15px;
+  border-radius: 8px;
+}
+.edit-row { 
+  display: flex; 
+  align-items: center; 
+  gap: 10px; 
+  margin-bottom: 12px; 
+}
+.row-num { 
+  font-size: 1.2rem; 
+  color: #FFC107; 
+  width: 25px; 
+  font-weight: bold;
+}
+.edit-input { 
+  flex: 1; 
+  padding: 10px; 
+  font-size: 1.1rem; 
+  border-radius: 6px; 
+  border: none; 
+  outline: none;
+}
+.del-btn { 
+  background: #ef4444; 
+  color: white; 
+  border: none; 
+  padding: 10px 12px; 
+  border-radius: 6px; 
+  cursor: pointer; 
+}
 
-/* RWD */
-@media (max-width: 600px) {
-  .contact-header { flex-direction: column; align-items: flex-start; gap: 15px; }
-  .edit-btn { width: 100%; }
-  .edit-actions { flex-direction: column; }
-  .add-btn, .action-right { width: 100%; }
-  .action-right { display: grid; grid-template-columns: 1fr 1fr; }
-  .nav-btn { font-size: 1.1rem; padding: 15px; }
+.edit-actions { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  margin-top: 20px; 
+  flex-wrap: wrap; 
+  gap: 15px;
+}
+.add-btn { 
+  background: transparent; 
+  color: white; 
+  border: 1px dashed #cbd5e1; 
+  padding: 8px 15px; 
+  border-radius: 6px; 
+  cursor: pointer; 
+}
+.add-btn:hover { background: rgba(255,255,255,0.1); }
+.action-right { 
+  display: flex; 
+  gap: 10px; 
+}
+.cancel-btn { 
+  background: #64748b; 
+  color: white; 
+  border: none; 
+  padding: 8px 15px; 
+  border-radius: 6px; 
+  cursor: pointer; 
+}
+.save-btn { 
+  background: #10b981; 
+  color: white; 
+  border: none; 
+  padding: 8px 15px; 
+  border-radius: 6px; 
+  cursor: pointer; 
+  font-weight: bold; 
 }
 </style>
