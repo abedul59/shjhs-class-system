@@ -141,8 +141,11 @@ const updateTime = () => {
 const parentNotices = ref([])
 const contactBookItems = ref([])
 const officerPasswords = ref({ academic: '', counseling: '' })
+
+// 編輯模式狀態與當前編輯者身分
 const isEditingContact = ref(false)
 const editingContactItems = ref([])
+const currentEditorRole = ref('') // 記錄是哪個股長登入
 
 // --- 出缺席狀態管理 ---
 const allStudents = ref([])
@@ -158,7 +161,6 @@ const absentStudentsList = computed(() => {
   })
 })
 const absentCount = computed(() => absentStudentsList.value.length)
-
 
 // --- 資料抓取 ---
 const fetchData = async () => {
@@ -206,11 +208,17 @@ const unlockContactEdit = () => {
   const pwd = window.prompt("🔒 進入編輯模式，請輸入「學藝股長」或「輔導股長」密碼：")
   if (!pwd) return
   
-  if (
-    (officerPasswords.value.academic && pwd === officerPasswords.value.academic) || 
-    (officerPasswords.value.counseling && pwd === officerPasswords.value.counseling) || 
-    pwd === '168168168'
-  ) {
+  // 驗證並記錄登入者身分
+  if (officerPasswords.value.academic && pwd === officerPasswords.value.academic) {
+    currentEditorRole.value = '學藝股長'
+    isEditingContact.value = true
+    editingContactItems.value = [...contactBookItems.value] 
+  } else if (officerPasswords.value.counseling && pwd === officerPasswords.value.counseling) {
+    currentEditorRole.value = '輔導股長'
+    isEditingContact.value = true
+    editingContactItems.value = [...contactBookItems.value] 
+  } else if (pwd === '168168168') {
+    currentEditorRole.value = '導師 (萬用密碼)'
     isEditingContact.value = true
     editingContactItems.value = [...contactBookItems.value] 
   } else {
@@ -221,8 +229,10 @@ const unlockContactEdit = () => {
 const addContactItem = () => editingContactItems.value.push('')
 const removeContactItem = (i) => editingContactItems.value.splice(i, 1)
 
+// --- 儲存聯絡簿與寫入稽核紀錄 ---
 const saveContactItems = async () => {
   try {
+    // 1. 更新聯絡簿事項
     const { error } = await supabase.from('contact_books').upsert({
       record_date: todayISO, 
       notices: parentNotices.value, // 保留原有的家長須知不被洗掉
@@ -231,9 +241,18 @@ const saveContactItems = async () => {
     
     if (error) throw error
 
+    // 2. 寫入黑板編輯稽核紀錄，供 AdminAudit.vue 後台查閱
+    await supabase.from('board_edit_logs').insert({
+      board_type: '今日聯絡簿',
+      editor_role: currentEditorRole.value,
+      action_details: `前台更新了 ${editingContactItems.value.length} 筆聯絡簿事項`,
+      ip_address: '前台系統'
+    })
+
+    // 3. 更新前端畫面狀態
     contactBookItems.value = [...editingContactItems.value]
     isEditingContact.value = false
-    alert("✅ 聯絡簿已成功更新發布！")
+    alert("✅ 聯絡簿已成功更新，並已寫入系統稽核紀錄！")
   } catch (error) {
     alert("❌ 儲存失敗：" + error.message)
   }
@@ -254,8 +273,8 @@ const saveContactItems = async () => {
 
 /* ================= 共用黑板樣式 ================= */
 .blackboard {
-  background-color: #315243; /* 黑板深綠色 */
-  border: 10px solid #754d29; /* 木紋深咖啡色邊框 */
+  background-color: #315243;
+  border: 10px solid #754d29;
   border-radius: 8px;
   padding: 20px 25px;
   box-shadow: 0 6px 12px rgba(0,0,0,0.15), inset 0 0 10px rgba(0,0,0,0.3);
@@ -266,8 +285,8 @@ const saveContactItems = async () => {
   font-size: 1.4rem;
   font-weight: bold;
 }
-.notice-title { color: #fca5a5; /* 偏紅粉的字體 */ }
-.contact-title { color: #f59e0b; /* 黃色字體 */ }
+.notice-title { color: #fca5a5; }
+.contact-title { color: #f59e0b; }
 
 .board-date {
   color: #cbd5e1;
@@ -315,7 +334,6 @@ const saveContactItems = async () => {
   min-width: 0;
 }
 
-/* 1. 時鐘與按鈕白底卡片 */
 .control-card {
   background: white;
   border-radius: 8px;
@@ -354,7 +372,6 @@ const saveContactItems = async () => {
 .btn-purple { background: #8b5cf6; }
 .btn-red { background: #ef4444; }
 
-/* 2. 出缺席統計列 */
 .stats-row {
   display: flex;
   gap: 15px;
@@ -367,22 +384,21 @@ const saveContactItems = async () => {
   font-size: 1.05rem;
   font-weight: bold;
 }
-.stat-expected { background: #fef3c7; color: #92400e; } /* 黃底 */
-.stat-present { background: #dcfce7; color: #166534; }  /* 綠底 */
-.stat-absent { background: #ffe4e6; color: #be123c; }   /* 粉紅底 */
+.stat-expected { background: #fef3c7; color: #92400e; }
+.stat-present { background: #dcfce7; color: #166534; }
+.stat-absent { background: #ffe4e6; color: #be123c; }
 
-/* 3. 未到學生卡片網格 */
 .student-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 12px;
 }
 .student-card {
-  background: #ffe4e6; /* 粉紅背景 */
+  background: #ffe4e6;
   border-radius: 6px;
   padding: 15px 10px;
   text-align: center;
-  color: #e11d48; /* 紅色字體 */
+  color: #e11d48;
   font-weight: bold;
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
