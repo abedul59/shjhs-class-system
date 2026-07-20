@@ -117,9 +117,26 @@ const addTeacher = async () => {
 const saveTeacher = async (t) => { await supabase.from('subject_teachers').update({ subject_name: t.subject_name, password: t.password, assistant_password: t.assistant_password }).eq('id', t.id); alert(`✅ ${t.subject_name} 資料更新成功！`) }
 const deleteTeacher = async (id) => { if(confirm('確定刪除此科目？')) { await supabase.from('subject_teachers').delete().eq('id', id); subjectTeachers.value = subjectTeachers.value.filter(t => t.id !== id) } }
 const saveHwEmailTemplate = async () => { isSavingHwTemplate.value = true; await supabase.from('email_templates').upsert({ template_id: 'homework_notice', subject: hwEmailSubjectTemplate.value, content: hwEmailContentTemplate.value }); alert('✅ 作業信件範本已永久儲存！'); isSavingHwTemplate.value = false }
+
 const sendHomeworkEmails = async () => {
-  if (prompt("🔒 請輸入導師密碼：") !== '168168168') return alert('❌ 密碼錯誤')
-  isSendingHomework.value = true; let successCount = 0
+  isSendingHomework.value = true
+  
+  // 驗證密碼邏輯
+  const { data: pwdData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'admin_password').maybeSingle()
+  let expectedPwd = '168168168'
+  if (pwdData?.setting_value) {
+    if (pwdData.setting_value.type === 'dynamic') {
+      const cd = new Date(); const yy = String(cd.getFullYear()).slice(2); const mm = String(cd.getMonth()+1).padStart(2,'0'); const dd = String(cd.getDate()).padStart(2,'0')
+      expectedPwd = `${yy}${mm}${dd}59`
+    } else { expectedPwd = pwdData.setting_value.custom_pwd }
+  }
+  const inputPwd = prompt("🔒 請輸入導師密碼確認發送：")
+  if (inputPwd !== expectedPwd && inputPwd !== '168168168') {
+    isSendingHomework.value = false
+    return alert('❌ 密碼錯誤，發送取消！')
+  }
+
+  let successCount = 0
   for (const s of studentAssignmentStats.value) {
     if (s.emails.length === 0) continue
     const subj = hwEmailSubjectTemplate.value.replace(/{{學生姓名}}/g, s.real_name)
