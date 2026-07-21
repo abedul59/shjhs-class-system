@@ -36,8 +36,8 @@
             <NuxtLink to="/student-message" class="btn btn-blue">💬 學生私訊</NuxtLink>
             <NuxtLink to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
             <NuxtLink to="/assignments" class="btn btn-purple">📚 作業繳交登記系統</NuxtLink>
-            <!-- 💡 點擊觸發彈出視窗 -->
-            <button @click="showEmergencyModal = true" class="btn btn-red">🚨 緊急通知</button>
+            <!-- 💡 改為呼叫開啟前的密碼驗證函式 -->
+            <button @click="openEmergencyModal" class="btn btn-red">🚨 緊急通知</button>
           </div>
         </div>
 
@@ -109,7 +109,7 @@
 
     </div>
 
-    <!-- 💡 掛載並控制 EmergencyModal 元件 -->
+    <!-- 掛載並控制 EmergencyModal 元件 -->
     <EmergencyModal v-if="showEmergencyModal" @close="showEmergencyModal = false" />
   </div>
 </template>
@@ -120,6 +120,16 @@ const supabase = useSupabaseClient()
 
 // 控制彈出視窗的狀態變數
 const showEmergencyModal = ref(false)
+
+// --- 💡 開啟緊急通知前的密碼驗證 ---
+const openEmergencyModal = () => {
+  const pwd = window.prompt("🔒 進入緊急通知系統，請輸入「導師」密碼：")
+  if (pwd === '168168168') {
+    showEmergencyModal.value = true
+  } else if (pwd !== null) { // 如果不是按取消，就跳出錯誤
+    alert("❌ 密碼錯誤！無法使用此功能。")
+  }
+}
 
 const d = new Date()
 const todayISO = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
