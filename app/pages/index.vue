@@ -249,18 +249,16 @@ const saveContactItems = async () => {
       console.warn("無法取得真實 IP", e)
     }
 
-    // 3. 寫入稽核紀錄 (將所有可能的欄位補齊，並捕捉錯誤)
+    // 3. 寫入稽核紀錄 (已移除不存在的 action_details 欄位)
     const { error: logError } = await supabase.from('board_edit_logs').insert({
       board_type: '聯絡簿', 
       editor_role: currentEditorRole.value, 
-      action_details: '前台編輯聯絡簿',
       ip_address: clientIp
     })
 
-    // 💡 關鍵防呆：如果有錯誤，直接在畫面上彈出具體原因
     if (logError) {
       console.error("稽核紀錄寫入失敗:", logError)
-      alert(`⚠️ 聯絡簿事項已儲存，但「稽核紀錄」寫入失敗！\n\n系統訊息：${logError.message}\n\n這通常代表 Supabase 的 RLS 權限阻擋了前台寫入，或您的資料表缺乏 action_details 欄位。`)
+      alert(`⚠️ 聯絡簿事項已儲存，但「稽核紀錄」寫入失敗！\n\n系統訊息：${logError.message}`)
     } else {
       alert("✅ 聯絡簿已成功更新發布！(稽核紀錄亦已同步更新)")
     }
