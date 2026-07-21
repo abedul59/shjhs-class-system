@@ -93,17 +93,10 @@ const applyTemplate = (type) => {
   messageContent.value = `親愛的家長您好：\n\n您的孩子 ${name} 目前在校身體不適。\n狀況為：${condition}。\n\n為求慎重與孩子健康，請您盡速撥冗至學校將孩子接回就醫休息。\n若有任何問題請隨時透過系統私訊或電話聯繫。\n\n導師 敬上`
 }
 
-// 驗證密碼、呼叫 API 寄信與寫入資料庫
+// 呼叫 API 寄信與寫入資料庫
 const sendNotification = async () => {
   if (!selectedStudent.value || !messageContent.value.trim()) {
     alert('請確認已選擇學生並輸入通知內容！')
-    return
-  }
-
-  // 🔒 加入導師密碼驗證
-  const pwd = window.prompt("🔒 確認發送緊急通知，請輸入「導師」密碼：")
-  if (pwd !== '168168168') {
-    alert("❌ 密碼錯誤！發送已取消。")
     return
   }
 
