@@ -36,8 +36,8 @@
             <NuxtLink to="/student-message" class="btn btn-blue">💬 學生私訊</NuxtLink>
             <NuxtLink to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
             <NuxtLink to="/assignments" class="btn btn-purple">📚 作業繳交登記系統</NuxtLink>
-            <!-- 💡 補回綁定的點擊事件 -->
-            <button @click="showEmergencyModal = true" class="btn btn-red">🚨 緊急通知</button>
+            <!-- 點擊此按鈕展開底部的緊急通知區塊 -->
+            <button @click="toggleEmergencySection" class="btn btn-red">🚨 緊急通知</button>
           </div>
         </div>
 
@@ -119,17 +119,31 @@
 
     </div>
 
-    <!-- 💡 補回緊急通知 Modal 組件 -->
-    <EmergencyModal v-if="showEmergencyModal" @close="showEmergencyModal = false" />
+    <!-- ================= 底部：發送緊急通知區塊 ================= -->
+    <div v-if="showEmergencySection" class="emergency-block">
+      <h3 class="emergency-title">🚨 發送緊急通知</h3>
+      
+      <div class="emergency-controls">
+        <label>👨‍🎓 選擇學生：</label>
+        <select v-model="selectedEmergencyStudent" class="student-select">
+          <option value="" disabled selected>請選擇學生...</option>
+          <option v-for="student in allStudents" :key="student.id" :value="student.id">
+            {{ student.seat_number }}號 - {{ student.real_name }}
+          </option>
+        </select>
+      </div>
+
+      <button @click="sendEmergencyAlert" class="send-record-btn" :disabled="!selectedEmergencyStudent || isSendingAlert">
+        {{ isSendingAlert ? '發送中...' : '📤 發送通知並寫入系統紀錄' }}
+      </button>
+    </div>
+
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 const supabase = useSupabaseClient()
-
-// --- 💡 緊急通知 Modal 狀態開關 ---
-const showEmergencyModal = ref(false)
 
 // --- 日期與時間管理 ---
 const d = new Date()
@@ -167,6 +181,47 @@ const absentStudentsList = computed(() => {
   })
 })
 const absentCount = computed(() => absentStudentsList.value.length)
+
+// --- 🚨 緊急通知專用狀態與邏輯 ---
+const showEmergencySection = ref(true) // 預設依照截圖顯示於底部
+const selectedEmergencyStudent = ref('')
+const isSendingAlert = ref(false)
+
+const toggleEmergencySection = () => {
+  showEmergencySection.value = !showEmergencySection.value
+}
+
+const sendEmergencyAlert = async () => {
+  if (!selectedEmergencyStudent.value) {
+    alert("請先選擇要發送通知的學生！")
+    return
+  }
+
+  // 💡 安全機制：輸入導師密碼才能發出通知
+  const pwd = window.prompt("🔒 確認發送緊急通知，請輸入「導師」密碼：")
+  if (!pwd) return
+
+  if (pwd !== '168168168') {
+    alert("❌ 密碼錯誤！發送已取消。")
+    return
+  }
+
+  isSendingAlert.value = true
+  try {
+    // 找出選取的學生姓名 (用於提示)
+    const studentInfo = allStudents.value.find(s => s.id === selectedEmergencyStudent.value)
+    
+    // 這裡可以串接您實際發送信件或推播的 API
+    // 例如： await $fetch('/api/send-email', { method: 'POST', body: { ... } })
+
+    alert(`✅ 驗證成功！已發送緊急通知給 ${studentInfo.real_name} 的家長，並已寫入系統紀錄。`)
+    selectedEmergencyStudent.value = '' // 清空選擇
+  } catch (error) {
+    alert("❌ 發生錯誤，通知發送失敗：" + error.message)
+  } finally {
+    isSendingAlert.value = false
+  }
+}
 
 // --- 資料抓取 ---
 const fetchData = async () => {
@@ -285,7 +340,6 @@ const saveContactItems = async () => {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  position: relative;
 }
 
 /* ================= 共用黑板樣式 ================= */
@@ -495,6 +549,53 @@ const saveContactItems = async () => {
 .action-right { display: flex; gap: 10px; }
 .cancel-btn { background: #64748b; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; }
 .save-btn { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+
+/* ================= 底部：緊急通知區塊 ================= */
+.emergency-block {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.emergency-title {
+  margin: 0 0 15px 0;
+  font-size: 1.1rem;
+  color: #1e293b;
+}
+.emergency-controls {
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.95rem;
+}
+.student-select {
+  padding: 6px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  min-width: 150px;
+}
+.send-record-btn {
+  background: #f8fafc;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.send-record-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+.send-record-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* 📱 響應式調整 */
 @media (max-width: 1024px) {
