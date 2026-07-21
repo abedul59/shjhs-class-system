@@ -207,7 +207,7 @@ const unlockContactEdit = () => {
   const pwd = window.prompt("🔒 進入編輯模式，請輸入「學藝股長」或「輔導股長」密碼：")
   if (!pwd) return
   
-  // 驗證密碼，並將身分精準設定為符合您截圖格式的「股長」或「導師」
+  // 驗證密碼，並將身分精準設定為符合截圖格式的「股長」或「導師」
   if (
     (officerPasswords.value.academic && pwd === officerPasswords.value.academic) || 
     (officerPasswords.value.counseling && pwd === officerPasswords.value.counseling)
@@ -249,8 +249,9 @@ const saveContactItems = async () => {
       console.warn("無法取得真實 IP", e)
     }
 
-    // 3. 寫入稽核紀錄 (已移除不存在的 action_details 欄位)
+    // 3. 寫入稽核紀錄 (✨補上被資料庫要求必填的 board_date 欄位！)
     const { error: logError } = await supabase.from('board_edit_logs').insert({
+      board_date: todayISO, // 補上遺漏的必填日期
       board_type: '聯絡簿', 
       editor_role: currentEditorRole.value, 
       ip_address: clientIp
@@ -260,7 +261,7 @@ const saveContactItems = async () => {
       console.error("稽核紀錄寫入失敗:", logError)
       alert(`⚠️ 聯絡簿事項已儲存，但「稽核紀錄」寫入失敗！\n\n系統訊息：${logError.message}`)
     } else {
-      alert("✅ 聯絡簿已成功更新發布！(稽核紀錄亦已同步更新)")
+      alert("✅ 聯絡簿已成功更新發布！(稽核紀錄亦已同步寫入後台)")
     }
 
     // 4. 更新畫面
