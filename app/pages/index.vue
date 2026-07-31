@@ -27,8 +27,16 @@
             <NuxtLink to="/assignments" class="btn btn-purple">📚 作業管理</NuxtLink>
             <button @click="openDiscipline" class="btn btn-dark-blue">⚖️ 秩序管理</button>
             <button @click="openEmergencyModal" class="btn btn-red">🚨 緊急通知</button>
-            <!-- 💡 新增：座位管理按鈕 (直接導向，不在index.vue做密碼驗證) -->
             <NuxtLink to="/seats" class="btn btn-teal">🪑 座位管理</NuxtLink>
+            
+            <!-- 💡 新增：座位表展開/隱藏切換按鈕 (只有後台開啟顯示時才會出現) -->
+            <button 
+              v-if="seatingChart.isVisible" 
+              @click="showSeatingChartLocal = !showSeatingChartLocal" 
+              class="btn btn-indigo"
+            >
+              {{ showSeatingChartLocal ? '🙈 隱藏教室座位表' : '👀 顯示教室座位表' }}
+            </button>
           </div>
         </div>
 
@@ -84,16 +92,33 @@
       </div>
     </div>
 
-    <!-- 💡 新增：班級座位表顯示區 (若導師設定顯示，才渲染) -->
-    <div v-if="seatingChart.isVisible" class="seating-display-board">
+    <!-- 💡 班級座位表顯示區 (加入 && showSeatingChartLocal 雙重判斷) -->
+    <div v-if="seatingChart.isVisible && showSeatingChartLocal" class="seating-display-board">
       <h3 class="seating-title">🪑 班級座位表</h3>
       <div class="seating-wrapper">
         <div :class="['seating-area', { 'is-rotated': seatingChart.isRotated }]">
           
+          <div class="labels-grid-readonly">
+            <div v-for="n in 6" :key="'readonly-label-'+n" class="row-label-readonly">
+              第{{ n }}排
+            </div>
+          </div>
+
           <div class="seats-grid-readonly">
-            <div v-for="seat in seatingChart.seats" :key="seat.id" class="seat-card-readonly">
+            <div 
+              v-for="seat in seatingChart.seats" 
+              :key="seat.id" 
+              :class="['seat-card-readonly', { 'is-hidden-seat-readonly': seat.isHidden }]"
+            >
               <div class="seat-id-readonly">{{ seat.id }}</div>
-              <div class="seat-text-readonly" v-html="seat.content.replace(/\n/g, '<br>')"></div>
+              <div 
+                class="seat-text-readonly" 
+                v-html="seat.content.replace(/\n/g, '<br>')"
+                :style="{ 
+                  fontSize: (seatingChart.settings?.fontSize || 16) + 'px', 
+                  color: seatingChart.settings?.fontColor || '#1e293b' 
+                }"
+              ></div>
             </div>
           </div>
 
@@ -115,6 +140,9 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 const supabase = useSupabaseClient()
 
 const showEmergencyModal = ref(false)
+
+// 💡 獨立控制首頁是否展開座位表的狀態
+const showSeatingChartLocal = ref(false)
 
 const openEmergencyModal = () => {
   const pwd = window.prompt("🔒 進入緊急通知系統，請輸入「導師」密碼：")
@@ -146,8 +174,12 @@ const parentNotices = ref([])
 const contactBookItems = ref([])
 const officerPasswords = ref({ academic: '', counseling: '', discipline: '', teacher: '168168168' })
 
-// 💡 儲存座位表資料
-const seatingChart = ref({ isVisible: false, isRotated: false, seats: [] })
+const seatingChart = ref({ 
+  isVisible: false, 
+  isRotated: false, 
+  seats: [],
+  settings: { fontSize: 16, fontColor: '#1e293b' }
+})
 
 const isEditingContact = ref(false)
 const editingContactItems = ref([])
@@ -167,7 +199,6 @@ const absentStudentsList = computed(() => {
 const absentCount = computed(() => absentStudentsList.value.length)
 
 const fetchData = async () => {
-  // 抓取聯絡簿
   const { data: boardData } = await supabase
     .from('contact_books')
     .select('notices, contact_items')
@@ -177,7 +208,6 @@ const fetchData = async () => {
   parentNotices.value = boardData?.notices || []
   contactBookItems.value = boardData?.contact_items || []
 
-  // 抓取密碼設定與座位表設定
   const { data: sysData } = await supabase
     .from('system_settings')
     .select('*')
@@ -191,7 +221,6 @@ const fetchData = async () => {
     if (seatSetting) seatingChart.value = seatSetting.setting_value
   }
 
-  // 抓取學生與出缺席
   const { data: sData } = await supabase.from('students').select('*').order('seat_number')
   if (sData) allStudents.value = sData
 
@@ -240,18 +269,6 @@ const saveContactItems = async () => {
       record_date: todayISO, notices: parentNotices.value, contact_items: editingContactItems.value
     }, { onConflict: 'record_date' })
     if (upsertError) throw upsertError
-
-    let clientIp = null
-    try {
-      const ipRes = await fetch('https://api.ipify.org?format=json')
-      const ipData = await ipRes.json()
-      clientIp = ipData.ip
-    } catch (e) { console.warn("無法取得真實 IP", e) }
-
-    await supabase.from('board_edit_logs').insert({
-      board_date: todayISO, board_type: '聯絡簿', editor_role: currentEditorRole.value, ip_address: clientIp
-    })
-
     alert("✅ 聯絡簿已成功更新發布！")
     contactBookItems.value = [...editingContactItems.value]
     isEditingContact.value = false
@@ -262,7 +279,6 @@ const saveContactItems = async () => {
 </script>
 
 <style scoped>
-/* 原有的樣式保留 */
 .page-container { min-height: 100vh; background-color: #f3f4f6; padding: 20px; font-family: sans-serif; display: flex; flex-direction: column; gap: 20px; }
 .blackboard { background-color: #315243; border: 10px solid #754d29; border-radius: 8px; padding: 20px 25px; box-shadow: 0 6px 12px rgba(0,0,0,0.15), inset 0 0 10px rgba(0,0,0,0.3); }
 .board-title { margin: 0; font-size: 1.4rem; font-weight: bold; }
@@ -288,7 +304,8 @@ const saveContactItems = async () => {
 .btn-purple { background: #8b5cf6; }
 .btn-red { background: #ef4444; }
 .btn-dark-blue { background: #1e3a8a; } 
-.btn-teal { background: #0f766e; } /* 新增座位管理按鈕顏色 */
+.btn-teal { background: #0f766e; } 
+.btn-indigo { background: #6366f1; } /* 新增顯示座位表按鈕顏色 */
 
 .stats-row { display: flex; gap: 15px; }
 .stat-box { flex: 1; padding: 12px; border-radius: 6px; text-align: center; font-size: 1.05rem; font-weight: bold; }
@@ -318,11 +335,10 @@ const saveContactItems = async () => {
 .cancel-btn { background: #64748b; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; }
 .save-btn { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 
-/* 💡 新增：首頁顯示的座位表樣式 (唯讀版) */
 .seating-display-board {
   background: white;
   border-radius: 8px;
-  padding: 25px;
+  padding: 30px;
   box-shadow: 0 4px 6px rgba(0,0,0,0.05);
   border: 1px solid #e2e8f0;
   margin-top: 10px;
@@ -332,8 +348,9 @@ const saveContactItems = async () => {
   color: #0f766e;
   border-bottom: 2px solid #f1f5f9;
   padding-bottom: 10px;
-  margin-bottom: 20px;
+  margin-bottom: 25px;
   text-align: center;
+  font-size: 1.4rem;
 }
 .seating-wrapper {
   display: flex;
@@ -342,67 +359,70 @@ const saveContactItems = async () => {
 }
 .seating-area {
   width: 100%;
-  max-width: 800px;
+  max-width: 900px;
   transition: transform 0.5s ease;
 }
+
 .seating-area.is-rotated { transform: rotate(180deg); }
-.seating-area.is-rotated .seat-card-readonly { transform: rotate(-180deg); }
+.seating-area.is-rotated .seat-card-readonly,
+.seating-area.is-rotated .row-label-readonly,
 .seating-area.is-rotated .teacher-desk-readonly { transform: rotate(-180deg); }
+
+.labels-grid-readonly { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 15px; }
+.row-label-readonly { text-align: center; font-weight: bold; color: #0f766e; font-size: 1.1rem; transition: transform 0.5s ease; }
 
 .seats-grid-readonly {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 10px;
-  margin-bottom: 30px;
+  margin-bottom: 35px;
 }
 .seat-card-readonly {
-  border: 2px solid #e2e8f0;
+  border: 2px solid #cbd5e1;
   border-radius: 8px;
   background: #f8fafc;
   padding: 10px;
   text-align: center;
-  height: 80px;
+  height: 90px;
   display: flex;
   flex-direction: column;
   transition: transform 0.5s ease;
 }
+
+/* 💡 徹底隱藏，不留下任何邊框與點擊事件，但保留格線空間 */
+.seat-card-readonly.is-hidden-seat-readonly {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 .seat-id-readonly {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: #94a3b8;
   text-align: left;
   margin-bottom: 5px;
   font-weight: bold;
 }
 .seat-text-readonly {
-  font-size: 0.95rem;
   font-weight: bold;
-  color: #1e293b;
-  line-height: 1.3;
+  line-height: 1.4;
 }
 
 .teacher-desk-readonly {
   border: 3px solid #0f766e;
   background: #f0fdfa;
-  padding: 12px 20px;
+  padding: 15px 20px;
   border-radius: 8px;
   text-align: center;
-  width: 200px;
+  width: 250px;
   margin: 0 auto;
   transition: transform 0.5s ease;
 }
-.teacher-desk-readonly h3 {
-  margin: 0;
-  color: #0f766e;
-  font-size: 1.1rem;
-}
+.teacher-desk-readonly h3 { margin: 0; color: #0f766e; font-size: 1.2rem; }
 
-@media (max-width: 1024px) { 
-  .main-split { flex-direction: column; } 
-  .student-grid { grid-template-columns: repeat(3, 1fr); } 
-}
+@media (max-width: 1024px) { .main-split { flex-direction: column; } .student-grid { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 768px) {
-  .seats-grid-readonly { gap: 5px; }
-  .seat-card-readonly { padding: 5px; height: 70px; }
-  .seat-text-readonly { font-size: 0.85rem; }
+  .seats-grid-readonly, .labels-grid-readonly { gap: 5px; }
+  .seat-card-readonly { padding: 5px; height: 75px; }
 }
 </style>
