@@ -1,6 +1,7 @@
 <template>
   <div class="discipline-page">
-    <!-- ================= 登入介面 (沿用作業繳交風格) ================= -->
+    
+    <!-- ================= 登入介面 (完美整合科目選擇與密碼同步) ================= -->
     <div v-if="!isLoggedIn" class="login-container">
       <div class="login-card">
         <h2 class="title">🚨 秩序管理系統</h2>
@@ -10,14 +11,20 @@
           <label>登入身分：</label>
           <select v-model="loginForm.role" class="form-control">
             <option value="discipline">風紀股長</option>
-            <option value="subject_teacher">任課老師</option>
+            <option value="subject">任課老師 / 小老師</option>
             <option value="teacher">導師 (最高權限)</option>
           </select>
         </div>
 
-        <div v-if="loginForm.role === 'subject_teacher'" class="form-group">
+        <!-- 💡 當選擇任課老師/小老師時，自動載入 assignments.vue 使用的科目清單 -->
+        <div v-if="loginForm.role === 'subject'" class="form-group">
           <label>任課科目 (必填)：</label>
-          <input v-model="loginForm.subject" type="text" placeholder="例如：國文、英文、理化..." class="form-control" />
+          <select v-model="loginForm.subject" class="form-control">
+            <option value="" disabled>請選擇科目...</option>
+            <option v-for="t in teachersList" :key="t.id" :value="t.subject_name">
+              {{ t.subject_name }}
+            </option>
+          </select>
         </div>
 
         <div class="form-group">
@@ -41,191 +48,193 @@
       </div>
     </div>
 
-    <!-- ================= 主操作介面 ================= -->
-    <div v-else class="main-container">
+    <!-- ================= 主操作介面 (保留您原本的違規管理與統計) ================= -->
+    <div v-else class="main-content-wrapper">
       <header class="page-header">
-        <div class="header-left">
-          <h2>📋 班級秩序與違規登記</h2>
-          <span class="role-badge">
-            目前身分：{{ displayRoleName }}
-          </span>
-        </div>
+        <h2>⚖️ 班級秩序與違規管理系統</h2>
         <div class="header-right">
-          <button @click="handleLogout" class="btn-logout">登出</button>
-          <NuxtLink to="/" class="btn-home">回首頁</NuxtLink>
+          <span class="role-badge">目前身分：{{ userRole }}</span>
+          <button @click="logout" class="btn-logout">登出返回</button>
         </div>
       </header>
 
-      <div class="content-grid">
-        <!-- 左側：登記違規表單 -->
-        <div class="card form-card">
-          <h3>➕ 新增違規紀錄</h3>
-          
-          <div class="form-group">
-            <label>違規學生：</label>
-            <select v-model="recordForm.student_id" class="form-control">
-              <option value="" disabled>請選擇學生...</option>
-              <option v-for="student in studentList" :key="student.id" :value="student.id">
-                <!-- 💡 修正為 real_name 與 seat_number -->
-                {{ student.seat_number }}號 - {{ student.real_name }}
-              </option>
-            </select>
+      <div class="main-content">
+        <!-- ================= 左側：登記違規 ================= -->
+        <div class="left-col">
+          <div class="card form-card">
+            <h3>📝 登記違規行為</h3>
+            <div class="form-group">
+              <label>👩‍🎓 選擇學生：</label>
+              <select v-model="form.studentId" class="form-control">
+                <option disabled value="">請選擇學生...</option>
+                <option v-for="s in students" :key="s.id" :value="s.id">
+                  {{ s.seat_number }}號 - {{ s.real_name }}
+                </option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label>⚠️ 違規項目：</label>
+              <select v-model="form.violationName" class="form-control">
+                <option disabled value="">請選擇違規項目...</option>
+                <option v-for="v in violationTypes" :key="v.id" :value="v.name">
+                  {{ v.name }}
+                </option>
+              </select>
+            </div>
+
+            <button @click="submitRecord" class="btn-primary" :disabled="!form.studentId || !form.violationName || isSubmitting">
+              {{ isSubmitting ? '登記中...' : '送出登記' }}
+            </button>
           </div>
 
-          <div class="form-group">
-            <label>違規事由：</label>
-            <select v-model="recordForm.reason" class="form-control">
-              <option value="" disabled>請選擇事由...</option>
-              <option value="上課吵鬧">上課吵鬧</option>
-              <option value="未帶學用品">未帶學用品</option>
-              <option value="睡覺/不專心">睡覺 / 不專心</option>
-              <option value="遲到/早退">遲到 / 早退</option>
-              <option value="服裝儀容違規">服裝儀容違規</option>
-              <option value="其他">其他 (請在備註說明)</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>備註說明 (選填)：</label>
-            <textarea v-model="recordForm.note" rows="3" class="form-control" placeholder="輸入詳細情況..."></textarea>
-          </div>
-
-          <button @click="submitRecord" class="btn-primary" :disabled="isSubmitting">
-            {{ isSubmitting ? '儲存中...' : '💾 登記違規' }}
-          </button>
-        </div>
-
-        <!-- 右側：近期紀錄與統計表 -->
-        <div class="card table-card">
-          <h3>📊 近期違規紀錄</h3>
-          
-          <div v-if="isLoadingData" class="loading-text">資料載入中...</div>
-          
-          <div v-else class="table-responsive">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>日期時間</th>
-                  <th>座號姓名</th>
-                  <th>違規事由</th>
-                  <th>登記人</th>
-                  <th v-if="currentUser.role === 'teacher'">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="record in recentRecords" :key="record.id">
-                  <td class="time-col">{{ formatTime(record.created_at) }}</td>
-                  <td>
-                    <!-- 💡 修正為 real_name 與 seat_number -->
-                    {{ record.students?.seat_number || '?' }}號 
-                    {{ record.students?.real_name || '未知學生' }}
-                  </td>
-                  <td>
-                    <span class="reason-tag">{{ record.reason }}</span>
-                    <div class="note-text" v-if="record.note">{{ record.note }}</div>
-                  </td>
-                  <td>{{ record.recorded_by }}</td>
-                  <td v-if="currentUser.role === 'teacher'">
-                    <button @click="deleteRecord(record.id)" class="btn-sm-delete">刪除</button>
-                  </td>
-                </tr>
-                <tr v-if="recentRecords.length === 0">
-                  <td colspan="5" class="empty-state">尚無任何違規紀錄</td>
-                </tr>
-              </tbody>
-            </table>
+          <!-- 導師專屬：管理違規種類 -->
+          <div v-if="userRole === '導師'" class="card manage-card">
+            <h3>⚙️ 管理違規種類 (僅導師可見)</h3>
+            <div class="add-type">
+              <input v-model="newTypeName" type="text" placeholder="輸入新違規項目名稱..." class="form-control edit-input">
+              <button @click="addViolationType" class="btn-add">新增</button>
+            </div>
+            <ul class="type-list">
+              <li v-for="v in violationTypes" :key="v.id">
+                <span>{{ v.name }}</span>
+                <button @click="deleteViolationType(v.id)" class="btn-del-type">刪除</button>
+              </li>
+            </ul>
           </div>
         </div>
+
+        <!-- ================= 右側：違規統計與紀錄 ================= -->
+        <div class="right-col">
+          <div class="card history-card">
+            <h3>📊 違規次數統計與紀錄</h3>
+            
+            <div v-if="groupedRecords.length === 0" class="empty-state">
+              目前班上表現優良，尚無違規紀錄！🎉
+            </div>
+            
+            <div class="table-container" v-else>
+              <table class="history-table">
+                <thead>
+                  <tr>
+                    <th>座號姓名</th>
+                    <th>違規項目 (累計次數)</th>
+                    <th>詳細發生時間</th>
+                    <th>登記人</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="group in groupedRecords" :key="group.student_id + group.violation_name">
+                    <td class="student-cell">
+                      <span class="seat">{{ getStudentSeat(group.student_id) }}</span>
+                      {{ getStudentName(group.student_id) }}
+                    </td>
+                    <td class="violation-cell">
+                      {{ group.violation_name }} 
+                      <span class="count-badge">共 {{ group.records.length }} 次</span>
+                    </td>
+                    <td class="time-cell">
+                      <ul class="time-list">
+                        <li v-for="rec in group.records" :key="rec.id">
+                          {{ formatTime(rec.created_at) }}
+                        </li>
+                      </ul>
+                    </td>
+                    <td>{{ group.records[0].recorded_by }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 const supabase = useSupabaseClient()
 
-const TABLE_STUDENTS = 'students'           
-const TABLE_RECORDS = 'discipline_records'  
-
-// 登入狀態與資料
+// 登入狀態與清單
 const isLoggedIn = ref(false)
 const isLoggingIn = ref(false)
 const loginForm = ref({ role: 'discipline', subject: '', password: '' })
-const currentUser = ref({ role: '', subject: '' })
+const teachersList = ref([]) // 同步 assignments.vue 的科目清單
 
 // 業務資料
-const studentList = ref([])
-const recentRecords = ref([])
-const isLoadingData = ref(false)
+const userRole = ref('')
+const students = ref([])
+const violationTypes = ref([])
+const disciplineRecords = ref([])
+const form = ref({ studentId: '', violationName: '' })
+const newTypeName = ref('')
 const isSubmitting = ref(false)
 
-const recordForm = ref({
-  student_id: '',
-  reason: '',
-  note: ''
-})
+// 進入頁面時檢查權限與抓取基礎資料
+onMounted(async () => {
+  // 先抓取科目老師清單，供登入選單使用
+  await fetchTeachers()
 
-const displayRoleName = computed(() => {
-  if (currentUser.value.role === 'teacher') return '導師'
-  if (currentUser.value.role === 'subject_teacher') return `任課老師 (${currentUser.value.subject})`
-  return '風紀股長'
-})
-
-onMounted(() => {
-  const savedRole = sessionStorage.getItem('discipline_role')
-  const savedSubject = sessionStorage.getItem('discipline_subject')
-  
-  if (savedRole) {
-    currentUser.value.role = savedRole
-    currentUser.value.subject = savedSubject || ''
+  const role = sessionStorage.getItem('discipline_role')
+  if (role) {
+    userRole.value = role
     isLoggedIn.value = true
-    fetchInitialData()
+    await loadMainData()
   }
 })
 
+// 載入科目清單 (與 assignments.vue 同步)
+const fetchTeachers = async () => {
+  const { data } = await supabase.from('subject_teachers').select('*').order('subject_name')
+  if (data) teachersList.value = data
+}
+
+// 處理登入驗證
 const handleLogin = async () => {
   if (!loginForm.value.password) {
     alert('請輸入密碼！')
     return
   }
-  if (loginForm.value.role === 'subject_teacher' && !loginForm.value.subject.trim()) {
-    alert('任課老師請務必填寫「任課科目」！')
-    return
-  }
 
   isLoggingIn.value = true
   try {
-    const { data, error } = await supabase
-      .from('system_settings')
-      .select('setting_value')
-      .eq('setting_key', 'board_officer_passwords')
-      .maybeSingle()
+    // 判斷是否為導師或風紀股長
+    if (loginForm.value.role === 'teacher' || loginForm.value.role === 'discipline') {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('setting_value')
+        .eq('setting_key', 'board_officer_passwords')
+        .maybeSingle()
 
-    if (error) throw error
-
-    const passwords = data?.setting_value || {}
-    const correctPassword = passwords[loginForm.value.role]
-
-    if (!correctPassword) {
-      alert(`後台尚未設定此身分(${loginForm.value.role})的密碼，請通知導師！`)
-      return
-    }
-
-    if (loginForm.value.password === correctPassword) {
-      sessionStorage.setItem('discipline_role', loginForm.value.role)
-      if (loginForm.value.role === 'subject_teacher') {
-        sessionStorage.setItem('discipline_subject', loginForm.value.subject.trim())
+      if (error) throw error
+      const passwords = data?.setting_value || {}
+      
+      if (loginForm.value.password === passwords[loginForm.value.role]) {
+        const roleName = loginForm.value.role === 'teacher' ? '導師' : '風紀股長'
+        completeLogin(roleName)
+      } else {
+        alert('密碼錯誤，請重新輸入！')
+      }
+    } 
+    // 判斷是否為任課老師或小老師
+    else if (loginForm.value.role === 'subject') {
+      if (!loginForm.value.subject) {
+        alert('請選擇任課科目！')
+        return
       }
       
-      currentUser.value.role = loginForm.value.role
-      currentUser.value.subject = loginForm.value.subject.trim()
-      isLoggedIn.value = true
+      // 從剛才抓好的 teachersList 進行密碼比對
+      const teacherInfo = teachersList.value.find(t => t.subject_name === loginForm.value.subject)
       
-      loginForm.value.password = ''
-      await fetchInitialData()
-    } else {
-      alert('密碼錯誤，請重新輸入！')
+      if (teacherInfo && loginForm.value.password === teacherInfo.password) {
+        completeLogin(`科任老師 (${teacherInfo.subject_name})`)
+      } else if (teacherInfo && teacherInfo.assistant_password && loginForm.value.password === teacherInfo.assistant_password) {
+        completeLogin(`小老師 (${teacherInfo.subject_name})`)
+      } else {
+        alert('密碼錯誤！請確認老師或小老師密碼。')
+      }
     }
   } catch (error) {
     console.error('登入驗證發生錯誤:', error)
@@ -235,100 +244,119 @@ const handleLogin = async () => {
   }
 }
 
-const handleLogout = () => {
+const completeLogin = async (roleName) => {
+  userRole.value = roleName
+  sessionStorage.setItem('discipline_role', roleName)
+  isLoggedIn.value = true
+  loginForm.value.password = ''
+  await loadMainData()
+}
+
+const logout = () => {
   sessionStorage.removeItem('discipline_role')
-  sessionStorage.removeItem('discipline_subject')
   isLoggedIn.value = false
 }
 
-const fetchInitialData = async () => {
-  isLoadingData.value = true
-  try {
-    const { data: studentsData } = await supabase.from(TABLE_STUDENTS).select('*')
-    if (studentsData) {
-      // 💡 修正排序邏輯：使用 seat_number 進行排序
-      studentList.value = studentsData.sort((a, b) => {
-        const numA = a.seat_number || 0
-        const numB = b.seat_number || 0
-        return numA - numB
-      })
-    }
-    await fetchRecords()
-  } catch (error) {
-    console.error('載入資料錯誤:', error)
-  } finally {
-    isLoadingData.value = false
-  }
+// 載入主要業務資料
+const loadMainData = async () => {
+  await Promise.all([
+    fetchStudents(),
+    fetchViolationTypes(),
+    fetchRecords()
+  ])
+}
+
+const fetchStudents = async () => {
+  const { data } = await supabase.from('students').select('*').order('seat_number')
+  if (data) students.value = data
+}
+
+const fetchViolationTypes = async () => {
+  const { data } = await supabase.from('violation_types').select('*').order('created_at')
+  if (data) violationTypes.value = data
 }
 
 const fetchRecords = async () => {
-  const { data: recordsData, error } = await supabase
-    .from(TABLE_RECORDS)
-    .select(`*, students(*)`)
-    .order('created_at', { ascending: false })
-    .limit(30)
-
-  if (error) {
-    console.error('無法讀取紀錄，請確認資料表名稱。', error)
-  }
-  if (recordsData) recentRecords.value = recordsData
+  const { data } = await supabase.from('discipline_records').select('*').order('created_at', { ascending: false })
+  if (data) disciplineRecords.value = data
 }
 
+// 提交違規紀錄
 const submitRecord = async () => {
-  if (!recordForm.value.student_id || !recordForm.value.reason) {
-    alert('請確實選擇「違規學生」與「違規事由」！')
-    return
-  }
-
   isSubmitting.value = true
   try {
-    const { error } = await supabase
-      .from(TABLE_RECORDS)
-      .insert({
-        student_id: recordForm.value.student_id,
-        reason: recordForm.value.reason,
-        note: recordForm.value.note,
-        recorded_by: displayRoleName.value
-      })
-
-    if (error) throw error
-
-    alert('✅ 違規紀錄已成功儲存！')
+    const { error } = await supabase.from('discipline_records').insert({
+      student_id: form.value.studentId,
+      violation_name: form.value.violationName,
+      recorded_by: userRole.value
+    })
     
-    recordForm.value.student_id = ''
-    recordForm.value.reason = ''
-    recordForm.value.note = ''
+    if (error) throw error
+    alert('✅ 違規登記成功！')
+    
+    form.value.studentId = ''
+    form.value.violationName = ''
     await fetchRecords()
   } catch (error) {
-    console.error('儲存紀錄錯誤:', error)
-    alert('儲存失敗，請檢查網路連線。')
+    alert('❌ 登記失敗：' + error.message)
   } finally {
     isSubmitting.value = false
   }
 }
 
-const deleteRecord = async (id) => {
-  if (confirm('確定要刪除這筆紀錄嗎？這項操作無法復原。')) {
-    const { error } = await supabase.from(TABLE_RECORDS).delete().eq('id', id)
-    if (!error) {
-      await fetchRecords()
-    } else {
-      alert('刪除失敗！')
-    }
+// --- 導師專屬管理功能 ---
+const addViolationType = async () => {
+  if (!newTypeName.value.trim()) return
+  const { error } = await supabase.from('violation_types').insert({ name: newTypeName.value.trim() })
+  if (!error) {
+    newTypeName.value = ''
+    await fetchViolationTypes()
+  } else {
+    alert('新增失敗：' + error.message)
   }
 }
 
+const deleteViolationType = async (id) => {
+  if (confirm("確定要刪除這個違規項目嗎？")) {
+    const { error } = await supabase.from('violation_types').delete().eq('id', id)
+    if (!error) await fetchViolationTypes()
+  }
+}
+
+// --- 報表轉換與格式化 ---
+const getStudentName = (id) => students.value.find(s => s.id === id)?.real_name || '未知'
+const getStudentSeat = (id) => students.value.find(s => s.id === id)?.seat_number || '?'
+
 const formatTime = (isoString) => {
   const date = new Date(isoString)
-  return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+  return `${date.getMonth()+1}/${date.getDate()} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`
 }
+
+const groupedRecords = computed(() => {
+  const groups = {}
+  disciplineRecords.value.forEach(record => {
+    const key = `${record.student_id}_${record.violation_name}`
+    if (!groups[key]) {
+      groups[key] = {
+        student_id: record.student_id,
+        violation_name: record.violation_name,
+        records: []
+      }
+    }
+    groups[key].records.push(record)
+  })
+  
+  return Object.values(groups).sort((a, b) => {
+    return getStudentSeat(a.student_id) - getStudentSeat(b.student_id)
+  })
+})
 </script>
 
 <style scoped>
 /* =========== 基礎設定 =========== */
 .discipline-page {
   min-height: 100vh;
-  background-color: #f8fafc;
+  background-color: #f1f5f9;
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   padding: 20px;
 }
@@ -351,12 +379,12 @@ const formatTime = (isoString) => {
 .title { text-align: center; color: #1e293b; margin-bottom: 5px; }
 .subtitle { text-align: center; color: #64748b; margin-bottom: 25px; font-size: 0.95rem; }
 
-/* =========== 共用表單元件 =========== */
-.form-group { margin-bottom: 20px; }
+/* =========== 共用表單與按鈕 =========== */
+.form-group { margin-bottom: 15px; }
 .form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #475569; }
 .form-control {
   width: 100%;
-  padding: 12px;
+  padding: 10px;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   font-size: 1rem;
@@ -364,75 +392,82 @@ const formatTime = (isoString) => {
 }
 .form-control:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
 
-/* =========== 按鈕設計 =========== */
-.btn-submit, .btn-primary {
-  width: 100%;
-  padding: 12px;
-  background-color: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 1.1rem;
-  font-weight: bold;
-  cursor: pointer;
-  transition: background-color 0.2s;
+.btn-submit, .btn-primary { 
+  width: 100%; 
+  background: #3b82f6; 
+  color: white; 
+  border: none; 
+  padding: 12px; 
+  border-radius: 6px; 
+  font-weight: bold; 
+  cursor: pointer; 
+  font-size: 1.1rem; 
+  margin-top: 10px;
 }
-.btn-submit:hover, .btn-primary:hover { background-color: #2563eb; }
-.btn-submit:disabled, .btn-primary:disabled { background-color: #94a3b8; cursor: not-allowed; }
+.btn-primary { background: #10b981; }
+.btn-submit:disabled, .btn-primary:disabled { background: #9ca3af; cursor: not-allowed; }
 
 .back-link { text-align: center; margin-top: 20px; }
 .back-link a { color: #64748b; text-decoration: none; font-weight: bold; }
 
 /* =========== 主畫面佈局 =========== */
-.main-container { max-width: 1200px; margin: 0 auto; }
+.main-content-wrapper { max-width: 1300px; margin: 0 auto; }
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   background: #1e293b;
   color: white;
-  padding: 20px 30px;
-  border-radius: 12px;
-  margin-bottom: 25px;
+  padding: 15px 25px;
+  border-radius: 8px;
+  margin-bottom: 20px;
 }
-.header-left h2 { margin: 0 0 5px 0; }
-.role-badge { background: #3b82f6; padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; }
+.page-header h2 { margin: 0; }
+.header-right { display: flex; align-items: center; gap: 15px; }
+.role-badge { background: #3b82f6; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 0.9rem;}
+.btn-logout { background: #ef4444; color: white; border: none; padding: 6px 15px; border-radius: 6px; cursor: pointer; font-weight: bold;}
 
-.header-right { display: flex; gap: 10px; }
-.btn-logout { background: transparent; border: 1px solid #94a3b8; color: white; padding: 8px 15px; border-radius: 6px; cursor: pointer; }
-.btn-home { background: #475569; color: white; text-decoration: none; padding: 8px 15px; border-radius: 6px; }
-.btn-logout:hover, .btn-home:hover { background: #64748b; }
-
-.content-grid {
-  display: grid;
-  grid-template-columns: 350px 1fr;
-  gap: 25px;
+.main-content {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
 }
 
-@media (max-width: 850px) {
-  .content-grid { grid-template-columns: 1fr; }
-}
+.left-col { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 350px;}
+.right-col { flex: 2; min-width: 600px;}
 
 .card {
   background: white;
-  border-radius: 12px;
-  padding: 25px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   border: 1px solid #e2e8f0;
 }
-.card h3 { margin-top: 0; color: #334155; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px; margin-bottom: 20px; }
+.card h3 { margin-top: 0; color: #334155; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 20px;}
+
+/* =========== 管理項目樣式 =========== */
+.manage-card .add-type { display: flex; gap: 10px; margin-bottom: 15px; }
+.edit-input { flex: 1; }
+.btn-add { background: #3b82f6; color: white; border: none; padding: 0 15px; border-radius: 6px; cursor: pointer; font-weight: bold;}
+.type-list { list-style: none; padding: 0; margin: 0; max-height: 250px; overflow-y: auto;}
+.type-list li { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0; margin-bottom: 8px; border-radius: 6px;}
+.btn-del-type { background: #ef4444; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85rem;}
+
+.empty-state { text-align: center; padding: 40px; color: #10b981; font-weight: bold; font-size: 1.2rem; background: #ecfdf5; border-radius: 8px; }
 
 /* =========== 表格樣式 =========== */
-.table-responsive { overflow-x: auto; }
-.data-table { width: 100%; border-collapse: collapse; }
-.data-table th { background: #f8fafc; padding: 12px; text-align: left; color: #475569; border-bottom: 2px solid #e2e8f0; }
-.data-table td { padding: 12px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
-.time-col { color: #64748b; font-size: 0.9rem; }
-.reason-tag { display: inline-block; background: #fee2e2; color: #b91c1c; padding: 4px 8px; border-radius: 4px; font-size: 0.9rem; font-weight: bold; }
-.note-text { font-size: 0.85rem; color: #64748b; margin-top: 6px; }
-.empty-state { text-align: center; padding: 30px !important; color: #94a3b8; }
+.table-container { overflow-x: auto; }
+.history-table { width: 100%; border-collapse: collapse; text-align: left; }
+.history-table th { background: #f1f5f9; padding: 12px; font-weight: bold; color: #475569; border-bottom: 2px solid #cbd5e1; }
+.history-table td { padding: 12px; border-bottom: 1px solid #e2e8f0; vertical-align: top;}
+.student-cell { font-weight: bold; color: #1e293b; }
+.seat { background: #cbd5e1; padding: 2px 8px; border-radius: 12px; font-size: 0.85rem; margin-right: 5px;}
+.violation-cell { color: #b91c1c; font-weight: bold; }
+.count-badge { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 12px; font-size: 0.85rem; margin-left: 8px; }
+.time-list { margin: 0; padding-left: 15px; font-size: 0.9rem; color: #64748b;}
 
-.btn-sm-delete { background: #fee2e2; color: #b91c1c; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; }
-.btn-sm-delete:hover { background: #fecaca; }
-.loading-text { text-align: center; padding: 40px; color: #64748b; }
+@media (max-width: 1024px) {
+  .main-content { flex-direction: column; }
+  .left-col, .right-col { width: 100%; min-width: 100%; }
+}
 </style>
