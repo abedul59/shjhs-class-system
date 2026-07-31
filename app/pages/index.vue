@@ -26,8 +26,7 @@
             <NuxtLink to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
             <NuxtLink to="/assignments" class="btn btn-purple">📚 作業管理</NuxtLink>
             <!-- 💡 新增：秩序管理按鈕 -->
-            
-            <NuxtLink to="/discipline" class="btn btn-purple">⚖️ 秩序管理</NuxtLink>
+            <button @click="openDiscipline" class="btn btn-dark-blue">⚖️ 秩序管理</button>
             <button @click="openEmergencyModal" class="btn btn-red">🚨 緊急通知</button>
           </div>
         </div>
@@ -105,16 +104,10 @@ const openEmergencyModal = () => {
   }
 }
 
-// 💡 秩序管理驗證邏輯
-// 將原本類似這樣的舊程式碼刪除：
-// const pwd = prompt('進入秩序管理，請輸入「導師」或「風紀股長」密碼：')
-// if (pwd === '...') navigateTo('/discipline')
-
-// 直接改成單純的跳轉（因為進入 discipline.vue 後會有我們新設計的精美登入介面）：
-//const goToDiscipline = () => {
-  //navigateTo('/discipline')
-//}
-
+// 💡 秩序管理驗證邏輯：移除舊版 prompt，直接導向我們做好的 discipline.vue 內部驗證
+const openDiscipline = () => {
+  navigateTo('/discipline')
+}
 
 const d = new Date()
 const todayISO = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
