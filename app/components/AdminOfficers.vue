@@ -1,57 +1,51 @@
 <template>
-  <div class="admin-officers-container">
-    <div class="card-header">
+  <div class="admin-officers">
+    <div class="header-box">
       <h3>🔐 職位密碼與權限管理</h3>
-      <p class="subtitle">您可以自由新增股長職位並設定密碼。請注意：系統核心功能綁定的代號為 <strong>teacher (導師)</strong> 與 <strong>discipline (風紀)</strong>。</p>
+      <p>您可以自由新增股長職位並設定密碼。請注意：系統核心功能綁定的代號將標示對應的「中文標籤」，以供識別。</p>
     </div>
 
-    <div v-if="isLoading" class="loading-state">
-      資料載入中...
-    </div>
-
-    <div v-else class="table-wrapper">
-      <table class="password-table">
+    <div class="table-container">
+      <table class="officer-table">
         <thead>
           <tr>
             <th>職位代號 (Role Key)</th>
             <th>登入密碼 (Password)</th>
-            <th class="action-col">操作</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(item, index) in passwordList" :key="index">
+          <tr v-for="(item, index) in officerList" :key="index">
             <td>
-              <input 
-                v-model="item.roleKey" 
-                type="text" 
-                placeholder="例如: discipline" 
-                class="edit-input" 
-                :disabled="item.roleKey === 'teacher'" 
-                title="teacher 為系統核心代號，不可修改" 
-              />
+              <div class="role-input-group">
+                <!-- 💡 視覺化中文對照標籤 -->
+                <span v-if="roleMap[item.key]" class="cn-label">{{ roleMap[item.key] }}</span>
+                <input 
+                  v-model="item.key" 
+                  type="text" 
+                  placeholder="輸入英文代號 (如: cleaning)..." 
+                  :disabled="isCoreRole(item.key)"
+                  :class="{ 'is-core': isCoreRole(item.key) }"
+                />
+              </div>
             </td>
             <td>
-              <input 
-                v-model="item.password" 
-                type="text" 
-                placeholder="輸入密碼..." 
-                class="edit-input" 
-              />
+              <input v-model="item.password" type="text" placeholder="請設定密碼..." class="pwd-input" />
             </td>
-            <td class="action-col">
-              <button v-if="item.roleKey !== 'teacher'" @click="removeRole(index)" class="btn-delete">🗑️ 刪除</button>
-              <span v-else class="locked-text">🔒 核心鎖定</span>
+            <td class="action-cell">
+              <span v-if="item.key === 'teacher'" class="lock-text">🔒 核心鎖定</span>
+              <button v-else @click="removeRole(index)" class="btn-delete">🗑️ 刪除</button>
             </td>
           </tr>
         </tbody>
       </table>
+    </div>
 
-      <div class="admin-actions">
-        <button @click="addNewRole" class="btn-add">➕ 新增股長 / 職位</button>
-        <button @click="savePasswords" class="btn-save" :disabled="isSaving">
-          {{ isSaving ? '儲存中...' : '💾 儲存所有密碼變更' }}
-        </button>
-      </div>
+    <div class="bottom-actions">
+      <button @click="addRole" class="btn-add">➕ 新增股長 / 職位</button>
+      <button @click="saveChanges" class="btn-save" :disabled="isSaving">
+        {{ isSaving ? '儲存中...' : '💾 儲存所有密碼變更' }}
+      </button>
     </div>
   </div>
 </template>
@@ -60,18 +54,26 @@
 import { ref, onMounted } from 'vue'
 const supabase = useSupabaseClient()
 
-const isLoading = ref(true)
+const officerList = ref([])
 const isSaving = ref(false)
 
-// 用於在畫面上呈現與編輯的陣列格式：[{ roleKey: 'academic', password: '111' }, ...]
-const passwordList = ref([])
+// 💡 中文對照表 (僅作視覺呈現，絕對不影響底層英文 Key 邏輯)
+const roleMap = {
+  'teacher': '導師',
+  'academic': '學藝股長',
+  'counseling': '輔導股長',
+  'discipline': '風紀股長'
+}
+
+// 定義系統核心關聯的 Key，不允許修改 Key 名稱 (但允許改密碼)
+const coreRoles = ['teacher', 'academic', 'counseling', 'discipline']
+const isCoreRole = (key) => coreRoles.includes(key)
 
 onMounted(async () => {
-  await fetchPasswords()
+  await fetchData()
 })
 
-const fetchPasswords = async () => {
-  isLoading.value = true
+const fetchData = async () => {
   try {
     const { data, error } = await supabase
       .from('system_settings')
@@ -81,62 +83,65 @@ const fetchPasswords = async () => {
 
     if (error) throw error
 
-    const passwordsJSON = data?.setting_value || {}
-    
-    // 將 JSON Object 轉換為 Array，方便 Vue 進行 v-model 渲染與列表編輯
-    passwordList.value = Object.keys(passwordsJSON).map(key => ({
-      roleKey: key,
-      password: passwordsJSON[key]
-    }))
-
+    if (data?.setting_value) {
+      // 將資料庫的 JSON Object 轉為 Array 方便渲染
+      officerList.value = Object.entries(data.setting_value).map(([key, password]) => ({
+        key,
+        password
+      }))
+    } else {
+      // 若資料庫全空，給予基礎預設值
+      officerList.value = [
+        { key: 'teacher', password: '168168168' },
+        { key: 'academic', password: '' },
+        { key: 'counseling', password: '' },
+        { key: 'discipline', password: '' }
+      ]
+    }
   } catch (err) {
-    console.error(err)
-    alert("讀取密碼資料失敗！")
-  } finally {
-    isLoading.value = false
+    console.error('讀取密碼設定失敗', err)
   }
 }
 
-const addNewRole = () => {
-  passwordList.value.push({ roleKey: '', password: '' })
+const addRole = () => {
+  officerList.value.push({ key: '', password: '' })
 }
 
 const removeRole = (index) => {
-  if (confirm("確定要刪除這個職位的密碼權限嗎？")) {
-    passwordList.value.splice(index, 1)
+  if (confirm('確定要刪除此職位的密碼設定嗎？(若有綁定前台按鈕將導致無法登入)')) {
+    officerList.value.splice(index, 1)
   }
 }
 
-const savePasswords = async () => {
-  // 1. 驗證資料，過濾掉空的代號
-  const hasEmptyKey = passwordList.value.some(item => !item.roleKey.trim())
-  if (hasEmptyKey) {
-    alert("❌ 儲存失敗：請確保所有「職位代號」都有填寫內容！")
-    return
-  }
-
+const saveChanges = async () => {
   isSaving.value = true
   try {
-    // 2. 將 Array 轉回 JSON Object 格式
-    const newPasswordsJSON = {}
-    passwordList.value.forEach(item => {
-      newPasswordsJSON[item.roleKey.trim()] = item.password.trim()
+    // 過濾掉空白的 key，並轉回 JSON Object 存入資料庫
+    const newSettings = {}
+    officerList.value.forEach(item => {
+      if (item.key.trim()) {
+        newSettings[item.key.trim()] = item.password.trim()
+      }
     })
 
-    // 3. 寫入資料庫 (💡 已經徹底移除 updated_at 欄位，解決 Schema Cache 的報錯問題)
-    const { error } = await supabase
-      .from('system_settings')
-      .upsert({
-        setting_key: 'board_officer_passwords',
-        setting_value: newPasswordsJSON
-      }, { onConflict: 'setting_key' })
+    // 終極防呆：確保 teacher 絕對存在，防止您被鎖在外面
+    if (!newSettings['teacher']) {
+      newSettings['teacher'] = '168168168'
+    }
 
-    if (error) throw error
-    
-    alert("✅ 所有職位與密碼已成功更新！")
+    const { error: upsertError } = await supabase
+      .from('system_settings')
+      .upsert(
+        { setting_key: 'board_officer_passwords', setting_value: newSettings }, 
+        { onConflict: 'setting_key' }
+      )
+
+    if (upsertError) throw upsertError
+
+    alert('✅ 所有密碼與權限變更已成功儲存！')
+    await fetchData()
   } catch (err) {
-    console.error(err)
-    alert("❌ 儲存失敗：" + err.message)
+    alert('❌ 儲存失敗：' + err.message)
   } finally {
     isSaving.value = false
   }
@@ -144,62 +149,144 @@ const savePasswords = async () => {
 </script>
 
 <style scoped>
-.admin-officers-container {
+.admin-officers {
   background: white;
   border-radius: 8px;
-  padding: 25px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   border: 1px solid #e2e8f0;
+  padding: 25px;
 }
-.card-header { margin-bottom: 20px; border-bottom: 2px solid #f1f5f9; padding-bottom: 15px; }
-.card-header h3 { margin: 0 0 10px 0; color: #334155; font-size: 1.3rem; }
-.subtitle { margin: 0; color: #64748b; font-size: 0.95rem; line-height: 1.5; }
 
-.loading-state { text-align: center; padding: 40px; color: #64748b; font-size: 1.1rem; }
-
-.table-wrapper { overflow-x: auto; }
-.password-table {
-  width: 100%;
-  border-collapse: collapse;
+.header-box {
   margin-bottom: 20px;
 }
-.password-table th {
-  background: #f8fafc;
-  padding: 12px;
+.header-box h3 {
+  margin-top: 0;
+  color: #1e293b;
+  margin-bottom: 8px;
+}
+.header-box p {
+  color: #64748b;
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.table-container {
+  overflow-x: auto;
+  margin-bottom: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.officer-table {
+  width: 100%;
+  border-collapse: collapse;
   text-align: left;
-  color: #475569;
+}
+.officer-table th {
+  background: #f8fafc;
+  padding: 12px 15px;
   font-weight: bold;
+  color: #475569;
   border-bottom: 2px solid #e2e8f0;
 }
-.password-table td {
-  padding: 12px;
-  border-bottom: 1px solid #e2e8f0;
+.officer-table td {
+  padding: 12px 15px;
+  border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
 }
-.action-col { text-align: center; width: 120px; }
 
-.edit-input {
-  width: 100%;
+/* 職位輸入框與標籤排版 */
+.role-input-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cn-label {
+  background-color: #e0e7ff;
+  color: #4338ca;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+input {
   padding: 10px;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   font-size: 1rem;
+  width: 100%;
   box-sizing: border-box;
 }
-.edit-input:disabled { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
+input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+input.is-core {
+  background-color: #f1f5f9;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+.pwd-input {
+  max-width: 300px;
+}
 
-.btn-delete { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold;}
-.btn-delete:hover { background: #fecaca; }
-.locked-text { color: #94a3b8; font-size: 0.9rem; font-weight: bold; }
+.action-cell {
+  text-align: center;
+  width: 120px;
+}
+.lock-text {
+  color: #d97706;
+  font-weight: bold;
+  font-size: 0.95rem;
+}
+.btn-delete {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.btn-delete:hover {
+  background: #fecaca;
+}
 
-.admin-actions {
+.bottom-actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 10px;
+  padding-top: 10px;
 }
-.btn-add { background: transparent; color: #3b82f6; border: 2px dashed #93c5fd; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1rem; }
-.btn-add:hover { background: #eff6ff; }
-.btn-save { background: #10b981; color: white; border: none; padding: 12px 25px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.1rem; }
-.btn-save:disabled { background: #9ca3af; cursor: not-allowed; }
+.btn-add {
+  background: transparent;
+  color: #3b82f6;
+  border: 2px dashed #bfdbfe;
+  padding: 10px 15px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.btn-add:hover {
+  background: #eff6ff;
+}
+.btn-save {
+  background: #10b981;
+  color: white;
+  border: none;
+  padding: 12px 25px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 1.05rem;
+}
+.btn-save:hover {
+  background: #059669;
+}
+.btn-save:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
 </style>
