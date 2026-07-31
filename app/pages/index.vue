@@ -27,7 +27,7 @@
             <NuxtLink to="/assignments" class="btn btn-purple">📚 作業管理</NuxtLink>
             <!-- 💡 新增：秩序管理按鈕 -->
             
-            <NuxtLink to="/discipline">秩序管理</NuxtLink>
+            <NuxtLink to="/discipline" class="btn btn-purple">秩序管理</NuxtLink>
             <button @click="openEmergencyModal" class="btn btn-red">🚨 緊急通知</button>
           </div>
         </div>
