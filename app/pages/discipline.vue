@@ -1,6 +1,6 @@
 <template>
   <div class="discipline-page">
-    <!-- ================= 登入介面 ================= -->
+    <!-- ================= 登入介面 (沿用作業繳交風格) ================= -->
     <div v-if="!isLoggedIn" class="login-container">
       <div class="login-card">
         <h2 class="title">🚨 秩序管理系統</h2>
@@ -15,7 +15,6 @@
           </select>
         </div>
 
-        <!-- 💡 若選擇任課老師，動態顯示科目輸入框 (沿用作業管理的邏輯) -->
         <div v-if="loginForm.role === 'subject_teacher'" class="form-group">
           <label>任課科目 (必填)：</label>
           <input v-model="loginForm.subject" type="text" placeholder="例如：國文、英文、理化..." class="form-control" />
@@ -67,7 +66,8 @@
             <select v-model="recordForm.student_id" class="form-control">
               <option value="" disabled>請選擇學生...</option>
               <option v-for="student in studentList" :key="student.id" :value="student.id">
-                {{ student.number }}號 - {{ student.name }}
+                <!-- 自動兼容 number 或 seat_number 欄位 -->
+                {{ student.number || student.seat_number }}號 - {{ student.name }}
               </option>
             </select>
           </div>
@@ -115,7 +115,11 @@
               <tbody>
                 <tr v-for="record in recentRecords" :key="record.id">
                   <td class="time-col">{{ formatTime(record.created_at) }}</td>
-                  <td>{{ record.students?.number }}號 {{ record.students?.name }}</td>
+                  <td>
+                    <!-- 容錯顯示學生座號與姓名 -->
+                    {{ record.students?.number || record.students?.seat_number || '?' }}號 
+                    {{ record.students?.name || '未知學生' }}
+                  </td>
                   <td>
                     <span class="reason-tag">{{ record.reason }}</span>
                     <div class="note-text" v-if="record.note">{{ record.note }}</div>
@@ -141,6 +145,12 @@
 import { ref, onMounted, computed } from 'vue'
 const supabase = useSupabaseClient()
 
+// ==========================================
+// ⚠️ 請確認您的資料庫 Table 名稱是否正確
+// ==========================================
+const TABLE_STUDENTS = 'students'           // 若您的學生表叫其他名字(例如 class_students)，請改這裡
+const TABLE_RECORDS = 'discipline_records'  // 若您的紀錄表叫其他名字(例如 violations)，請改這裡
+
 // 登入狀態與資料
 const isLoggedIn = ref(false)
 const isLoggingIn = ref(false)
@@ -159,14 +169,12 @@ const recordForm = ref({
   note: ''
 })
 
-// 計算顯示的身分名稱
 const displayRoleName = computed(() => {
   if (currentUser.value.role === 'teacher') return '導師'
   if (currentUser.value.role === 'subject_teacher') return `任課老師 (${currentUser.value.subject})`
   return '風紀股長'
 })
 
-// 初始化檢查登入狀態
 onMounted(() => {
   const savedRole = sessionStorage.getItem('discipline_role')
   const savedSubject = sessionStorage.getItem('discipline_subject')
@@ -179,7 +187,6 @@ onMounted(() => {
   }
 })
 
-// 處理登入驗證
 const handleLogin = async () => {
   if (!loginForm.value.password) {
     alert('請輸入密碼！')
@@ -192,7 +199,6 @@ const handleLogin = async () => {
 
   isLoggingIn.value = true
   try {
-    // 從資料庫撈取設定的密碼
     const { data, error } = await supabase
       .from('system_settings')
       .select('setting_value')
@@ -210,7 +216,6 @@ const handleLogin = async () => {
     }
 
     if (loginForm.value.password === correctPassword) {
-      // 登入成功，寫入 sessionStorage
       sessionStorage.setItem('discipline_role', loginForm.value.role)
       if (loginForm.value.role === 'subject_teacher') {
         sessionStorage.setItem('discipline_subject', loginForm.value.subject.trim())
@@ -220,7 +225,6 @@ const handleLogin = async () => {
       currentUser.value.subject = loginForm.value.subject.trim()
       isLoggedIn.value = true
       
-      // 清空表單並載入資料
       loginForm.value.password = ''
       await fetchInitialData()
     } else {
@@ -234,26 +238,27 @@ const handleLogin = async () => {
   }
 }
 
-// 登出
 const handleLogout = () => {
   sessionStorage.removeItem('discipline_role')
   sessionStorage.removeItem('discipline_subject')
   isLoggedIn.value = false
 }
 
-// 載入初始資料 (學生名單與近期紀錄)
 const fetchInitialData = async () => {
   isLoadingData.value = true
   try {
-    // 1. 抓取學生名單 (假設您有 students 資料表)
-    const { data: studentsData } = await supabase
-      .from('students')
-      .select('id, name, number')
-      .order('number', { ascending: true })
-    
-    if (studentsData) studentList.value = studentsData
+    // 1. 抓取學生名單 (使用 JS 排序避免資料庫缺少 number 欄位時報錯)
+    const { data: studentsData } = await supabase.from(TABLE_STUDENTS).select('*')
+    if (studentsData) {
+      // 容錯排序：優先使用 number，若無則用 seat_number
+      studentList.value = studentsData.sort((a, b) => {
+        const numA = a.number || a.seat_number || 0
+        const numB = b.number || b.seat_number || 0
+        return numA - numB
+      })
+    }
 
-    // 2. 抓取近期違規紀錄 (假設您有 discipline_records 資料表)
+    // 2. 抓取近期違規紀錄
     await fetchRecords()
   } catch (error) {
     console.error('載入資料錯誤:', error)
@@ -263,19 +268,19 @@ const fetchInitialData = async () => {
 }
 
 const fetchRecords = async () => {
-  const { data: recordsData } = await supabase
-    .from('discipline_records')
-    .select(`
-      id, reason, note, recorded_by, created_at,
-      students (number, name)
-    `)
+  // 自動關聯 students 表，以便顯示姓名
+  const { data: recordsData, error } = await supabase
+    .from(TABLE_RECORDS)
+    .select(`*, students(*)`)
     .order('created_at', { ascending: false })
-    .limit(20)
+    .limit(30)
 
+  if (error) {
+    console.error('無法讀取紀錄，請確認您的資料表名稱是否為:', TABLE_RECORDS)
+  }
   if (recordsData) recentRecords.value = recordsData
 }
 
-// 提交違規紀錄
 const submitRecord = async () => {
   if (!recordForm.value.student_id || !recordForm.value.reason) {
     alert('請確實選擇「違規學生」與「違規事由」！')
@@ -285,12 +290,11 @@ const submitRecord = async () => {
   isSubmitting.value = true
   try {
     const { error } = await supabase
-      .from('discipline_records')
+      .from(TABLE_RECORDS)
       .insert({
         student_id: recordForm.value.student_id,
         reason: recordForm.value.reason,
         note: recordForm.value.note,
-        // 紀錄是由誰登記的 (例如：風紀股長、導師、任課老師-國文)
         recorded_by: displayRoleName.value
       })
 
@@ -298,7 +302,6 @@ const submitRecord = async () => {
 
     alert('✅ 違規紀錄已成功儲存！')
     
-    // 清空表單並重新載入列表
     recordForm.value.student_id = ''
     recordForm.value.reason = ''
     recordForm.value.note = ''
@@ -311,10 +314,9 @@ const submitRecord = async () => {
   }
 }
 
-// 刪除紀錄 (僅限導師)
 const deleteRecord = async (id) => {
   if (confirm('確定要刪除這筆紀錄嗎？這項操作無法復原。')) {
-    const { error } = await supabase.from('discipline_records').delete().eq('id', id)
+    const { error } = await supabase.from(TABLE_RECORDS).delete().eq('id', id)
     if (!error) {
       await fetchRecords()
     } else {
@@ -323,7 +325,6 @@ const deleteRecord = async (id) => {
   }
 }
 
-// 格式化時間
 const formatTime = (isoString) => {
   const date = new Date(isoString)
   return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
