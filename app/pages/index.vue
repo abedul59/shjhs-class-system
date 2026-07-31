@@ -25,9 +25,10 @@
             <NuxtLink to="/student-message" class="btn btn-blue">💬 學生私訊</NuxtLink>
             <NuxtLink to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
             <NuxtLink to="/assignments" class="btn btn-purple">📚 作業管理</NuxtLink>
-            <!-- 💡 新增：秩序管理按鈕 -->
             <button @click="openDiscipline" class="btn btn-dark-blue">⚖️ 秩序管理</button>
             <button @click="openEmergencyModal" class="btn btn-red">🚨 緊急通知</button>
+            <!-- 💡 新增：座位管理按鈕 (直接導向，不在index.vue做密碼驗證) -->
+            <NuxtLink to="/seats" class="btn btn-teal">🪑 座位管理</NuxtLink>
           </div>
         </div>
 
@@ -83,6 +84,27 @@
       </div>
     </div>
 
+    <!-- 💡 新增：班級座位表顯示區 (若導師設定顯示，才渲染) -->
+    <div v-if="seatingChart.isVisible" class="seating-display-board">
+      <h3 class="seating-title">🪑 班級座位表</h3>
+      <div class="seating-wrapper">
+        <div :class="['seating-area', { 'is-rotated': seatingChart.isRotated }]">
+          
+          <div class="seats-grid-readonly">
+            <div v-for="seat in seatingChart.seats" :key="seat.id" class="seat-card-readonly">
+              <div class="seat-id-readonly">{{ seat.id }}</div>
+              <div class="seat-text-readonly" v-html="seat.content.replace(/\n/g, '<br>')"></div>
+            </div>
+          </div>
+
+          <div class="teacher-desk-readonly">
+            <h3>講桌</h3>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
     <!-- 掛載並控制 EmergencyModal 元件 -->
     <EmergencyModal v-if="showEmergencyModal" @close="showEmergencyModal = false" />
   </div>
@@ -104,7 +126,6 @@ const openEmergencyModal = () => {
   }
 }
 
-// 💡 秩序管理驗證邏輯：移除舊版 prompt，直接導向我們做好的 discipline.vue 內部驗證
 const openDiscipline = () => {
   navigateTo('/discipline')
 }
@@ -125,6 +146,9 @@ const parentNotices = ref([])
 const contactBookItems = ref([])
 const officerPasswords = ref({ academic: '', counseling: '', discipline: '', teacher: '168168168' })
 
+// 💡 儲存座位表資料
+const seatingChart = ref({ isVisible: false, isRotated: false, seats: [] })
+
 const isEditingContact = ref(false)
 const editingContactItems = ref([])
 const currentEditorRole = ref('') 
@@ -143,6 +167,7 @@ const absentStudentsList = computed(() => {
 const absentCount = computed(() => absentStudentsList.value.length)
 
 const fetchData = async () => {
+  // 抓取聯絡簿
   const { data: boardData } = await supabase
     .from('contact_books')
     .select('notices, contact_items')
@@ -152,16 +177,21 @@ const fetchData = async () => {
   parentNotices.value = boardData?.notices || []
   contactBookItems.value = boardData?.contact_items || []
 
-  const { data: pwdData } = await supabase
+  // 抓取密碼設定與座位表設定
+  const { data: sysData } = await supabase
     .from('system_settings')
-    .select('setting_value')
-    .eq('setting_key', 'board_officer_passwords')
-    .maybeSingle()
+    .select('*')
+    .in('setting_key', ['board_officer_passwords', 'seating_chart_data'])
+
+  if (sysData) {
+    const pwdSetting = sysData.find(s => s.setting_key === 'board_officer_passwords')
+    if (pwdSetting) officerPasswords.value = { ...officerPasswords.value, ...pwdSetting.setting_value }
     
-  if (pwdData?.setting_value) {
-    officerPasswords.value = { ...officerPasswords.value, ...pwdData.setting_value }
+    const seatSetting = sysData.find(s => s.setting_key === 'seating_chart_data')
+    if (seatSetting) seatingChart.value = seatSetting.setting_value
   }
 
+  // 抓取學生與出缺席
   const { data: sData } = await supabase.from('students').select('*').order('seat_number')
   if (sData) allStudents.value = sData
 
@@ -232,7 +262,7 @@ const saveContactItems = async () => {
 </script>
 
 <style scoped>
-/* 包含您原有的所有樣式... */
+/* 原有的樣式保留 */
 .page-container { min-height: 100vh; background-color: #f3f4f6; padding: 20px; font-family: sans-serif; display: flex; flex-direction: column; gap: 20px; }
 .blackboard { background-color: #315243; border: 10px solid #754d29; border-radius: 8px; padding: 20px 25px; box-shadow: 0 6px 12px rgba(0,0,0,0.15), inset 0 0 10px rgba(0,0,0,0.3); }
 .board-title { margin: 0; font-size: 1.4rem; font-weight: bold; }
@@ -257,7 +287,8 @@ const saveContactItems = async () => {
 .btn-dark { background: #64748b; }
 .btn-purple { background: #8b5cf6; }
 .btn-red { background: #ef4444; }
-.btn-dark-blue { background: #1e3a8a; } /* 秩序管理專用按鈕顏色 */
+.btn-dark-blue { background: #1e3a8a; } 
+.btn-teal { background: #0f766e; } /* 新增座位管理按鈕顏色 */
 
 .stats-row { display: flex; gap: 15px; }
 .stat-box { flex: 1; padding: 12px; border-radius: 6px; text-align: center; font-size: 1.05rem; font-weight: bold; }
@@ -287,5 +318,91 @@ const saveContactItems = async () => {
 .cancel-btn { background: #64748b; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; }
 .save-btn { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 
-@media (max-width: 1024px) { .main-split { flex-direction: column; } .student-grid { grid-template-columns: repeat(3, 1fr); } }
+/* 💡 新增：首頁顯示的座位表樣式 (唯讀版) */
+.seating-display-board {
+  background: white;
+  border-radius: 8px;
+  padding: 25px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  border: 1px solid #e2e8f0;
+  margin-top: 10px;
+}
+.seating-title {
+  margin-top: 0;
+  color: #0f766e;
+  border-bottom: 2px solid #f1f5f9;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+.seating-wrapper {
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+.seating-area {
+  width: 100%;
+  max-width: 800px;
+  transition: transform 0.5s ease;
+}
+.seating-area.is-rotated { transform: rotate(180deg); }
+.seating-area.is-rotated .seat-card-readonly { transform: rotate(-180deg); }
+.seating-area.is-rotated .teacher-desk-readonly { transform: rotate(-180deg); }
+
+.seats-grid-readonly {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  margin-bottom: 30px;
+}
+.seat-card-readonly {
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 10px;
+  text-align: center;
+  height: 80px;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.5s ease;
+}
+.seat-id-readonly {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-align: left;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+.seat-text-readonly {
+  font-size: 0.95rem;
+  font-weight: bold;
+  color: #1e293b;
+  line-height: 1.3;
+}
+
+.teacher-desk-readonly {
+  border: 3px solid #0f766e;
+  background: #f0fdfa;
+  padding: 12px 20px;
+  border-radius: 8px;
+  text-align: center;
+  width: 200px;
+  margin: 0 auto;
+  transition: transform 0.5s ease;
+}
+.teacher-desk-readonly h3 {
+  margin: 0;
+  color: #0f766e;
+  font-size: 1.1rem;
+}
+
+@media (max-width: 1024px) { 
+  .main-split { flex-direction: column; } 
+  .student-grid { grid-template-columns: repeat(3, 1fr); } 
+}
+@media (max-width: 768px) {
+  .seats-grid-readonly { gap: 5px; }
+  .seat-card-readonly { padding: 5px; height: 70px; }
+  .seat-text-readonly { font-size: 0.85rem; }
+}
 </style>
