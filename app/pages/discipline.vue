@@ -66,8 +66,8 @@
             <select v-model="recordForm.student_id" class="form-control">
               <option value="" disabled>請選擇學生...</option>
               <option v-for="student in studentList" :key="student.id" :value="student.id">
-                <!-- 自動兼容 number 或 seat_number 欄位 -->
-                {{ student.number || student.seat_number }}號 - {{ student.name }}
+                <!-- 💡 修正為 real_name 與 seat_number -->
+                {{ student.seat_number }}號 - {{ student.real_name }}
               </option>
             </select>
           </div>
@@ -116,9 +116,9 @@
                 <tr v-for="record in recentRecords" :key="record.id">
                   <td class="time-col">{{ formatTime(record.created_at) }}</td>
                   <td>
-                    <!-- 容錯顯示學生座號與姓名 -->
-                    {{ record.students?.number || record.students?.seat_number || '?' }}號 
-                    {{ record.students?.name || '未知學生' }}
+                    <!-- 💡 修正為 real_name 與 seat_number -->
+                    {{ record.students?.seat_number || '?' }}號 
+                    {{ record.students?.real_name || '未知學生' }}
                   </td>
                   <td>
                     <span class="reason-tag">{{ record.reason }}</span>
@@ -145,11 +145,8 @@
 import { ref, onMounted, computed } from 'vue'
 const supabase = useSupabaseClient()
 
-// ==========================================
-// ⚠️ 請確認您的資料庫 Table 名稱是否正確
-// ==========================================
-const TABLE_STUDENTS = 'students'           // 若您的學生表叫其他名字(例如 class_students)，請改這裡
-const TABLE_RECORDS = 'discipline_records'  // 若您的紀錄表叫其他名字(例如 violations)，請改這裡
+const TABLE_STUDENTS = 'students'           
+const TABLE_RECORDS = 'discipline_records'  
 
 // 登入狀態與資料
 const isLoggedIn = ref(false)
@@ -247,18 +244,15 @@ const handleLogout = () => {
 const fetchInitialData = async () => {
   isLoadingData.value = true
   try {
-    // 1. 抓取學生名單 (使用 JS 排序避免資料庫缺少 number 欄位時報錯)
     const { data: studentsData } = await supabase.from(TABLE_STUDENTS).select('*')
     if (studentsData) {
-      // 容錯排序：優先使用 number，若無則用 seat_number
+      // 💡 修正排序邏輯：使用 seat_number 進行排序
       studentList.value = studentsData.sort((a, b) => {
-        const numA = a.number || a.seat_number || 0
-        const numB = b.number || b.seat_number || 0
+        const numA = a.seat_number || 0
+        const numB = b.seat_number || 0
         return numA - numB
       })
     }
-
-    // 2. 抓取近期違規紀錄
     await fetchRecords()
   } catch (error) {
     console.error('載入資料錯誤:', error)
@@ -268,7 +262,6 @@ const fetchInitialData = async () => {
 }
 
 const fetchRecords = async () => {
-  // 自動關聯 students 表，以便顯示姓名
   const { data: recordsData, error } = await supabase
     .from(TABLE_RECORDS)
     .select(`*, students(*)`)
@@ -276,7 +269,7 @@ const fetchRecords = async () => {
     .limit(30)
 
   if (error) {
-    console.error('無法讀取紀錄，請確認您的資料表名稱是否為:', TABLE_RECORDS)
+    console.error('無法讀取紀錄，請確認資料表名稱。', error)
   }
   if (recordsData) recentRecords.value = recordsData
 }
