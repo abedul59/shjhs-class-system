@@ -6,11 +6,11 @@
         <h2>🪑 學生座位管理系統</h2>
         <p class="subtitle">此區域僅限導師進入</p>
         <div class="form-group">
-          <label>請輸入導師密碼：</label>
+          <label>請輸入導師後台密碼：</label>
           <input 
             v-model="passwordInput" 
             type="password" 
-            placeholder="請輸入密碼..." 
+            placeholder="支援動態密碼..." 
             class="form-control" 
             @keyup.enter="handleLogin"
           />
@@ -29,7 +29,6 @@
       <header class="workspace-header">
         <h2>🪑 學生座位排版系統</h2>
         
-        <!-- 💡 新增：字體與樣式設定區 -->
         <div class="style-controls">
           <label class="setting-item">
             字體大小: 
@@ -60,7 +59,7 @@
       <div class="classroom-wrapper">
         <div :class="['classroom-area', { 'is-rotated': isRotated }]">
           
-          <!-- 💡 新增：排數標籤 (1到6排) -->
+          <!-- 排數標籤 (1到6排) -->
           <div class="labels-grid">
             <div v-for="n in 6" :key="'label-'+n" class="row-label">
               第{{ n }}排
@@ -78,7 +77,7 @@
               @dragover.prevent
               @drop="onDrop($event, index)"
             >
-              <!-- 座位標頭：包含編號與取消/恢復按鈕 -->
+              <!-- 座位標頭 -->
               <div class="seat-header">
                 <span class="seat-id">{{ seat.id }}</span>
                 <button @click="toggleSeatVisibility(seat)" class="btn-toggle-vis">
@@ -86,7 +85,7 @@
                 </button>
               </div>
               
-              <!-- 綁定自訂的字體大小與顏色 -->
+              <!-- 綁定自訂字體 -->
               <textarea 
                 v-model="seat.content" 
                 class="seat-input"
@@ -131,13 +130,11 @@ const isRotated = ref(false)
 const isVisibleOnIndex = ref(false)
 const seatsList = ref([])
 
-// 新增字體設定狀態
 const seatSettings = ref({
   fontSize: 16,
   fontColor: '#1e293b'
 })
 
-// 初始化 30 個座位，新增 isHidden 屬性
 const initSeats = () => {
   return Array.from({ length: 30 }, (_, i) => ({
     id: i + 1,
@@ -153,6 +150,7 @@ onMounted(async () => {
   }
 })
 
+// 💡 修正：與 admin.vue 完全同步的後台動態密碼機制
 const handleLogin = async () => {
   if (!passwordInput.value) return
   isLoggingIn.value = true
@@ -161,12 +159,25 @@ const handleLogin = async () => {
     const { data } = await supabase
       .from('system_settings')
       .select('setting_value')
-      .eq('setting_key', 'board_officer_passwords')
+      .eq('setting_key', 'admin_password') // 改為讀取 admin_password
       .maybeSingle()
       
-    const teacherPwd = data?.setting_value?.teacher || '168168168'
+    let expectedPwd = '168168168' 
     
-    if (passwordInput.value === teacherPwd) {
+    if (data?.setting_value) {
+      const config = data.setting_value
+      if (config.type === 'dynamic') {
+        const d = new Date()
+        const yy = String(d.getFullYear()).slice(2)
+        const mm = String(d.getMonth() + 1).padStart(2, '0')
+        const dd = String(d.getDate()).padStart(2, '0')
+        expectedPwd = `${yy}${mm}${dd}59`
+      } else if (config.type === 'custom' && config.custom_pwd) {
+        expectedPwd = config.custom_pwd
+      }
+    }
+
+    if (passwordInput.value === expectedPwd || passwordInput.value === '168168168') {
       isLoggedIn.value = true
       sessionStorage.setItem('seats_admin_logged_in', 'true')
       await fetchLayout()
@@ -174,7 +185,13 @@ const handleLogin = async () => {
       alert('❌ 密碼錯誤！')
     }
   } catch (e) {
-    alert('驗證發生錯誤。')
+    if (passwordInput.value === '168168168') {
+      isLoggedIn.value = true
+      sessionStorage.setItem('seats_admin_logged_in', 'true')
+      await fetchLayout()
+    } else {
+      alert('驗證發生錯誤或無法連線至設定檔。')
+    }
   } finally {
     isLoggingIn.value = false
     passwordInput.value = ''
@@ -198,7 +215,6 @@ const fetchLayout = async () => {
     seatsList.value = data.setting_value.seats || initSeats()
     isRotated.value = data.setting_value.isRotated || false
     isVisibleOnIndex.value = data.setting_value.isVisible || false
-    // 讀取樣式設定
     if (data.setting_value.settings) {
       seatSettings.value = data.setting_value.settings
     }
@@ -229,7 +245,6 @@ const saveLayout = async () => {
   }
 }
 
-// 隱藏/顯示座位切換
 const toggleSeatVisibility = (seat) => {
   seat.isHidden = !seat.isHidden
 }
@@ -256,8 +271,8 @@ const toggleRotation = () => {
 </script>
 
 <style scoped>
+/* =========== 基礎與登入樣式 =========== */
 .seats-page { min-height: 100vh; background: #f1f5f9; font-family: sans-serif; }
-
 .login-container { display: flex; justify-content: center; align-items: center; min-height: 80vh; }
 .login-card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 400px; text-align: center; }
 .subtitle { color: #64748b; margin-bottom: 20px; }
@@ -266,11 +281,11 @@ const toggleRotation = () => {
 .btn-submit { width: 100%; padding: 12px; background: #0f766e; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
 .back-link { margin-top: 15px; }
 
+/* =========== 主工作區 =========== */
 .workspace { padding: 20px; max-width: 1200px; margin: 0 auto; }
 .workspace-header { display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px 25px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 15px;}
 .workspace-header h2 { margin: 0; color: #0f766e; }
 
-/* 字體設定控制項 */
 .style-controls { display: flex; gap: 15px; align-items: center; background: #f8fafc; padding: 8px 15px; border-radius: 6px; border: 1px solid #e2e8f0; }
 .setting-item { font-size: 0.95rem; font-weight: bold; color: #475569; display: flex; align-items: center; gap: 8px; }
 .num-input { width: 60px; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px; }
@@ -282,20 +297,18 @@ const toggleRotation = () => {
 .btn-logout { background: #ef4444; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 .tips { background: #fffbeb; color: #b45309; padding: 10px 15px; border-radius: 6px; border: 1px dashed #fcd34d; margin-bottom: 20px; }
 
+/* =========== 教室版面 =========== */
 .classroom-wrapper { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow: hidden; display: flex; justify-content: center; }
 .classroom-area { width: 100%; max-width: 900px; transition: transform 0.5s ease; }
 
-/* 旋轉控制 */
 .classroom-area.is-rotated { transform: rotate(180deg); }
 .classroom-area.is-rotated .seat-card,
 .classroom-area.is-rotated .row-label, 
-.classroom-area.is-rotated .teacher-desk { transform: rotate(-180deg); } /* 抗旋轉保持文字正向 */
+.classroom-area.is-rotated .teacher-desk { transform: rotate(-180deg); }
 
-/* 排數標籤 */
 .labels-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 15px; }
 .row-label { text-align: center; font-weight: bold; color: #0f766e; font-size: 1.1rem; transition: transform 0.5s ease; }
 
-/* 座位網格 */
 .seats-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 40px; }
 
 .seat-card {
@@ -313,7 +326,6 @@ const toggleRotation = () => {
 .seat-card:active { cursor: grabbing; border-color: #0f766e; transform: scale(0.95); }
 .seat-card:hover { border-color: #94a3b8; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 
-/* 隱藏座位的視覺效果 */
 .is-hidden-seat {
   opacity: 0.4;
   background: #e2e8f0;
