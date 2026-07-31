@@ -104,23 +104,13 @@ const openEmergencyModal = () => {
   }
 }
 
-// 💡 秩序管理驗證邏輯
-const openDiscipline = () => {
-  const pwd = window.prompt("🔒 進入秩序管理，請輸入「導師」或「風紀股長」密碼：")
-  if (!pwd) return
-  
-  const teacherPwd = officerPasswords.value.teacher || '168168168'
-  const disciplinePwd = officerPasswords.value.discipline || ''
+// 將原本類似這樣的舊程式碼刪除：
+// const pwd = prompt('進入秩序管理，請輸入「導師」或「風紀股長」密碼：')
+// if (pwd === '...') navigateTo('/discipline')
 
-  if (pwd === teacherPwd) {
-    sessionStorage.setItem('discipline_role', '導師')
-    navigateTo('/discipline')
-  } else if (disciplinePwd && pwd === disciplinePwd) {
-    sessionStorage.setItem('discipline_role', '風紀股長')
-    navigateTo('/discipline')
-  } else {
-    alert("❌ 密碼錯誤！無法進入秩序管理系統。")
-  }
+// 直接改成單純的跳轉（因為進入 discipline.vue 後會有我們新設計的精美登入介面）：
+const goToDiscipline = () => {
+  navigateTo('/discipline')
 }
 
 const d = new Date()
