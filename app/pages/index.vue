@@ -1,259 +1,298 @@
 <template>
-  <div class="dashboard-container">
-    <!-- ================= 頂部導覽列 ================= -->
-    <header class="dashboard-header">
-      <div class="header-title">
-        <h1>🏫 班級電子黑板系統</h1>
-        <p class="date-display">{{ currentDate }}</p>
+  <div class="page-container">
+    <!-- 頂部：家長須知事項 -->
+    <div class="blackboard top-board">
+      <h2 class="board-title notice-title">📢 家長須知事項</h2>
+      <div class="dashed-divider"></div>
+      <div class="board-content">
+        <div v-if="parentNotices.length === 0" class="empty-text-italic">目前無特別須知事項</div>
+        <ul v-else class="item-list">
+          <li v-for="(notice, index) in parentNotices" :key="'n-'+index"><span class="bullet">📌</span> {{ notice }}</li>
+        </ul>
       </div>
-      
-      <div class="action-buttons">
-        <button @click="openEmergencyModal" class="btn-nav btn-danger">🚨 緊急通知</button>
-        <!-- 💡 這裡已經將原本的攔截邏輯移除，改為直接跳轉 -->
-        <button @click="goToDiscipline" class="btn-nav btn-discipline">📋 秩序管理</button>
-        <button @click="goToAssignments" class="btn-nav btn-homework">📚 作業繳交</button>
-        <button @click="goToAdmin" class="btn-nav btn-admin">⚙️ 後台管理</button>
+    </div>
+
+    <!-- 下半部：雙欄佈局 -->
+    <div class="main-split">
+      <!-- 左側：控制面板 -->
+      <div class="left-panel">
+        <div class="control-card">
+          <div class="clock-display">🕒 {{ currentTime }}</div>
+          
+          <div class="button-group">
+            <NuxtLink to="/parent-bind" class="btn btn-orange">👨‍👩‍👧 綁定</NuxtLink>
+            <NuxtLink to="/parent-message" class="btn btn-green">💬 家長私訊</NuxtLink>
+            <NuxtLink to="/student-message" class="btn btn-blue">💬 學生私訊</NuxtLink>
+            <NuxtLink to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
+            <NuxtLink to="/assignments" class="btn btn-purple">📚 作業管理</NuxtLink>
+            <!-- 💡 新增：秩序管理按鈕 -->
+            
+            <NuxtLink to="/discipline">秩序管理</NuxtLink>
+            <button @click="openEmergencyModal" class="btn btn-red">🚨 緊急通知</button>
+          </div>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-box stat-expected">應到: <strong>{{ expectedCount }}</strong></div>
+          <div class="stat-box stat-present">已到: <strong>{{ presentCount }}</strong></div>
+          <div class="stat-box stat-absent">未到: <strong>{{ absentCount }}</strong></div>
+        </div>
+
+        <div class="student-grid">
+          <div v-for="student in absentStudentsList" :key="student.id" class="student-card absent-card">
+            <div class="student-seat">{{ student.seat_number }}</div>
+            <div class="student-name">{{ student.real_name }}</div>
+            <div class="student-status">未到</div>
+          </div>
+        </div>
       </div>
-    </header>
 
-    <!-- ================= 雙黑板主畫面 ================= -->
-    <main class="boards-wrapper">
-      <!-- 左側黑板：聯絡簿 -->
-      <section class="blackboard">
-        <div class="board-header">
-          <h2>📝 聯絡簿</h2>
-        </div>
-        <div class="board-content">
-          <div v-if="isLoading" class="loading">載入中...</div>
-          <div v-else-if="contactBookItems.length === 0" class="empty-state">
-            目前尚無聯絡簿事項...
+      <!-- 右側：今日聯絡簿 -->
+      <div class="right-panel">
+        <div class="blackboard contact-board">
+          <div class="board-header">
+            <div>
+              <h2 class="board-title contact-title">⭐ 今日聯絡簿</h2>
+              <p class="board-date">{{ todayDisplay }}</p>
+            </div>
+            <button v-if="!isEditingContact" @click="unlockContactEdit" class="edit-btn">✏️ 編輯</button>
           </div>
-          <ul v-else class="item-list">
-            <li v-for="item in contactBookItems" :key="item.id">
-              {{ item.content }}
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <!-- 右側黑板：班級公告 -->
-      <section class="blackboard">
-        <div class="board-header">
-          <h2>📢 班級公告</h2>
-        </div>
-        <div class="board-content">
-          <div v-if="isLoading" class="loading">載入中...</div>
-          <div v-else-if="announcements.length === 0" class="empty-state">
-            目前尚無班級公告...
+          <div class="dashed-divider"></div>
+          <div class="board-content">
+            <div v-if="!isEditingContact">
+              <div v-if="contactBookItems.length === 0" class="empty-text-italic">目前尚無聯絡簿事項...</div>
+              <ul v-else class="item-list contact-list">
+                <li v-for="(item, index) in contactBookItems" :key="'c-'+index">{{ index + 1 }}. {{ item }}</li>
+              </ul>
+            </div>
+            <div v-else class="edit-mode">
+              <div v-for="(item, index) in editingContactItems" :key="'edit-'+index" class="edit-row">
+                <span class="row-num">{{ index + 1 }}.</span>
+                <input v-model="editingContactItems[index]" type="text" placeholder="輸入事項..." class="edit-input"/>
+                <button @click="removeContactItem(index)" class="del-btn">🗑️</button>
+              </div>
+              <div class="edit-actions">
+                <button @click="addContactItem" class="add-btn">➕ 新增事項</button>
+                <div class="action-right">
+                  <button @click="isEditingContact = false" class="cancel-btn">取消</button>
+                  <button @click="saveContactItems" class="save-btn">💾 儲存</button>
+                </div>
+              </div>
+            </div>
           </div>
-          <ul v-else class="item-list">
-            <li v-for="item in announcements" :key="item.id">
-              {{ item.content }}
-            </li>
-          </ul>
         </div>
-      </section>
-    </main>
+      </div>
+    </div>
 
-    <!-- ================= 緊急通知 Modal ================= -->
-    <EmergencyModal 
-      v-if="showEmergencyModal" 
-      @close="showEmergencyModal = false" 
-    />
+    <!-- 掛載並控制 EmergencyModal 元件 -->
+    <EmergencyModal v-if="showEmergencyModal" @close="showEmergencyModal = false" />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-
-// 狀態控制
-const isLoading = ref(true)
-const showEmergencyModal = ref(false)
-const contactBookItems = ref([])
-const announcements = ref([])
-const currentDate = ref('')
-
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 const supabase = useSupabaseClient()
 
-// 初始化時間與載入資料
-onMounted(async () => {
-  const now = new Date()
-  currentDate.value = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`
-  await fetchBoardData()
-})
+const showEmergencyModal = ref(false)
 
-// 讀取黑板資料
-const fetchBoardData = async () => {
-  isLoading.value = true
-  try {
-    // 假設您有 boards 資料表，根據您的實際架構調整
-    const { data, error } = await supabase
-      .from('boards')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (error) throw error
-
-    if (data) {
-      contactBookItems.value = data.filter(d => d.type === 'contact_book')
-      announcements.value = data.filter(d => d.type === 'announcement')
-    }
-  } catch (error) {
-    console.error('讀取黑板資料失敗:', error)
-  } finally {
-    isLoading.value = false
+const openEmergencyModal = () => {
+  const pwd = window.prompt("🔒 進入緊急通知系統，請輸入「導師」密碼：")
+  const teacherPwd = officerPasswords.value.teacher || '168168168'
+  if (pwd === teacherPwd) {
+    showEmergencyModal.value = true
+  } else if (pwd !== null) { 
+    alert("❌ 密碼錯誤！無法使用此功能。")
   }
 }
 
-// 💡 路由跳轉邏輯 (完全移除 prompt 密碼檢查，交給各分頁自行驗證)
-const goToDiscipline = () => {
-  navigateTo('/discipline')
+// 💡 秩序管理驗證邏輯
+// 將原本類似這樣的舊程式碼刪除：
+// const pwd = prompt('進入秩序管理，請輸入「導師」或「風紀股長」密碼：')
+// if (pwd === '...') navigateTo('/discipline')
+
+// 直接改成單純的跳轉（因為進入 discipline.vue 後會有我們新設計的精美登入介面）：
+//const goToDiscipline = () => {
+  //navigateTo('/discipline')
+//}
+
+
+const d = new Date()
+const todayISO = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+const todayDisplay = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日${days[d.getDay()]}`
+
+const currentTime = ref('')
+let timer = null
+const updateTime = () => {
+  const now = new Date()
+  currentTime.value = now.toLocaleTimeString('zh-TW', { hour12: false })
 }
 
-const goToAssignments = () => {
-  navigateTo('/assignments')
+const parentNotices = ref([])
+const contactBookItems = ref([])
+const officerPasswords = ref({ academic: '', counseling: '', discipline: '', teacher: '168168168' })
+
+const isEditingContact = ref(false)
+const editingContactItems = ref([])
+const currentEditorRole = ref('') 
+
+const allStudents = ref([])
+const todayAttendances = ref([])
+
+const expectedCount = computed(() => allStudents.value.length)
+const presentCount = computed(() => todayAttendances.value.filter(a => a.status === '已到').length)
+const absentStudentsList = computed(() => {
+  return allStudents.value.filter(s => {
+    const record = todayAttendances.value.find(a => a.student_id === s.id)
+    return !record || record.status === '未到' || record.status === '請假'
+  })
+})
+const absentCount = computed(() => absentStudentsList.value.length)
+
+const fetchData = async () => {
+  const { data: boardData } = await supabase
+    .from('contact_books')
+    .select('notices, contact_items')
+    .eq('record_date', todayISO)
+    .maybeSingle()
+
+  parentNotices.value = boardData?.notices || []
+  contactBookItems.value = boardData?.contact_items || []
+
+  const { data: pwdData } = await supabase
+    .from('system_settings')
+    .select('setting_value')
+    .eq('setting_key', 'board_officer_passwords')
+    .maybeSingle()
+    
+  if (pwdData?.setting_value) {
+    officerPasswords.value = { ...officerPasswords.value, ...pwdData.setting_value }
+  }
+
+  const { data: sData } = await supabase.from('students').select('*').order('seat_number')
+  if (sData) allStudents.value = sData
+
+  const { data: attData } = await supabase.from('attendances').select('*').eq('record_date', todayISO)
+  if (attData) todayAttendances.value = attData
 }
 
-const goToAdmin = () => {
-  navigateTo('/admin')
+onMounted(() => {
+  updateTime()
+  timer = setInterval(updateTime, 1000)
+  fetchData()
+})
+
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
+})
+
+const unlockContactEdit = () => {
+  const pwd = window.prompt("🔒 進入編輯模式，請輸入「學藝股長」或「輔導股長」密碼：")
+  if (!pwd) return
+  
+  const teacherPwd = officerPasswords.value.teacher || '168168168'
+  
+  if (
+    (officerPasswords.value.academic && pwd === officerPasswords.value.academic) || 
+    (officerPasswords.value.counseling && pwd === officerPasswords.value.counseling)
+  ) {
+    currentEditorRole.value = '股長'
+    isEditingContact.value = true
+    editingContactItems.value = [...contactBookItems.value] 
+  } else if (pwd === teacherPwd) {
+    currentEditorRole.value = '導師'
+    isEditingContact.value = true
+    editingContactItems.value = [...contactBookItems.value] 
+  } else {
+    alert("❌ 密碼錯誤！請確認密碼是否正確。")
+  }
 }
 
-// 開啟緊急通知
-const openEmergencyModal = () => {
-  showEmergencyModal.value = true
+const addContactItem = () => editingContactItems.value.push('')
+const removeContactItem = (i) => editingContactItems.value.splice(i, 1)
+
+const saveContactItems = async () => {
+  try {
+    const { error: upsertError } = await supabase.from('contact_books').upsert({
+      record_date: todayISO, notices: parentNotices.value, contact_items: editingContactItems.value
+    }, { onConflict: 'record_date' })
+    if (upsertError) throw upsertError
+
+    let clientIp = null
+    try {
+      const ipRes = await fetch('https://api.ipify.org?format=json')
+      const ipData = await ipRes.json()
+      clientIp = ipData.ip
+    } catch (e) { console.warn("無法取得真實 IP", e) }
+
+    await supabase.from('board_edit_logs').insert({
+      board_date: todayISO, board_type: '聯絡簿', editor_role: currentEditorRole.value, ip_address: clientIp
+    })
+
+    alert("✅ 聯絡簿已成功更新發布！")
+    contactBookItems.value = [...editingContactItems.value]
+    isEditingContact.value = false
+  } catch (error) {
+    alert("❌ 聯絡簿儲存失敗：" + error.message)
+  }
 }
 </script>
 
 <style scoped>
-/* ================= 全局與容器 ================= */
-.dashboard-container {
-  min-height: 100vh;
-  background-color: #f1f5f9;
-  padding: 20px;
-  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-}
+/* 包含您原有的所有樣式... */
+.page-container { min-height: 100vh; background-color: #f3f4f6; padding: 20px; font-family: sans-serif; display: flex; flex-direction: column; gap: 20px; }
+.blackboard { background-color: #315243; border: 10px solid #754d29; border-radius: 8px; padding: 20px 25px; box-shadow: 0 6px 12px rgba(0,0,0,0.15), inset 0 0 10px rgba(0,0,0,0.3); }
+.board-title { margin: 0; font-size: 1.4rem; font-weight: bold; }
+.notice-title { color: #fca5a5; }
+.contact-title { color: #f59e0b; }
+.board-date { color: #cbd5e1; margin: 8px 0 0 0; font-size: 0.95rem; }
+.dashed-divider { border-bottom: 2px dashed #94a3b8; margin: 15px 0; opacity: 0.6; }
+.board-content { color: white; min-height: 80px; }
+.empty-text-italic { color: #94a3b8; font-style: italic; font-size: 1.1rem; }
+.item-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.item-list li { font-size: 1.15rem; letter-spacing: 0.5px; }
 
-/* ================= 頂部導覽列 ================= */
-.dashboard-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: white;
-  padding: 20px 30px;
-  border-radius: 12px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-  margin-bottom: 25px;
-}
+.main-split { display: flex; gap: 20px; align-items: flex-start; }
+.left-panel { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.control-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; text-align: center; }
+.clock-display { font-size: 2.2rem; font-weight: bold; color: #1e293b; margin-bottom: 20px; }
+.button-group { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.btn { padding: 8px 12px; border-radius: 6px; font-size: 0.95rem; font-weight: bold; color: white; border: none; cursor: pointer; display: inline-block; text-decoration: none;}
+.btn-orange { background: #f59e0b; }
+.btn-green { background: #10b981; }
+.btn-blue { background: #3b82f6; }
+.btn-dark { background: #64748b; }
+.btn-purple { background: #8b5cf6; }
+.btn-red { background: #ef4444; }
+.btn-dark-blue { background: #1e3a8a; } /* 秩序管理專用按鈕顏色 */
 
-.header-title h1 {
-  margin: 0;
-  color: #1e293b;
-  font-size: 1.8rem;
-}
+.stats-row { display: flex; gap: 15px; }
+.stat-box { flex: 1; padding: 12px; border-radius: 6px; text-align: center; font-size: 1.05rem; font-weight: bold; }
+.stat-expected { background: #fef3c7; color: #92400e; }
+.stat-present { background: #dcfce7; color: #166534; }
+.stat-absent { background: #ffe4e6; color: #be123c; }
 
-.date-display {
-  margin: 5px 0 0 0;
-  color: #64748b;
-  font-weight: bold;
-}
+.student-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.student-card { background: #ffe4e6; border-radius: 6px; padding: 15px 10px; text-align: center; color: #e11d48; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.student-seat { font-size: 1.2rem; margin-bottom: 5px; }
+.student-name { font-size: 1.1rem; margin-bottom: 5px; color: #be123c; }
+.student-status { font-size: 0.9rem; opacity: 0.9; }
 
-.action-buttons {
-  display: flex;
-  gap: 12px;
-}
+.right-panel { flex: 1; min-width: 0; }
+.board-header { display: flex; justify-content: space-between; align-items: flex-start; }
+.edit-btn { background-color: #f59e0b; color: #1e293b; border: none; padding: 6px 16px; border-radius: 6px; font-weight: bold; font-size: 0.95rem; cursor: pointer; }
 
-.btn-nav {
-  padding: 10px 18px;
-  border: none;
-  border-radius: 8px;
-  font-size: 1.05rem;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: white;
-}
+.edit-mode { background: rgba(0, 0, 0, 0.2); padding: 15px; border-radius: 8px; }
+.edit-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.row-num { font-size: 1.1rem; color: #f59e0b; width: 25px; font-weight: bold; }
+.edit-input { flex: 1; padding: 8px 12px; font-size: 1rem; border-radius: 6px; border: none; }
+.del-btn { background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
 
-.btn-danger { background-color: #ef4444; }
-.btn-danger:hover { background-color: #dc2626; }
+.edit-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
+.add-btn { background: transparent; color: white; border: 1px dashed #cbd5e1; padding: 8px 15px; border-radius: 6px; cursor: pointer; }
+.action-right { display: flex; gap: 10px; }
+.cancel-btn { background: #64748b; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; }
+.save-btn { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 
-.btn-discipline { background-color: #f59e0b; }
-.btn-discipline:hover { background-color: #d97706; }
-
-.btn-homework { background-color: #3b82f6; }
-.btn-homework:hover { background-color: #2563eb; }
-
-.btn-admin { background-color: #475569; }
-.btn-admin:hover { background-color: #334155; }
-
-/* ================= 雙黑板主畫面 ================= */
-.boards-wrapper {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 25px;
-  min-height: 70vh;
-}
-
-@media (max-width: 900px) {
-  .boards-wrapper {
-    grid-template-columns: 1fr;
-  }
-}
-
-.blackboard {
-  background-color: #1a472a; /* 經典黑板綠 */
-  border: 12px solid #8b5a2b; /* 木質邊框 */
-  border-radius: 10px;
-  box-shadow: inset 0 0 20px rgba(0,0,0,0.5), 0 10px 15px rgba(0,0,0,0.1);
-  display: flex;
-  flex-direction: column;
-}
-
-.board-header {
-  border-bottom: 2px dashed rgba(255,255,255,0.3);
-  padding: 15px 20px;
-  text-align: center;
-}
-
-.board-header h2 {
-  color: white;
-  margin: 0;
-  font-size: 1.8rem;
-  letter-spacing: 2px;
-  text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-}
-
-.board-content {
-  flex: 1;
-  padding: 20px;
-  color: white;
-  font-size: 1.4rem;
-  line-height: 1.8;
-  font-family: 'Kaiti TC', 'DFKai-sb', serif; /* 粉筆字體風格 */
-}
-
-.item-list {
-  list-style-type: none;
-  padding-left: 0;
-  margin: 0;
-}
-
-.item-list li {
-  margin-bottom: 15px;
-  padding-left: 25px;
-  position: relative;
-}
-
-.item-list li::before {
-  content: '•';
-  position: absolute;
-  left: 0;
-  color: #fcd34d; /* 黃色粉筆點點 */
-}
-
-.loading, .empty-state {
-  text-align: center;
-  color: rgba(255,255,255,0.6);
-  margin-top: 40px;
-  font-style: italic;
-}
+@media (max-width: 1024px) { .main-split { flex-direction: column; } .student-grid { grid-template-columns: repeat(3, 1fr); } }
 </style>
