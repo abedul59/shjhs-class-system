@@ -123,13 +123,12 @@ const savePasswords = async () => {
       newPasswordsJSON[item.roleKey.trim()] = item.password.trim()
     })
 
-    // 3. 寫入資料庫
+    // 3. 寫入資料庫 (💡 已經徹底移除 updated_at 欄位，解決 Schema Cache 的報錯問題)
     const { error } = await supabase
       .from('system_settings')
       .upsert({
         setting_key: 'board_officer_passwords',
-        setting_value: newPasswordsJSON,
-        updated_at: new Date().toISOString()
+        setting_value: newPasswordsJSON
       }, { onConflict: 'setting_key' })
 
     if (error) throw error
