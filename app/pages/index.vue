@@ -1,6 +1,5 @@
 <template>
   <div class="page-container">
-    <!-- 頂部：家長須知事項 -->
     <div class="blackboard top-board">
       <h2 class="board-title notice-title">📢 家長須知事項</h2>
       <div class="dashed-divider"></div>
@@ -12,9 +11,7 @@
       </div>
     </div>
 
-    <!-- 下半部：雙欄佈局 -->
     <div class="main-split">
-      <!-- 左側：控制面板 -->
       <div class="left-panel">
         <div class="control-card">
           <div class="clock-display">🕒 {{ currentTime }}</div>
@@ -29,7 +26,6 @@
             <button @click="openEmergencyModal" class="btn btn-red">🚨 緊急通知</button>
             <NuxtLink to="/seats" class="btn btn-teal">🪑 座位管理</NuxtLink>
             
-            <!-- 💡 新增：座位表展開/隱藏切換按鈕 (只有後台開啟顯示時才會出現) -->
             <button 
               v-if="seatingChart.isVisible" 
               @click="showSeatingChartLocal = !showSeatingChartLocal" 
@@ -55,7 +51,6 @@
         </div>
       </div>
 
-      <!-- 右側：今日聯絡簿 -->
       <div class="right-panel">
         <div class="blackboard contact-board">
           <div class="board-header">
@@ -92,7 +87,7 @@
       </div>
     </div>
 
-    <!-- 💡 班級座位表顯示區 (加入 && showSeatingChartLocal 雙重判斷) -->
+    <!-- 座位表顯示區 (加入水平滑動) -->
     <div v-if="seatingChart.isVisible && showSeatingChartLocal" class="seating-display-board">
       <h3 class="seating-title">🪑 班級座位表</h3>
       <div class="seating-wrapper">
@@ -130,7 +125,6 @@
       </div>
     </div>
 
-    <!-- 掛載並控制 EmergencyModal 元件 -->
     <EmergencyModal v-if="showEmergencyModal" @close="showEmergencyModal = false" />
   </div>
 </template>
@@ -140,8 +134,6 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 const supabase = useSupabaseClient()
 
 const showEmergencyModal = ref(false)
-
-// 💡 獨立控制首頁是否展開座位表的狀態
 const showSeatingChartLocal = ref(false)
 
 const openEmergencyModal = () => {
@@ -305,7 +297,7 @@ const saveContactItems = async () => {
 .btn-red { background: #ef4444; }
 .btn-dark-blue { background: #1e3a8a; } 
 .btn-teal { background: #0f766e; } 
-.btn-indigo { background: #6366f1; } /* 新增顯示座位表按鈕顏色 */
+.btn-indigo { background: #6366f1; width: 100%; margin-top: 5px; font-size: 1.05rem;} /* 獨立一行且更明顯 */
 
 .stats-row { display: flex; gap: 15px; }
 .stat-box { flex: 1; padding: 12px; border-radius: 6px; text-align: center; font-size: 1.05rem; font-weight: bold; }
@@ -335,10 +327,11 @@ const saveContactItems = async () => {
 .cancel-btn { background: #64748b; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; }
 .save-btn { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 
+/* 💡 座位表顯示區 (加入水平滑動) */
 .seating-display-board {
   background: white;
   border-radius: 8px;
-  padding: 30px;
+  padding: 20px;
   box-shadow: 0 4px 6px rgba(0,0,0,0.05);
   border: 1px solid #e2e8f0;
   margin-top: 10px;
@@ -353,13 +346,15 @@ const saveContactItems = async () => {
   font-size: 1.4rem;
 }
 .seating-wrapper {
-  display: flex;
-  justify-content: center;
-  overflow: hidden;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 15px;
 }
 .seating-area {
   width: 100%;
-  max-width: 900px;
+  min-width: 800px; /* 強制最小寬度，防止手機版破版 */
+  margin: 0 auto;
   transition: transform 0.5s ease;
 }
 
@@ -389,7 +384,6 @@ const saveContactItems = async () => {
   transition: transform 0.5s ease;
 }
 
-/* 💡 徹底隱藏，不留下任何邊框與點擊事件，但保留格線空間 */
 .seat-card-readonly.is-hidden-seat-readonly {
   opacity: 0 !important;
   visibility: hidden !important;
@@ -420,9 +414,14 @@ const saveContactItems = async () => {
 }
 .teacher-desk-readonly h3 { margin: 0; color: #0f766e; font-size: 1.2rem; }
 
-@media (max-width: 1024px) { .main-split { flex-direction: column; } .student-grid { grid-template-columns: repeat(3, 1fr); } }
+/* 手機版排版調整 */
+@media (max-width: 1024px) { 
+  .main-split { flex-direction: column; } 
+  .student-grid { grid-template-columns: repeat(3, 1fr); } 
+}
 @media (max-width: 768px) {
-  .seats-grid-readonly, .labels-grid-readonly { gap: 5px; }
-  .seat-card-readonly { padding: 5px; height: 75px; }
+  .student-grid { grid-template-columns: repeat(2, 1fr); }
+  .button-group { flex-direction: column; }
+  .btn { width: 100%; text-align: center;}
 }
 </style>
