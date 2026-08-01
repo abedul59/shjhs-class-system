@@ -1,5 +1,6 @@
 <template>
   <div class="page-container">
+    <!-- 頂部：家長須知事項 -->
     <div class="blackboard top-board">
       <h2 class="board-title notice-title">📢 家長須知事項</h2>
       <div class="dashed-divider"></div>
@@ -11,7 +12,9 @@
       </div>
     </div>
 
+    <!-- 下半部：雙欄佈局 -->
     <div class="main-split">
+      <!-- 左側：控制面板 -->
       <div class="left-panel">
         <div class="control-card">
           <div class="clock-display">🕒 {{ currentTime }}</div>
@@ -26,6 +29,7 @@
             <button @click="openEmergencyModal" class="btn btn-red">🚨 緊急通知</button>
             <NuxtLink to="/seats" class="btn btn-teal">🪑 座位管理</NuxtLink>
             
+            <!-- 座位表展開/隱藏切換按鈕 -->
             <button 
               v-if="seatingChart.isVisible" 
               @click="showSeatingChartLocal = !showSeatingChartLocal" 
@@ -51,6 +55,7 @@
         </div>
       </div>
 
+      <!-- 右側：今日聯絡簿 -->
       <div class="right-panel">
         <div class="blackboard contact-board">
           <div class="board-header">
@@ -87,7 +92,7 @@
       </div>
     </div>
 
-    <!-- 座位表顯示區 (加入水平滑動) -->
+    <!-- 班級座位表顯示區 -->
     <div v-if="seatingChart.isVisible && showSeatingChartLocal" class="seating-display-board">
       <h3 class="seating-title">🪑 班級座位表</h3>
       <div class="seating-wrapper">
@@ -125,6 +130,7 @@
       </div>
     </div>
 
+    <!-- 掛載並控制 EmergencyModal 元件 -->
     <EmergencyModal v-if="showEmergencyModal" @close="showEmergencyModal = false" />
   </div>
 </template>
@@ -287,6 +293,7 @@ const saveContactItems = async () => {
 .left-panel { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .control-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; text-align: center; }
 .clock-display { font-size: 2.2rem; font-weight: bold; color: #1e293b; margin-bottom: 20px; }
+
 .button-group { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .btn { padding: 8px 12px; border-radius: 6px; font-size: 0.95rem; font-weight: bold; color: white; border: none; cursor: pointer; display: inline-block; text-decoration: none;}
 .btn-orange { background: #f59e0b; }
@@ -297,7 +304,8 @@ const saveContactItems = async () => {
 .btn-red { background: #ef4444; }
 .btn-dark-blue { background: #1e3a8a; } 
 .btn-teal { background: #0f766e; } 
-.btn-indigo { background: #6366f1; width: 100%; margin-top: 5px; font-size: 1.05rem;} /* 獨立一行且更明顯 */
+/* 💡 修正：移除 width: 100% 讓它自然與其他按鈕排列 */
+.btn-indigo { background: #6366f1; } 
 
 .stats-row { display: flex; gap: 15px; }
 .stat-box { flex: 1; padding: 12px; border-radius: 6px; text-align: center; font-size: 1.05rem; font-weight: bold; }
@@ -327,7 +335,6 @@ const saveContactItems = async () => {
 .cancel-btn { background: #64748b; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; }
 .save-btn { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 
-/* 💡 座位表顯示區 (加入水平滑動) */
 .seating-display-board {
   background: white;
   border-radius: 8px;
@@ -353,7 +360,7 @@ const saveContactItems = async () => {
 }
 .seating-area {
   width: 100%;
-  min-width: 800px; /* 強制最小寬度，防止手機版破版 */
+  min-width: 800px; 
   margin: 0 auto;
   transition: transform 0.5s ease;
 }
@@ -414,14 +421,15 @@ const saveContactItems = async () => {
 }
 .teacher-desk-readonly h3 { margin: 0; color: #0f766e; font-size: 1.2rem; }
 
-/* 手機版排版調整 */
 @media (max-width: 1024px) { 
   .main-split { flex-direction: column; } 
   .student-grid { grid-template-columns: repeat(3, 1fr); } 
 }
 @media (max-width: 768px) {
+  /* 💡 修正：移除讓 button-group 垂直排列的設定，保留原本自然的 flex-wrap */
   .student-grid { grid-template-columns: repeat(2, 1fr); }
-  .button-group { flex-direction: column; }
-  .btn { width: 100%; text-align: center;}
+  
+  .seats-grid-readonly, .labels-grid-readonly { gap: 5px; }
+  .seat-card-readonly { padding: 5px; height: 75px; }
 }
 </style>
