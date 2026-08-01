@@ -1,6 +1,5 @@
 <template>
   <div class="seats-page">
-    <!-- ================= 獨立登入介面 ================= -->
     <div v-if="!isLoggedIn" class="login-container">
       <div class="login-card">
         <h2>🪑 學生座位管理系統</h2>
@@ -24,18 +23,18 @@
       </div>
     </div>
 
-    <!-- ================= 座位排版主介面 ================= -->
     <div v-else class="workspace">
       <header class="workspace-header">
-        <h2>🪑 學生座位排版系統</h2>
+        <h2>🪑 座位排版系統</h2>
         
+        <!-- 字體與樣式設定區 (修正手機版顯示) -->
         <div class="style-controls">
           <label class="setting-item">
             字體大小: 
             <input type="number" v-model="seatSettings.fontSize" min="10" max="40" class="num-input"> px
           </label>
           <label class="setting-item">
-            字體顏色: 
+            文字顏色: 
             <input type="color" v-model="seatSettings.fontColor" class="color-input">
           </label>
         </div>
@@ -52,21 +51,19 @@
       </header>
 
       <div class="tips">
-        💡 提示：拖曳座位可交換位置。不需要的座位點擊左上角「取消」即可隱藏。
+        💡 提示：手機上可左右滑動查看完整座位。拖曳座位可交換位置，點擊左上角「取消」即可隱藏不需要的空位。
       </div>
 
-      <!-- 教室版面區 -->
+      <!-- 教室版面區 (加入水平滑動) -->
       <div class="classroom-wrapper">
         <div :class="['classroom-area', { 'is-rotated': isRotated }]">
           
-          <!-- 排數標籤 (1到6排) -->
           <div class="labels-grid">
             <div v-for="n in 6" :key="'label-'+n" class="row-label">
               第{{ n }}排
             </div>
           </div>
 
-          <!-- 座位網格 -->
           <div class="seats-grid">
             <div 
               v-for="(seat, index) in seatsList" 
@@ -77,7 +74,6 @@
               @dragover.prevent
               @drop="onDrop($event, index)"
             >
-              <!-- 座位標頭 -->
               <div class="seat-header">
                 <span class="seat-id">{{ seat.id }}</span>
                 <button @click="toggleSeatVisibility(seat)" class="btn-toggle-vis">
@@ -85,7 +81,6 @@
                 </button>
               </div>
               
-              <!-- 綁定自訂字體 -->
               <textarea 
                 v-model="seat.content" 
                 class="seat-input"
@@ -96,7 +91,6 @@
             </div>
           </div>
 
-          <!-- 講桌區域 -->
           <div class="teacher-desk-area">
             <div class="teacher-desk">
               <h3>講桌</h3>
@@ -111,7 +105,6 @@
 
         </div>
       </div>
-
     </div>
   </div>
 </template>
@@ -125,7 +118,6 @@ const isLoggingIn = ref(false)
 const passwordInput = ref('')
 const isSaving = ref(false)
 
-// 座位資料與版面設定
 const isRotated = ref(false)
 const isVisibleOnIndex = ref(false)
 const seatsList = ref([])
@@ -150,7 +142,6 @@ onMounted(async () => {
   }
 })
 
-// 💡 修正：與 admin.vue 完全同步的後台動態密碼機制
 const handleLogin = async () => {
   if (!passwordInput.value) return
   isLoggingIn.value = true
@@ -159,7 +150,7 @@ const handleLogin = async () => {
     const { data } = await supabase
       .from('system_settings')
       .select('setting_value')
-      .eq('setting_key', 'admin_password') // 改為讀取 admin_password
+      .eq('setting_key', 'admin_password')
       .maybeSingle()
       
     let expectedPwd = '168168168' 
@@ -190,7 +181,7 @@ const handleLogin = async () => {
       sessionStorage.setItem('seats_admin_logged_in', 'true')
       await fetchLayout()
     } else {
-      alert('驗證發生錯誤或無法連線至設定檔。')
+      alert('驗證發生錯誤。')
     }
   } finally {
     isLoggingIn.value = false
@@ -271,35 +262,56 @@ const toggleRotation = () => {
 </script>
 
 <style scoped>
-/* =========== 基礎與登入樣式 =========== */
 .seats-page { min-height: 100vh; background: #f1f5f9; font-family: sans-serif; }
-.login-container { display: flex; justify-content: center; align-items: center; min-height: 80vh; }
-.login-card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 400px; text-align: center; }
+.login-container { display: flex; justify-content: center; align-items: center; min-height: 80vh; padding: 20px; }
+.login-card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
 .subtitle { color: #64748b; margin-bottom: 20px; }
 .form-group { margin-bottom: 20px; text-align: left; }
 .form-control { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
 .btn-submit { width: 100%; padding: 12px; background: #0f766e; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
 .back-link { margin-top: 15px; }
 
-/* =========== 主工作區 =========== */
 .workspace { padding: 20px; max-width: 1200px; margin: 0 auto; }
-.workspace-header { display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px 25px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 15px;}
+.workspace-header { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  background: white; 
+  padding: 15px 25px; 
+  border-radius: 8px; 
+  margin-bottom: 15px; 
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
+  flex-wrap: wrap; 
+  gap: 15px;
+}
 .workspace-header h2 { margin: 0; color: #0f766e; }
 
-.style-controls { display: flex; gap: 15px; align-items: center; background: #f8fafc; padding: 8px 15px; border-radius: 6px; border: 1px solid #e2e8f0; }
+.style-controls { display: flex; gap: 15px; align-items: center; background: #f8fafc; padding: 8px 15px; border-radius: 6px; border: 1px solid #e2e8f0; flex-wrap: wrap; justify-content: center; }
 .setting-item { font-size: 0.95rem; font-weight: bold; color: #475569; display: flex; align-items: center; gap: 8px; }
 .num-input { width: 60px; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px; }
 .color-input { width: 40px; height: 30px; padding: 0; border: none; cursor: pointer; }
 
-.header-actions { display: flex; gap: 10px; }
+.header-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .btn-rotate { background: #e2e8f0; color: #334155; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 .btn-save { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 .btn-logout { background: #ef4444; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-.tips { background: #fffbeb; color: #b45309; padding: 10px 15px; border-radius: 6px; border: 1px dashed #fcd34d; margin-bottom: 20px; }
+.tips { background: #fffbeb; color: #b45309; padding: 10px 15px; border-radius: 6px; border: 1px dashed #fcd34d; margin-bottom: 20px; font-size: 0.95rem; line-height: 1.5; }
 
-/* =========== 教室版面 =========== */
-.classroom-wrapper { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow: hidden; display: flex; justify-content: center; }
-.classroom-area { width: 100%; max-width: 900px; transition: transform 0.5s ease; }
+/* 教室版面 - 關鍵手機版修正 */
+.classroom-wrapper { 
+  background: white; 
+  padding: 20px; 
+  border-radius: 12px; 
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+  overflow-x: auto; /* 允許水平滑動 */
+  -webkit-overflow-scrolling: touch;
+}
+.classroom-area { 
+  width: 100%; 
+  min-width: 800px; /* 強制最小寬度，防止手機版擠壓破版 */
+  margin: 0 auto;
+  transition: transform 0.5s ease; 
+}
 
 .classroom-area.is-rotated { transform: rotate(180deg); }
 .classroom-area.is-rotated .seat-card,
@@ -319,7 +331,8 @@ const toggleRotation = () => {
   text-align: center;
   cursor: grab;
   transition: all 0.3s ease;
-  height: 100px;
+  height: auto;
+  min-height: 100px;
   display: flex;
   flex-direction: column;
 }
@@ -332,7 +345,7 @@ const toggleRotation = () => {
   border: 2px dashed #94a3b8;
 }
 
-.seat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+.seat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; flex-wrap: wrap; gap: 5px;}
 .seat-id { font-size: 0.8rem; color: #94a3b8; font-weight: bold; }
 .btn-toggle-vis { background: white; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; }
 .btn-toggle-vis:hover { background: #f1f5f9; }
@@ -345,12 +358,21 @@ const toggleRotation = () => {
   text-align: center;
   font-weight: bold;
   resize: none;
+  min-height: 50px;
 }
 .seat-input:focus { outline: none; background: #fff; border-radius: 4px; }
 
-.teacher-desk-area { display: flex; justify-content: center; }
+.teacher-desk-area { display: flex; justify-content: center; margin-bottom: 20px;}
 .teacher-desk { border: 3px solid #0f766e; background: #f0fdfa; padding: 15px 30px; border-radius: 8px; text-align: center; width: 250px; transition: transform 0.5s ease; }
 .teacher-desk h3 { margin: 0 0 10px 0; color: #0f766e; }
 .desk-controls { background: white; padding: 5px 10px; border-radius: 4px; border: 1px solid #cbd5e1; }
 .toggle-label { font-weight: bold; color: #475569; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; }
+
+/* 手機版排版調整 */
+@media (max-width: 768px) {
+  .workspace-header { flex-direction: column; align-items: stretch; text-align: center;}
+  .style-controls { justify-content: center; }
+  .header-actions { flex-direction: column; }
+  .btn-rotate, .btn-save, .btn-logout { width: 100%; }
+}
 </style>
