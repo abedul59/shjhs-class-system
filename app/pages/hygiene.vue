@@ -29,6 +29,12 @@
       <header class="workspace-header">
         <h2>🧹 衛生管理系統</h2>
         <div class="header-actions">
+          <!-- 💡 新增：控制首頁顯示的開關 (僅在編輯模式下可操作) -->
+          <label v-if="isEditing" class="toggle-label">
+            <input type="checkbox" v-model="d.isVisibleOnIndex" />
+            顯示於首頁
+          </label>
+          
           <button @click="toggleEditMode" class="btn-edit" :class="{ 'editing': isEditing }">
             {{ isEditing ? '👁️ 切換預覽模式' : '✏️ 開啟編輯模式' }}
           </button>
@@ -143,7 +149,6 @@
 
         <table class="custom-table lunch-table">
           <tbody>
-            <!-- 清潔組 -->
             <tr>
               <th rowspan="2" width="10%"><EditText v-model="d.lunch.clean_header" :edit="isEditing" class="h-full"/></th>
               <th width="15%"><EditText v-model="d.lunch.clean_h1" :edit="isEditing" /></th>
@@ -161,7 +166,6 @@
               <td><EditText v-model="d.lunch.clean_n5" :edit="isEditing" /></td>
               <td><EditText v-model="d.lunch.clean_n6" :edit="isEditing" /></td>
             </tr>
-            <!-- 搬餐組 -->
             <tr>
               <th rowspan="2"><EditText v-model="d.lunch.move_header" :edit="isEditing" class="h-full"/></th>
               <th><EditText v-model="d.lunch.move_h1" :edit="isEditing" /></th>
@@ -179,7 +183,6 @@
               <td><EditText v-model="d.lunch.move_n5" :edit="isEditing" /></td>
               <td><EditText v-model="d.lunch.move_n6" :edit="isEditing" /></td>
             </tr>
-            <!-- 配膳組 -->
             <tr>
               <th rowspan="2"><EditText v-model="d.lunch.serve_header" :edit="isEditing" class="h-full"/></th>
               <th><EditText v-model="d.lunch.serve_h1" :edit="isEditing" /></th>
@@ -224,42 +227,36 @@
             </tr>
           </thead>
           <tbody>
-            <!-- 小隊長 -->
             <tr v-for="n in 6" :key="'ld-'+n">
               <td v-if="n===1" rowspan="6">小隊長</td>
               <td>小隊長 {{n}}</td>
               <td><EditText v-model="d.squad.leaders[n-1]" :edit="isEditing" /></td>
               <td v-if="n===1" rowspan="6"><EditText v-model="d.squad.leader_desc" :edit="isEditing" class="h-full" /></td>
             </tr>
-            <!-- 值日生 -->
             <tr v-for="n in 6" :key="'dy-'+n">
               <td v-if="n===1" rowspan="6">值日生<br><span class="text-xs">(每天第 7 節下課到辦公室簽到)</span></td>
               <td>值日生 {{n}}</td>
               <td><EditText v-model="d.squad.duties[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.duty_desc[n-1]" :edit="isEditing" /></td>
             </tr>
-            <!-- 小幫手 -->
             <tr v-for="n in 5" :key="'hp-'+n">
               <td v-if="n===1" rowspan="5">小幫手<br><span class="text-xs">(每天第 1 節下課到辦公室簽到)</span></td>
               <td>小幫手 {{n}}</td>
               <td><EditText v-model="d.squad.helpers[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.helper_desc[n-1]" :edit="isEditing" /></td>
             </tr>
-            <!-- 公差 -->
             <tr v-for="n in 4" :key="'er-'+n">
               <td v-if="n===1" rowspan="4">公差<br><span class="text-xs">(每天第 2 節下課到辦公室簽到...)</span></td>
               <td>公差 {{n}}</td>
               <td><EditText v-model="d.squad.errands[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.errand_desc[n-1]" :edit="isEditing" /></td>
             </tr>
-            <!-- 小小兵 -->
             <tr v-for="n in 2" :key="'mn-'+n">
               <td v-if="n===1" rowspan="2">小小兵<br><span class="text-xs">(每天第 3 節下課到辦公室簽到)</span></td>
               <td>小小兵 {{n}}</td>
               <td><EditText v-model="d.squad.minions[n-1]" :edit="isEditing" /></td>
               <td v-if="n===1" rowspan="2"><EditText v-model="d.squad.minion_desc" :edit="isEditing" class="h-full" /></td>
             </tr>
-            <!-- 其他 -->
             <tr v-for="n in 3" :key="'ot-'+n">
               <td v-if="n===1" rowspan="3">其他</td>
               <td>特別小助理 {{n}}</td>
@@ -278,7 +275,6 @@
 import { ref, onMounted, defineComponent, h } from 'vue'
 const supabase = useSupabaseClient()
 
-// 建立一個微型元件來處理編輯與顯示切換 (減少程式碼重複)
 const EditText = defineComponent({
   props: ['modelValue', 'edit', 'class'],
   emits: ['update:modelValue'],
@@ -300,8 +296,9 @@ const isEditing = ref(false)
 const isSaving = ref(false)
 const activeTab = ref('morning')
 
-// 預設全部文字資料 (精確還原您的圖片內容，外掃區預設為空)
+// 💡 預設資料：加入 isVisibleOnIndex 變數
 const defaultData = {
+  isVisibleOnIndex: false, // 控制首頁顯示的開關
   morning: {
     title: '704 班 教室和外掃區 早上掃地工作分配表 2021/10/18 開始',
     note: '請先做好垃圾分類。每天早上和週五下午都要倒資源回收垃圾。\n每天早上和週五下午打掃時間視情況倒一般垃圾，超過八分滿時得立刻倒。週五下午和例假日前一天下午一定得倒光。',
@@ -345,7 +342,7 @@ const defaultData = {
   }
 }
 
-const d = ref(JSON.parse(JSON.stringify(defaultData))) // 深拷貝響應式資料
+const d = ref(JSON.parse(JSON.stringify(defaultData))) 
 
 onMounted(async () => {
   if (sessionStorage.getItem('hygiene_admin_logged_in') === 'true') {
@@ -380,7 +377,7 @@ const logout = () => { sessionStorage.removeItem('hygiene_admin_logged_in'); isL
 const fetchLayout = async () => {
   const { data } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'hygiene_management_data').maybeSingle()
   if (data?.setting_value) {
-    d.value = { ...JSON.parse(JSON.stringify(defaultData)), ...data.setting_value } // 保留新結構，合併舊資料
+    d.value = { ...JSON.parse(JSON.stringify(defaultData)), ...data.setting_value }
   }
 }
 
@@ -397,7 +394,6 @@ const saveData = async () => {
 </script>
 
 <style>
-/* 為了讓微型元件的樣式能生效，使用全域或深度選擇器 */
 .editable-textarea { width: 100%; height: 100%; min-height: 40px; border: 1px dashed #94a3b8; background: #fff; padding: 4px; font-family: inherit; font-size: inherit; resize: vertical; box-sizing: border-box; text-align: center; }
 .editable-textarea:focus { border-color: #3b82f6; outline: none; background: #eff6ff; }
 .readonly-text { padding: 4px; line-height: 1.4; word-break: break-word; }
@@ -419,7 +415,11 @@ const saveData = async () => {
 .workspace-header { display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px 25px; border-radius: 8px 8px 0 0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 15px; border-bottom: 1px solid #e2e8f0;}
 .workspace-header h2 { margin: 0; color: #0891b2; }
 
-.header-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+/* 💡 控制首頁顯示的開關樣式 */
+.toggle-label { font-weight: bold; color: #0891b2; display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 5px 10px; border: 1px dashed #cbd5e1; border-radius: 6px; background: #f0fdfa;}
+.toggle-label input { cursor: pointer; }
+
+.header-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; align-items: center;}
 .btn-edit { background: #e2e8f0; color: #334155; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
 .btn-edit.editing { background: #f59e0b; color: white; }
 .btn-save { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
@@ -456,6 +456,6 @@ const saveData = async () => {
 @media (max-width: 768px) {
   .workspace-header { flex-direction: column; text-align: center;}
   .header-actions { flex-direction: column; width: 100%;}
-  .header-actions button { width: 100%; }
+  .header-actions button, .toggle-label { width: 100%; justify-content: center;}
 }
 </style>
