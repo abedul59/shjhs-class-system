@@ -4,7 +4,6 @@
       <div v-if="!isVerified" class="verify-section">
         <div class="card-header">
           <h2>💬 班級私訊聊天室</h2>
-          <!-- 💡 新增的資安與個資提醒 -->
           <div class="security-notice">
             🔒 提醒家長：為維護資安與嚴格保護學生個資，請擇一方式進行身分驗證，完成後即可檢視與導師的對話紀錄。
           </div>
@@ -21,7 +20,6 @@
             </select>
           </div>
 
-          <!-- 💡 驗證方式切換按鈕 -->
           <div class="auth-method-toggle">
             <label :class="{ 'active': authMethod === 'id' }">
               <input type="radio" v-model="authMethod" value="id" />
@@ -72,7 +70,7 @@
         </form>
       </div>
 
-      <!-- 聊天室介面 (維持原樣) -->
+      <!-- 聊天室介面 -->
       <div v-else class="chat-section">
         <div class="chat-header">
           <h3>💬 與導師的私訊 ({{ verifiedStudentName }})</h3>
@@ -103,9 +101,8 @@ const supabase = useSupabaseClient()
 
 const students = ref([])
 const selectedStudentId = ref('')
-const authMethod = ref('id') // 預設使用身分證驗證
+const authMethod = ref('id') 
 
-// 表單輸入綁定
 const studentBirthday = ref('')
 const studentIdLast4 = ref('')
 const emailPrefix = ref('')
@@ -118,7 +115,6 @@ const sysMessage = ref({ type: '', text: '' })
 const chatMessages = ref([])
 const newMessage = ref('')
 
-// --- 🛡️ 網域 IP 攔截邏輯 ---
 const checkSchoolNetwork = async () => {
   try {
     const res = await fetch('https://api.ipify.org?format=json')
@@ -154,15 +150,12 @@ const fetchStudents = async () => {
   if (data) students.value = data 
 }
 
-// 💡 提取 Email 前五個英數字的核心邏輯
 const extractAlphanumericPrefix = (email) => {
   if (!email || typeof email !== 'string') return ''
   const beforeAt = email.split('@')[0]
-  // 移除所有非英數字元後，取前 5 碼轉小寫
   return beforeAt.replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toLowerCase()
 }
 
-// 💡 雙軌身分驗證邏輯
 const verifyIdentity = async () => {
   if (!selectedStudentId.value) {
     showMessage('error', '❌ 請先選擇學生！')
@@ -173,7 +166,6 @@ const verifyIdentity = async () => {
   sysMessage.value = { type: '', text: '' }
 
   try {
-    // 取得該名學生的基本資料
     const { data: stData, error: stError } = await supabase
       .from('students')
       .select('*')
@@ -184,32 +176,36 @@ const verifyIdentity = async () => {
 
     let isValid = false
 
-    // 驗證方式一：生日 + 身分證後四碼
     if (authMethod.value === 'id') {
       const idStr = (stData.id_number || stData.id_last_5 || '').slice(-4)
       if (stData.birthday === studentBirthday.value && idStr === studentIdLast4.value) {
         isValid = true
       }
     } 
-    // 驗證方式二：Email 前五碼
     else if (authMethod.value === 'email') {
       const userInputPrefix = emailPrefix.value.replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toLowerCase()
       let emailsToCheck = []
 
-      // 1. 抓取 parent_bindings 資料表中的 Email (若有使用獨立資料表)
+      // 💡 修正：正確抓取 parents 資料表中的信箱 (對應 AdminStudents.vue)
+      const { data: parentsData } = await supabase
+        .from('parents')
+        .select('email')
+        .eq('student_id', selectedStudentId.value)
+        
+      if (parentsData) {
+        emailsToCheck.push(...parentsData.map(p => p.email).filter(Boolean))
+      }
+
+      // 備用：若有額外的 parent_bindings 資料表
       const { data: bindings } = await supabase
         .from('parent_bindings')
         .select('email')
         .eq('student_id', selectedStudentId.value)
-      if (bindings) emailsToCheck.push(...bindings.map(b => b.email))
+        
+      if (bindings) {
+        emailsToCheck.push(...bindings.map(b => b.email).filter(Boolean))
+      }
 
-      // 2. 同時抓取 students 資料表中可能包含的 Email 欄位 (相容性設計)
-      if (stData.parent_email) emailsToCheck.push(stData.parent_email)
-      if (stData.father_email) emailsToCheck.push(stData.father_email)
-      if (stData.mother_email) emailsToCheck.push(stData.mother_email)
-      if (stData.contact_email) emailsToCheck.push(stData.contact_email)
-
-      // 比對任一家長的 Email 前 5 個英數字是否吻合
       isValid = emailsToCheck.some(email => {
         return extractAlphanumericPrefix(email) === userInputPrefix
       })
@@ -221,7 +217,6 @@ const verifyIdentity = async () => {
       return
     }
 
-    // 驗證成功，進入聊天室
     verifiedStudentName.value = stData.real_name
     isVerified.value = true
     await loadChatHistory()
@@ -291,46 +286,12 @@ onMounted(async () => {
 .card-header { text-align: center; margin-bottom: 25px; }
 .card-header h2 { color: #047857; margin-bottom: 15px; font-size: 1.6rem; }
 
-/* 資安提醒樣式 */
-.security-notice {
-  background-color: #fef2f2;
-  color: #991b1b;
-  padding: 12px 15px;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  border: 1px solid #fecaca;
-  text-align: left;
-}
+.security-notice { background-color: #fef2f2; color: #991b1b; padding: 12px 15px; border-radius: 8px; font-size: 0.9rem; line-height: 1.5; border: 1px solid #fecaca; text-align: left; }
 
-/* 驗證方式切換按鈕樣式 */
-.auth-method-toggle {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
-  background: #f1f5f9;
-  padding: 5px;
-  border-radius: 10px;
-}
-.auth-method-toggle label {
-  flex: 1;
-  text-align: center;
-  padding: 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: bold;
-  color: #64748b;
-  transition: all 0.2s;
-  font-size: 0.95rem;
-}
-.auth-method-toggle label input {
-  display: none;
-}
-.auth-method-toggle label.active {
-  background: white;
-  color: #10b981;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-}
+.auth-method-toggle { display: flex; gap: 10px; margin-bottom: 20px; background: #f1f5f9; padding: 5px; border-radius: 10px; }
+.auth-method-toggle label { flex: 1; text-align: center; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: bold; color: #64748b; transition: all 0.2s; font-size: 0.95rem; }
+.auth-method-toggle label input { display: none; }
+.auth-method-toggle label.active { background: white; color: #10b981; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 
 .form-group { margin-bottom: 20px; }
 .form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #374151; }
