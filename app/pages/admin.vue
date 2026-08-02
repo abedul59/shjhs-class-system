@@ -30,6 +30,7 @@
           <!-- 💡 這裡完美整合了剛做好的密碼管理元件 -->
           <button @click="currentTab = 'officers'" :class="{ active: currentTab === 'officers' }">🔐 職位密碼管理</button>
           <button @click="currentTab = 'settings'" :class="{ active: currentTab === 'settings' }">⚙️ 系統設定</button>
+          <button @click="currentTab = 'backup'" :class="{ active: currentTab === 'backup' }">  📦 系統備份</button>
           <NuxtLink to="/" class="back-btn">⬅️ 返回前台</NuxtLink>
         </div>
       </header>
@@ -47,6 +48,7 @@
         <!-- 💡 渲染密碼管理元件 -->
         <AdminOfficers v-if="currentTab === 'officers'" />
         <AdminSettings v-if="currentTab === 'settings'" />
+        <AdminBackup v-if="currentTab === 'backup'" />
       </main>
     </div>
   </div>
