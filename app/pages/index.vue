@@ -1,6 +1,5 @@
 <template>
   <div class="page-container">
-    <!-- 頂部：家長須知事項 -->
     <div class="blackboard top-board">
       <h2 class="board-title notice-title">📢 家長須知事項</h2>
       <div class="dashed-divider"></div>
@@ -12,7 +11,6 @@
       </div>
     </div>
 
-    <!-- 下半部：雙欄佈局 -->
     <div class="main-split">
       <div class="left-panel">
         <div class="control-card">
@@ -27,6 +25,9 @@
             <button @click="openDiscipline" class="btn btn-dark-blue">⚖️ 秩序管理</button>
             <button @click="openEmergencyModal" class="btn btn-red">🚨 緊急通知</button>
             <NuxtLink to="/seats" class="btn btn-teal">🪑 座位管理</NuxtLink>
+            
+            <!-- 💡 新增：衛生管理入口按鈕 -->
+            <NuxtLink to="/hygiene" class="btn btn-cyan">🧹 衛生管理</NuxtLink>
             
             <button 
               v-if="seatingChart.isVisible" 
@@ -89,7 +90,7 @@
       </div>
     </div>
 
-    <!-- 💡 同步更新的班級座位表顯示區 -->
+    <!-- 班級座位表顯示區 -->
     <div v-if="seatingChart.isVisible && showSeatingChartLocal" class="seating-display-board">
       <h3 class="seating-title">🪑 班級座位表</h3>
       <div class="seating-wrapper">
@@ -109,13 +110,11 @@
             >
               <div class="seat-id-readonly">{{ seat.id }}</div>
               
-              <!-- 💡 畫面渲染已全面改為新版變數，不再依賴 content 字串，避免崩潰 -->
               <div class="seat-text-container">
                 <div :style="{ fontSize: (seatingChart.settings?.numberSize || 16) + 'px', color: seatingChart.settings?.numberColor || '#64748b' }">{{ seat.seatNum }}</div>
                 <div :style="{ fontSize: (seatingChart.settings?.nameSize || 20) + 'px', color: seatingChart.settings?.nameColor || '#e11d48' }">{{ seat.name }}</div>
                 <div v-if="seat.other" :style="{ fontSize: (seatingChart.settings?.otherSize || 14) + 'px', color: seatingChart.settings?.otherColor || '#94a3b8' }">{{ seat.other }}</div>
               </div>
-
             </div>
           </div>
 
@@ -203,44 +202,23 @@ const fetchData = async () => {
     
     const seatSetting = sysData.find(s => s.setting_key === 'seating_chart_data')
     if (seatSetting) {
-      // 💡 核心修復：在賦值前進行安全過濾與資料格式升級
       const rawValue = seatSetting.setting_value || {}
-      
-      // 處理舊版文字轉換為新版欄位
       const normalizedSeats = (rawValue.seats || []).map(seat => {
         if (seat.content !== undefined) {
           const contentStr = seat.content || ''
           const lines = String(contentStr).split('\n')
-          return {
-            id: seat.id,
-            isHidden: seat.isHidden,
-            seatNum: lines[0] || '',
-            name: lines[1] || '',
-            other: lines.slice(2).join(' ') || ''
-          }
+          return { id: seat.id, isHidden: seat.isHidden, seatNum: lines[0] || '', name: lines[1] || '', other: lines.slice(2).join(' ') || '' }
         }
         return seat
       })
-
-      // 處理舊版設定轉換為新版設定
       let normalizedSettings = rawValue.settings || {}
       if (normalizedSettings.fontSize) {
         normalizedSettings = {
-          numberSize: normalizedSettings.fontSize,
-          nameSize: normalizedSettings.fontSize + 4,
-          otherSize: normalizedSettings.fontSize - 2,
-          numberColor: normalizedSettings.fontColor,
-          nameColor: normalizedSettings.fontColor,
-          otherColor: normalizedSettings.fontColor
+          numberSize: normalizedSettings.fontSize, nameSize: normalizedSettings.fontSize + 4, otherSize: normalizedSettings.fontSize - 2,
+          numberColor: normalizedSettings.fontColor, nameColor: normalizedSettings.fontColor, otherColor: normalizedSettings.fontColor
         }
       }
-
-      seatingChart.value = {
-        isVisible: rawValue.isVisible || false,
-        isRotated: rawValue.isRotated || false,
-        seats: normalizedSeats,
-        settings: normalizedSettings
-      }
+      seatingChart.value = { isVisible: rawValue.isVisible || false, isRotated: rawValue.isRotated || false, seats: normalizedSeats, settings: normalizedSettings }
     }
   }
 
@@ -251,9 +229,7 @@ const fetchData = async () => {
   if (attData) todayAttendances.value = attData
 }
 
-onMounted(() => {
-  updateTime(); timer = setInterval(updateTime, 1000); fetchData()
-})
+onMounted(() => { updateTime(); timer = setInterval(updateTime, 1000); fetchData() })
 onUnmounted(() => { if (timer) clearInterval(timer) })
 
 const unlockContactEdit = () => {
@@ -308,6 +284,7 @@ const saveContactItems = async () => {
 .btn-red { background: #ef4444; }
 .btn-dark-blue { background: #1e3a8a; } 
 .btn-teal { background: #0f766e; } 
+.btn-cyan { background: #06b6d4; } /* 💡 衛生管理按鈕顏色 */
 .btn-indigo { background: #6366f1; } 
 
 .stats-row { display: flex; gap: 15px; }
@@ -350,15 +327,10 @@ const saveContactItems = async () => {
 .row-label-readonly { text-align: center; font-weight: bold; color: #0f766e; font-size: 1.1rem; transition: transform 0.5s ease; }
 
 .seats-grid-readonly { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 35px; }
-.seat-card-readonly {
-  border: 2px solid #cbd5e1; border-radius: 8px; background: #f8fafc; padding: 10px;
-  text-align: center; min-height: 110px; display: flex; flex-direction: column; transition: transform 0.5s ease;
-}
+.seat-card-readonly { border: 2px solid #cbd5e1; border-radius: 8px; background: #f8fafc; padding: 10px; text-align: center; min-height: 110px; display: flex; flex-direction: column; transition: transform 0.5s ease; }
 .seat-card-readonly.is-hidden-seat-readonly { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
 .seat-id-readonly { font-size: 0.8rem; color: #94a3b8; text-align: left; margin-bottom: 5px; font-weight: bold; }
-
 .seat-text-container { display: flex; flex-direction: column; gap: 4px; font-weight: bold; justify-content: center; flex: 1;}
-
 .teacher-desk-readonly { border: 3px solid #0f766e; background: #f0fdfa; padding: 15px 20px; border-radius: 8px; text-align: center; width: 250px; margin: 0 auto; transition: transform 0.5s ease; }
 .teacher-desk-readonly h3 { margin: 0; color: #0f766e; font-size: 1.2rem; }
 
