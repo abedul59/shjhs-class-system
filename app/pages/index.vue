@@ -1,6 +1,5 @@
 <template>
   <div class="page-container">
-    <!-- 頂部：家長須知事項 -->
     <div class="blackboard top-board">
       <h2 class="board-title notice-title">📢 家長須知事項</h2>
       <div class="dashed-divider"></div>
@@ -12,7 +11,6 @@
       </div>
     </div>
 
-    <!-- 下半部：雙欄佈局 -->
     <div class="main-split">
       <div class="left-panel">
         <div class="control-card">
@@ -37,8 +35,9 @@
               {{ showSeatingChartLocal ? '🙈 隱藏教室座位表' : '👀 顯示教室座位表' }}
             </button>
 
-            <!-- 💡 新增：顯示衛生工作按鈕 -->
+            <!-- 💡 新增：加入 v-if 綁定導師後台的設定值 -->
             <button 
+              v-if="hygieneData.isVisibleOnIndex"
               @click="showHygieneLocal = !showHygieneLocal" 
               class="btn btn-sky"
             >
@@ -121,8 +120,8 @@
       </div>
     </div>
 
-    <!-- 💡 新增：班級衛生工作顯示區 (唯讀版) -->
-    <div v-if="showHygieneLocal" class="hygiene-display-board">
+    <!-- 班級衛生工作顯示區 (加入雙重 v-if 保險判斷) -->
+    <div v-if="hygieneData.isVisibleOnIndex && showHygieneLocal" class="hygiene-display-board">
       <h3 class="hygiene-main-title">🧹 班級衛生工作管理</h3>
       
       <!-- 唯讀版分頁切換 -->
@@ -262,8 +261,8 @@ const showSeatingChartLocal = ref(false)
 const showHygieneLocal = ref(false)
 const activeHygieneTab = ref('morning')
 
-// 💡 預設衛生工作資料 (與後台完全一致，避免無資料時出錯)
 const defaultHygieneData = {
+  isVisibleOnIndex: false, // 💡 新增控制變數預設值
   morning: {
     title: '704 班 教室和外掃區 早上掃地工作分配表 2021/10/18 開始',
     note: '請先做好垃圾分類。每天早上和週五下午都要倒資源回收垃圾。\n每天早上和週五下午打掃時間視情況倒一般垃圾，超過八分滿時得立刻倒。週五下午和例假日前一天下午一定得倒光。',
@@ -309,7 +308,6 @@ const defaultHygieneData = {
 
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
-// 💡 文字換行輔助函數
 const formatNL = (txt) => String(txt || '').replace(/\n/g, '<br>')
 
 const openEmergencyModal = () => {
@@ -364,7 +362,6 @@ const fetchData = async () => {
   parentNotices.value = boardData?.notices || []
   contactBookItems.value = boardData?.contact_items || []
 
-  // 💡 同時抓取密碼、座位表、衛生工作的資料
   const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data'])
   
   if (sysData) {
@@ -462,7 +459,7 @@ const saveContactItems = async () => {
 .btn-teal { background: #0f766e; } 
 .btn-cyan { background: #06b6d4; }
 .btn-indigo { background: #6366f1; } 
-.btn-sky { background: #0ea5e9; } /* 新按鈕藍色 */
+.btn-sky { background: #0ea5e9; }
 
 .stats-row { display: flex; gap: 15px; }
 .stat-box { flex: 1; padding: 12px; border-radius: 6px; text-align: center; font-size: 1.05rem; font-weight: bold; }
@@ -510,7 +507,7 @@ const saveContactItems = async () => {
 .teacher-desk-readonly { border: 3px solid #0f766e; background: #f0fdfa; padding: 15px 20px; border-radius: 8px; text-align: center; width: 250px; margin: 0 auto; transition: transform 0.5s ease; }
 .teacher-desk-readonly h3 { margin: 0; color: #0f766e; font-size: 1.2rem; }
 
-/* 💡 新增：衛生工作顯示區樣式 */
+/* 衛生工作顯示區 */
 .hygiene-display-board { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-top: 10px; }
 .hygiene-main-title { margin-top: 0; color: #0891b2; text-align: center; font-size: 1.4rem; margin-bottom: 15px; }
 .tabs-container-readonly { display: flex; gap: 10px; overflow-x: auto; white-space: nowrap; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; justify-content: center;}
@@ -519,7 +516,7 @@ const saveContactItems = async () => {
 .tab-btn.active { background: #0891b2; color: white; }
 
 .hygiene-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.hygiene-content { min-width: 800px; padding-bottom: 15px; } /* 防止手機版破版 */
+.hygiene-content { min-width: 800px; padding-bottom: 15px; }
 .hygiene-content-title { text-align: center; margin-bottom: 10px; font-size: 1.3rem; color: #1e293b; }
 .hygiene-sub-title { text-align: center; margin-bottom: 15px; color: #475569; font-size: 0.95rem; }
 
@@ -541,6 +538,6 @@ const saveContactItems = async () => {
   .student-grid { grid-template-columns: repeat(2, 1fr); }
   .seats-grid-readonly, .labels-grid-readonly { gap: 5px; }
   .seat-card-readonly { padding: 5px; min-height: 90px; }
-  .tabs-container-readonly { justify-content: flex-start; padding-bottom: 10px; } /* 手機板靠左，可滑動 */
+  .tabs-container-readonly { justify-content: flex-start; padding-bottom: 10px; }
 }
 </style>
