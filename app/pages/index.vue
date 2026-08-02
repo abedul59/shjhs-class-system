@@ -14,7 +14,6 @@
 
     <!-- 下半部：雙欄佈局 -->
     <div class="main-split">
-      <!-- 左側：控制面板 -->
       <div class="left-panel">
         <div class="control-card">
           <div class="clock-display">🕒 {{ currentTime }}</div>
@@ -29,7 +28,6 @@
             <button @click="openEmergencyModal" class="btn btn-red">🚨 緊急通知</button>
             <NuxtLink to="/seats" class="btn btn-teal">🪑 座位管理</NuxtLink>
             
-            <!-- 座位表展開/隱藏切換按鈕 -->
             <button 
               v-if="seatingChart.isVisible" 
               @click="showSeatingChartLocal = !showSeatingChartLocal" 
@@ -55,7 +53,6 @@
         </div>
       </div>
 
-      <!-- 右側：今日聯絡簿 -->
       <div class="right-panel">
         <div class="blackboard contact-board">
           <div class="board-header">
@@ -92,7 +89,7 @@
       </div>
     </div>
 
-    <!-- 班級座位表顯示區 -->
+    <!-- 💡 同步更新的班級座位表顯示區 -->
     <div v-if="seatingChart.isVisible && showSeatingChartLocal" class="seating-display-board">
       <h3 class="seating-title">🪑 班級座位表</h3>
       <div class="seating-wrapper">
@@ -111,14 +108,14 @@
               :class="['seat-card-readonly', { 'is-hidden-seat-readonly': seat.isHidden }]"
             >
               <div class="seat-id-readonly">{{ seat.id }}</div>
-              <div 
-                class="seat-text-readonly" 
-                v-html="seat.content.replace(/\n/g, '<br>')"
-                :style="{ 
-                  fontSize: (seatingChart.settings?.fontSize || 16) + 'px', 
-                  color: seatingChart.settings?.fontColor || '#1e293b' 
-                }"
-              ></div>
+              
+              <!-- 💡 畫面渲染已全面改為新版變數，不再依賴 content 字串，避免崩潰 -->
+              <div class="seat-text-container">
+                <div :style="{ fontSize: (seatingChart.settings?.numberSize || 16) + 'px', color: seatingChart.settings?.numberColor || '#64748b' }">{{ seat.seatNum }}</div>
+                <div :style="{ fontSize: (seatingChart.settings?.nameSize || 20) + 'px', color: seatingChart.settings?.nameColor || '#e11d48' }">{{ seat.name }}</div>
+                <div v-if="seat.other" :style="{ fontSize: (seatingChart.settings?.otherSize || 14) + 'px', color: seatingChart.settings?.otherColor || '#94a3b8' }">{{ seat.other }}</div>
+              </div>
+
             </div>
           </div>
 
@@ -130,7 +127,6 @@
       </div>
     </div>
 
-    <!-- 掛載並控制 EmergencyModal 元件 -->
     <EmergencyModal v-if="showEmergencyModal" @close="showEmergencyModal = false" />
   </div>
 </template>
@@ -152,9 +148,7 @@ const openEmergencyModal = () => {
   }
 }
 
-const openDiscipline = () => {
-  navigateTo('/discipline')
-}
+const openDiscipline = () => { navigateTo('/discipline') }
 
 const d = new Date()
 const todayISO = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
@@ -176,7 +170,7 @@ const seatingChart = ref({
   isVisible: false, 
   isRotated: false, 
   seats: [],
-  settings: { fontSize: 16, fontColor: '#1e293b' }
+  settings: {}
 })
 
 const isEditingContact = ref(false)
@@ -197,26 +191,57 @@ const absentStudentsList = computed(() => {
 const absentCount = computed(() => absentStudentsList.value.length)
 
 const fetchData = async () => {
-  const { data: boardData } = await supabase
-    .from('contact_books')
-    .select('notices, contact_items')
-    .eq('record_date', todayISO)
-    .maybeSingle()
-
+  const { data: boardData } = await supabase.from('contact_books').select('notices, contact_items').eq('record_date', todayISO).maybeSingle()
   parentNotices.value = boardData?.notices || []
   contactBookItems.value = boardData?.contact_items || []
 
-  const { data: sysData } = await supabase
-    .from('system_settings')
-    .select('*')
-    .in('setting_key', ['board_officer_passwords', 'seating_chart_data'])
-
+  const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', ['board_officer_passwords', 'seating_chart_data'])
+  
   if (sysData) {
     const pwdSetting = sysData.find(s => s.setting_key === 'board_officer_passwords')
     if (pwdSetting) officerPasswords.value = { ...officerPasswords.value, ...pwdSetting.setting_value }
     
     const seatSetting = sysData.find(s => s.setting_key === 'seating_chart_data')
-    if (seatSetting) seatingChart.value = seatSetting.setting_value
+    if (seatSetting) {
+      // 💡 核心修復：在賦值前進行安全過濾與資料格式升級
+      const rawValue = seatSetting.setting_value || {}
+      
+      // 處理舊版文字轉換為新版欄位
+      const normalizedSeats = (rawValue.seats || []).map(seat => {
+        if (seat.content !== undefined) {
+          const contentStr = seat.content || ''
+          const lines = String(contentStr).split('\n')
+          return {
+            id: seat.id,
+            isHidden: seat.isHidden,
+            seatNum: lines[0] || '',
+            name: lines[1] || '',
+            other: lines.slice(2).join(' ') || ''
+          }
+        }
+        return seat
+      })
+
+      // 處理舊版設定轉換為新版設定
+      let normalizedSettings = rawValue.settings || {}
+      if (normalizedSettings.fontSize) {
+        normalizedSettings = {
+          numberSize: normalizedSettings.fontSize,
+          nameSize: normalizedSettings.fontSize + 4,
+          otherSize: normalizedSettings.fontSize - 2,
+          numberColor: normalizedSettings.fontColor,
+          nameColor: normalizedSettings.fontColor,
+          otherColor: normalizedSettings.fontColor
+        }
+      }
+
+      seatingChart.value = {
+        isVisible: rawValue.isVisible || false,
+        isRotated: rawValue.isRotated || false,
+        seats: normalizedSeats,
+        settings: normalizedSettings
+      }
+    }
   }
 
   const { data: sData } = await supabase.from('students').select('*').order('seat_number')
@@ -227,35 +252,19 @@ const fetchData = async () => {
 }
 
 onMounted(() => {
-  updateTime()
-  timer = setInterval(updateTime, 1000)
-  fetchData()
+  updateTime(); timer = setInterval(updateTime, 1000); fetchData()
 })
-
-onUnmounted(() => {
-  if (timer) clearInterval(timer)
-})
+onUnmounted(() => { if (timer) clearInterval(timer) })
 
 const unlockContactEdit = () => {
   const pwd = window.prompt("🔒 進入編輯模式，請輸入「學藝股長」或「輔導股長」密碼：")
   if (!pwd) return
-  
   const teacherPwd = officerPasswords.value.teacher || '168168168'
-  
-  if (
-    (officerPasswords.value.academic && pwd === officerPasswords.value.academic) || 
-    (officerPasswords.value.counseling && pwd === officerPasswords.value.counseling)
-  ) {
-    currentEditorRole.value = '股長'
-    isEditingContact.value = true
-    editingContactItems.value = [...contactBookItems.value] 
+  if ((officerPasswords.value.academic && pwd === officerPasswords.value.academic) || (officerPasswords.value.counseling && pwd === officerPasswords.value.counseling)) {
+    currentEditorRole.value = '股長'; isEditingContact.value = true; editingContactItems.value = [...contactBookItems.value] 
   } else if (pwd === teacherPwd) {
-    currentEditorRole.value = '導師'
-    isEditingContact.value = true
-    editingContactItems.value = [...contactBookItems.value] 
-  } else {
-    alert("❌ 密碼錯誤！請確認密碼是否正確。")
-  }
+    currentEditorRole.value = '導師'; isEditingContact.value = true; editingContactItems.value = [...contactBookItems.value] 
+  } else { alert("❌ 密碼錯誤！請確認密碼是否正確。") }
 }
 
 const addContactItem = () => editingContactItems.value.push('')
@@ -263,16 +272,11 @@ const removeContactItem = (i) => editingContactItems.value.splice(i, 1)
 
 const saveContactItems = async () => {
   try {
-    const { error: upsertError } = await supabase.from('contact_books').upsert({
-      record_date: todayISO, notices: parentNotices.value, contact_items: editingContactItems.value
-    }, { onConflict: 'record_date' })
+    const { error: upsertError } = await supabase.from('contact_books').upsert({ record_date: todayISO, notices: parentNotices.value, contact_items: editingContactItems.value }, { onConflict: 'record_date' })
     if (upsertError) throw upsertError
     alert("✅ 聯絡簿已成功更新發布！")
-    contactBookItems.value = [...editingContactItems.value]
-    isEditingContact.value = false
-  } catch (error) {
-    alert("❌ 聯絡簿儲存失敗：" + error.message)
-  }
+    contactBookItems.value = [...editingContactItems.value]; isEditingContact.value = false
+  } catch (error) { alert("❌ 聯絡簿儲存失敗：" + error.message) }
 }
 </script>
 
@@ -304,7 +308,6 @@ const saveContactItems = async () => {
 .btn-red { background: #ef4444; }
 .btn-dark-blue { background: #1e3a8a; } 
 .btn-teal { background: #0f766e; } 
-/* 💡 修正：移除 width: 100% 讓它自然與其他按鈕排列 */
 .btn-indigo { background: #6366f1; } 
 
 .stats-row { display: flex; gap: 15px; }
@@ -335,101 +338,34 @@ const saveContactItems = async () => {
 .cancel-btn { background: #64748b; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; }
 .save-btn { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 
-.seating-display-board {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-  border: 1px solid #e2e8f0;
-  margin-top: 10px;
-}
-.seating-title {
-  margin-top: 0;
-  color: #0f766e;
-  border-bottom: 2px solid #f1f5f9;
-  padding-bottom: 10px;
-  margin-bottom: 25px;
-  text-align: center;
-  font-size: 1.4rem;
-}
-.seating-wrapper {
-  width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 15px;
-}
-.seating-area {
-  width: 100%;
-  min-width: 800px; 
-  margin: 0 auto;
-  transition: transform 0.5s ease;
-}
-
+/* 座位表顯示區 */
+.seating-display-board { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-top: 10px; }
+.seating-title { margin-top: 0; color: #0f766e; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 25px; text-align: center; font-size: 1.4rem; }
+.seating-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 15px; }
+.seating-area { width: 100%; min-width: 900px; margin: 0 auto; transition: transform 0.5s ease; }
 .seating-area.is-rotated { transform: rotate(180deg); }
-.seating-area.is-rotated .seat-card-readonly,
-.seating-area.is-rotated .row-label-readonly,
-.seating-area.is-rotated .teacher-desk-readonly { transform: rotate(-180deg); }
+.seating-area.is-rotated .seat-card-readonly, .seating-area.is-rotated .row-label-readonly, .seating-area.is-rotated .teacher-desk-readonly { transform: rotate(-180deg); }
 
 .labels-grid-readonly { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 15px; }
 .row-label-readonly { text-align: center; font-weight: bold; color: #0f766e; font-size: 1.1rem; transition: transform 0.5s ease; }
 
-.seats-grid-readonly {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 10px;
-  margin-bottom: 35px;
-}
+.seats-grid-readonly { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 35px; }
 .seat-card-readonly {
-  border: 2px solid #cbd5e1;
-  border-radius: 8px;
-  background: #f8fafc;
-  padding: 10px;
-  text-align: center;
-  height: 90px;
-  display: flex;
-  flex-direction: column;
-  transition: transform 0.5s ease;
+  border: 2px solid #cbd5e1; border-radius: 8px; background: #f8fafc; padding: 10px;
+  text-align: center; min-height: 110px; display: flex; flex-direction: column; transition: transform 0.5s ease;
 }
+.seat-card-readonly.is-hidden-seat-readonly { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
+.seat-id-readonly { font-size: 0.8rem; color: #94a3b8; text-align: left; margin-bottom: 5px; font-weight: bold; }
 
-.seat-card-readonly.is-hidden-seat-readonly {
-  opacity: 0 !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
-}
+.seat-text-container { display: flex; flex-direction: column; gap: 4px; font-weight: bold; justify-content: center; flex: 1;}
 
-.seat-id-readonly {
-  font-size: 0.8rem;
-  color: #94a3b8;
-  text-align: left;
-  margin-bottom: 5px;
-  font-weight: bold;
-}
-.seat-text-readonly {
-  font-weight: bold;
-  line-height: 1.4;
-}
-
-.teacher-desk-readonly {
-  border: 3px solid #0f766e;
-  background: #f0fdfa;
-  padding: 15px 20px;
-  border-radius: 8px;
-  text-align: center;
-  width: 250px;
-  margin: 0 auto;
-  transition: transform 0.5s ease;
-}
+.teacher-desk-readonly { border: 3px solid #0f766e; background: #f0fdfa; padding: 15px 20px; border-radius: 8px; text-align: center; width: 250px; margin: 0 auto; transition: transform 0.5s ease; }
 .teacher-desk-readonly h3 { margin: 0; color: #0f766e; font-size: 1.2rem; }
 
-@media (max-width: 1024px) { 
-  .main-split { flex-direction: column; } 
-  .student-grid { grid-template-columns: repeat(3, 1fr); } 
-}
+@media (max-width: 1024px) { .main-split { flex-direction: column; } .student-grid { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 768px) {
-  /* 💡 修正：移除讓 button-group 垂直排列的設定，保留原本自然的 flex-wrap */
   .student-grid { grid-template-columns: repeat(2, 1fr); }
-  
   .seats-grid-readonly, .labels-grid-readonly { gap: 5px; }
-  .seat-card-readonly { padding: 5px; height: 75px; }
+  .seat-card-readonly { padding: 5px; min-height: 90px; }
 }
 </style>
