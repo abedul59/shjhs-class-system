@@ -11,7 +11,6 @@
           <label>👩‍🎓 選擇學生</label>
           <select v-model="selectedStudentId" required :disabled="isLoading">
             <option value="" disabled selected>請選擇學號與姓名...</option>
-            <!-- 💡 改為顯示學號 -->
             <option v-for="student in students" :key="student.id" :value="student.id">
               {{ student.student_number }} - {{ student.hidden_name }}
             </option>
@@ -23,11 +22,16 @@
           <input v-model="studentBirthday" type="password" placeholder="西元生日 (例: 20130514)" required :disabled="isLoading" />
         </div>
 
-        <!-- 💡 驗證方式改為畢業國小與班級 -->
         <div class="form-group-row">
           <div class="form-group half-width">
             <label>🏫 畢業國小</label>
-            <input v-model="elementarySchool" type="text" placeholder="例: 臺南市正新" required :disabled="isLoading" />
+            <!-- 💡 改為下拉選單，並套用從資料庫動態撈取的選項 -->
+            <select v-model="elementarySchool" required :disabled="isLoading">
+              <option value="" disabled selected>請選擇畢業國小...</option>
+              <option v-for="school in elementarySchools" :key="school" :value="school">
+                {{ school }}
+              </option>
+            </select>
           </div>
           <div class="form-group half-width">
             <label>🔢 國小班級</label>
@@ -94,6 +98,7 @@ const supabase = useSupabaseClient()
 
 // 學生資料
 const students = ref([])
+const elementarySchools = ref([]) // 💡 存放不重複的國小清單
 const selectedStudentId = ref('')
 const studentBirthday = ref('')
 const elementarySchool = ref('')
@@ -114,9 +119,18 @@ const showMessage = (type, text) => {
 }
 
 const fetchStudents = async () => {
-  // 💡 抓取學號 (student_number)
-  const { data } = await supabase.from('students').select('id, student_number, hidden_name').order('student_number')
-  if (data) students.value = data
+  // 💡 在抓取時連同 elementary_school 一起拉出來
+  const { data } = await supabase
+    .from('students')
+    .select('id, student_number, hidden_name, elementary_school')
+    .order('student_number')
+    
+  if (data) {
+    students.value = data
+    // 💡 提取所有國小名稱，並使用 Set 去除重複值，最後進行排序
+    const schools = data.map(s => s.elementary_school).filter(Boolean)
+    elementarySchools.value = [...new Set(schools)].sort()
+  }
 }
 
 const submitBinding = async () => {
@@ -128,7 +142,6 @@ const submitBinding = async () => {
   isLoading.value = true; sysMessage.value = { type: '', text: '' } 
 
   try {
-    // 💡 驗證生日、畢業國小、國小班級
     const { data: verifyData, error: verifyError } = await supabase
       .from('students').select('id')
       .eq('id', selectedStudentId.value)
@@ -188,7 +201,6 @@ onMounted(() => fetchStudents())
 .form-group { margin-bottom: 20px; }
 .form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #444; }
 
-/* 💡 讓國小和班級可以並排顯示 */
 .form-group-row { display: flex; gap: 15px; margin-bottom: 20px; }
 .half-width { flex: 1; margin-bottom: 0; }
 
