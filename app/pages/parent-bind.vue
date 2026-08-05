@@ -3,16 +3,17 @@
     <div class="bind-card">
       <div class="card-header">
         <h2>👨‍👩‍👧 家長系統通知綁定</h2>
-        <p>請選擇您的孩子並完成雙重身分驗證，以便接收通知。</p>
+        <p>請選擇您的孩子並完成身分驗證，以便接收通知。</p>
       </div>
 
       <form @submit.prevent="submitBinding" class="bind-form">
         <div class="form-group">
           <label>👩‍🎓 選擇學生</label>
           <select v-model="selectedStudentId" required :disabled="isLoading">
-            <option value="" disabled selected>請選擇座號與姓名...</option>
+            <option value="" disabled selected>請選擇學號與姓名...</option>
+            <!-- 💡 改為顯示學號 -->
             <option v-for="student in students" :key="student.id" :value="student.id">
-              {{ student.seat_number }}號 - {{ student.hidden_name }}
+              {{ student.student_number }} - {{ student.hidden_name }}
             </option>
           </select>
         </div>
@@ -22,9 +23,16 @@
           <input v-model="studentBirthday" type="password" placeholder="西元生日 (例: 20130514)" required :disabled="isLoading" />
         </div>
 
-        <div class="form-group">
-          <label>🪪 學生身分證後五碼</label>
-          <input v-model="studentIdLast5" type="password" maxlength="5" placeholder="請輸入身分證後五碼" required :disabled="isLoading" />
+        <!-- 💡 驗證方式改為畢業國小與班級 -->
+        <div class="form-group-row">
+          <div class="form-group half-width">
+            <label>🏫 畢業國小</label>
+            <input v-model="elementarySchool" type="text" placeholder="例: 臺南市正新" required :disabled="isLoading" />
+          </div>
+          <div class="form-group half-width">
+            <label>🔢 國小班級</label>
+            <input v-model="elementaryClass" type="number" placeholder="例: 4" required :disabled="isLoading" />
+          </div>
         </div>
 
         <hr class="divider" />
@@ -85,8 +93,11 @@ import { ref, onMounted } from 'vue'
 const supabase = useSupabaseClient()
 
 // 學生資料
-const students = ref([]); const selectedStudentId = ref('')
-const studentBirthday = ref(''); const studentIdLast5 = ref('')
+const students = ref([])
+const selectedStudentId = ref('')
+const studentBirthday = ref('')
+const elementarySchool = ref('')
+const elementaryClass = ref('')
 
 // 家長填寫資料
 const parentRelationship = ref('')
@@ -94,7 +105,8 @@ const customRelationship = ref('')
 const parentPhone = ref('')
 const parentEmail = ref('')
 
-const isLoading = ref(false); const sysMessage = ref({ type: '', text: '' })
+const isLoading = ref(false)
+const sysMessage = ref({ type: '', text: '' })
 
 const showMessage = (type, text) => {
   sysMessage.value = { type, text }
@@ -102,48 +114,46 @@ const showMessage = (type, text) => {
 }
 
 const fetchStudents = async () => {
-  const { data } = await supabase.from('students').select('id, seat_number, hidden_name').order('seat_number')
+  // 💡 抓取學號 (student_number)
+  const { data } = await supabase.from('students').select('id, student_number, hidden_name').order('student_number')
   if (data) students.value = data
 }
 
 const submitBinding = async () => {
-  if (!selectedStudentId.value || !parentEmail.value || !studentBirthday.value || !studentIdLast5.value || !parentRelationship.value || !parentPhone.value) return
+  if (!selectedStudentId.value || !parentEmail.value || !studentBirthday.value || !elementarySchool.value || !elementaryClass.value || !parentRelationship.value || !parentPhone.value) return
   
-  // 決定最終存入資料庫的關係文字
   const finalRelationship = parentRelationship.value === '其他' ? customRelationship.value.trim() : parentRelationship.value
   if (!finalRelationship) return showMessage('error', '請填寫您與學生的關係！')
 
   isLoading.value = true; sysMessage.value = { type: '', text: '' } 
 
   try {
-    // 💡 雙重身分驗證！
+    // 💡 驗證生日、畢業國小、國小班級
     const { data: verifyData, error: verifyError } = await supabase
       .from('students').select('id')
       .eq('id', selectedStudentId.value)
       .eq('birthday', studentBirthday.value)
-      .eq('id_last_5', studentIdLast5.value)
+      .eq('elementary_school', elementarySchool.value.trim())
+      .eq('elementary_class', elementaryClass.value)
       .single()
 
     if (verifyError || !verifyData) {
-      showMessage('error', '❌ 身分驗證失敗：生日或身分證後五碼輸入錯誤！')
+      showMessage('error', '❌ 身分驗證失敗：生日、國小或班級輸入不正確！')
       isLoading.value = false; return
     }
 
-    // 檢查綁定數量 (放寬至 3 人)
     const { data: existingParents } = await supabase.from('parents').select('id').eq('student_id', selectedStudentId.value)
     if (existingParents.length >= 3) { 
       showMessage('error', '❌ 此學生已達綁定上限 (3位)。')
       isLoading.value = false; return 
     }
 
-    // 檢查 Email 是否重複
     const { data: duplicateEmail } = await supabase.from('parents').select('id').eq('student_id', selectedStudentId.value).eq('email', parentEmail.value)
     if (duplicateEmail.length > 0) { 
       showMessage('error', '⚠️ 此 Email 已綁定過這位學生囉！')
       isLoading.value = false; return 
     }
 
-    // 寫入資料庫 (新增 relationship 與 phone)
     await supabase.from('parents').insert({ 
       student_id: selectedStudentId.value, 
       email: parentEmail.value,
@@ -151,10 +161,10 @@ const submitBinding = async () => {
       phone: parentPhone.value
     })
 
-    showMessage('success', '🎉 雙重驗證通過！綁定成功！')
+    showMessage('success', '🎉 驗證通過！綁定成功！')
     
     // 清空表單
-    parentEmail.value = ''; studentBirthday.value = ''; studentIdLast5.value = ''; selectedStudentId.value = ''
+    parentEmail.value = ''; studentBirthday.value = ''; elementarySchool.value = ''; elementaryClass.value = ''; selectedStudentId.value = ''
     parentRelationship.value = ''; customRelationship.value = ''; parentPhone.value = ''
 
   } catch (error) { 
@@ -167,7 +177,6 @@ onMounted(() => fetchStudents())
 </script>
 
 <style scoped>
-/* 基礎排版 */
 .bind-container { min-height: 100vh; display: flex; justify-content: center; align-items: center; background-color: #fdf6e3; padding: 20px; font-family: 'sans-serif'; }
 .bind-card { background: white; width: 100%; max-width: 480px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); padding: 30px; border-top: 8px solid #f59e0b; }
 .card-header { text-align: center; margin-bottom: 20px; }
@@ -178,6 +187,11 @@ onMounted(() => fetchStudents())
 
 .form-group { margin-bottom: 20px; }
 .form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #444; }
+
+/* 💡 讓國小和班級可以並排顯示 */
+.form-group-row { display: flex; gap: 15px; margin-bottom: 20px; }
+.half-width { flex: 1; margin-bottom: 0; }
+
 select, input { width: 100%; padding: 12px 15px; border: 1px solid #d6d3d1; border-radius: 8px; font-size: 1.1rem; background-color: #fafaf9; box-sizing: border-box; transition: border-color 0.2s; font-family: inherit; }
 select:focus, input:focus { outline: none; border-color: #f59e0b; background-color: white; }
 
@@ -193,4 +207,8 @@ select:focus, input:focus { outline: none; border-color: #f59e0b; background-col
 .message-box.success { background-color: #d1fae5; color: #059669; border: 1px solid #a7f3d0; }
 .back-link { color: #f59e0b; text-decoration: none; font-weight: bold; font-size: 0.95rem; }
 .footer-note { margin-top: 25px; font-size: 0.85rem; color: #a8a29e; text-align: center; line-height: 1.4; }
+
+@media (max-width: 480px) {
+  .form-group-row { flex-direction: column; gap: 20px; }
+}
 </style>
