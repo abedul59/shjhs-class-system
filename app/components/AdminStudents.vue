@@ -3,6 +3,7 @@
     <div class="table-header">
       <h3>👩‍🎓 學生名單與資料維護</h3>
       <div class="export-actions">
+        <!-- 這裡保留原本的按鈕外觀，但我們主要處理匯入 -->
         <button @click="exportStudents('json')" class="export-btn json-btn">📥 匯出 JSON</button>
         <button @click="exportStudents('csv')" class="export-btn">📤 匯出 CSV</button>
       </div>
@@ -10,12 +11,16 @@
     
     <div class="import-section">
       <div class="import-controls">
-        <input type="file" accept=".json, .csv" @change="handleFileUpload" ref="fileInput" />
-        <button @click="processImport" class="import-btn" :disabled="!selectedFile || isImporting">🚀 執行匯入</button>
+        <input type="file" accept=".csv" @change="handleFileUpload" ref="fileInput" />
+        <button @click="processImport" class="import-btn" :disabled="!selectedFile || isImporting">
+          {{ isImporting ? '⏳ 匯入中...' : '🚀 執行匯入 (CSV)' }}
+        </button>
+      </div>
+      <div class="import-tips" style="font-size: 0.9rem; color: #64748b; margin-left: 10px;">
+        💡 請上傳包含 seat_number, student_number 等英文標題的 CSV 檔案。
       </div>
     </div>
 
-    <!-- 💡 提醒：因為欄位變多，表格寬度加寬到 2000px，手機上可左右滑動 -->
     <div class="table-responsive">
       <table class="student-edit-table">
         <thead>
@@ -36,7 +41,6 @@
         <tbody>
           <tr v-for="student in adminStudents" :key="student.id">
             <td><input type="number" v-model="student.seat_number" class="edit-input num-input"/></td>
-            <!-- 💡 新增：學號、畢業國小、國小班級 -->
             <td><input type="text" v-model="student.student_number" class="edit-input" placeholder="例: 1150175"/></td>
             <td><input type="text" v-model="student.real_name" class="edit-input"/></td>
             <td><input type="text" v-model="student.hidden_name" class="edit-input"/></td>
@@ -67,10 +71,12 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 const supabase = useSupabaseClient()
-const adminStudents = ref([]); const selectedFile = ref(null); const isImporting = ref(false)
+const adminStudents = ref([])
+const selectedFile = ref(null)
+const fileInput = ref(null)
+const isImporting = ref(false)
 
 const fetchData = async () => {
-  // 修改：預設改為使用學號排序，因為座號可能還沒出來
   const { data: sData } = await supabase.from('students').select('*').order('student_number')
   const { data: pData } = await supabase.from('parents').select('*')
   
@@ -88,7 +94,6 @@ onMounted(() => fetchData())
 
 const saveStudent = async (student) => {
   try {
-    // 💡 修正：更新 students 資料表時，包含新的學號、畢業國小、國小班級，並移除身分證後五碼
     await supabase.from('students').update({ 
       seat_number: student.seat_number, 
       student_number: student.student_number,
@@ -118,9 +123,88 @@ const deleteStudent = async (id, name) => {
   } 
 }
 
-const exportStudents = (type) => { alert(`📂 準備匯出 ${type.toUpperCase()} 格式名單...`) }
-const handleFileUpload = (e) => { const file = e.target.files[0]; if (file) selectedFile.value = file }
-const processImport = async () => { alert('🚀 此處需實作解析 CSV/JSON 並寫入 DB 的邏輯。建議使用我們剛剛建立的「系統備份」功能統一匯入。') }
+const exportStudents = (type) => { alert(`📂 準備匯出 ${type.toUpperCase()} 格式名單... (待實作)`) }
+
+const handleFileUpload = (e) => { 
+  const file = e.target.files[0]; 
+  if (file) selectedFile.value = file 
+}
+
+// 💡 實作 CSV 解析與寫入 DB 的邏輯
+const processImport = async () => {
+  if (!selectedFile.value) return
+  if (!confirm('即將匯入學生名單。若學號已存在將會自動更新資料，確定要執行嗎？')) return
+
+  isImporting.value = true
+
+  const reader = new FileReader()
+  reader.onload = async (e) => {
+    try {
+      const text = e.target.result
+      // 解析 CSV：依換行符號分割，並過濾掉空行
+      const rows = text.split(/\r?\n/).filter(row => row.trim() !== '')
+      if (rows.length < 2) throw new Error('檔案內容為空或缺少標題列')
+
+      // 第一行為標題 (英文欄位)
+      const headers = rows[0].split(',').map(h => h.trim())
+      const studentsToUpsert = []
+
+      // 迴圈處理每一筆資料
+      for (let i = 1; i < rows.length; i++) {
+        const values = rows[i].split(',').map(v => v.trim())
+        const studentObj = {}
+        
+        headers.forEach((header, index) => {
+          // 只處理有對應到值的欄位
+          if (values[index] !== undefined && values[index] !== '') {
+            // 如果是數字型態，嘗試轉換
+            if (header === 'seat_number' || header === 'elementary_class') {
+              studentObj[header] = parseInt(values[index], 10)
+            } else {
+              studentObj[header] = values[index]
+            }
+          }
+        })
+
+        // 確保至少有學號才能寫入
+        if (studentObj.student_number) {
+          studentsToUpsert.push(studentObj)
+        }
+      }
+
+      if (studentsToUpsert.length === 0) throw new Error('沒有找到有效的學生資料 (可能缺少 student_number 欄位)')
+
+      // 執行 Supabase Upsert (寫入/更新)
+      // 使用 student_number 作為判斷重複的鍵值
+      const { error } = await supabase
+        .from('students')
+        .upsert(studentsToUpsert, { onConflict: 'student_number' })
+
+      if (error) throw error
+
+      alert(`✅ 成功匯入 ${studentsToUpsert.length} 筆學生資料！`)
+      
+      // 清空選擇的檔案並重新抓取資料
+      selectedFile.value = null
+      if (fileInput.value) fileInput.value.value = ''
+      await fetchData()
+
+    } catch (err) {
+      console.error(err)
+      alert(`❌ 匯入發生錯誤：${err.message}`)
+    } finally {
+      isImporting.value = false
+    }
+  }
+  
+  reader.onerror = () => {
+    alert('❌ 讀取檔案失敗。')
+    isImporting.value = false
+  }
+
+  // 將檔案讀取為純文字
+  reader.readAsText(selectedFile.value, 'utf-8')
+}
 </script>
 
 <style scoped>
@@ -129,17 +213,17 @@ const processImport = async () => { alert('🚀 此處需實作解析 CSV/JSON �
 .export-actions { display: flex; gap: 10px; }
 .export-btn { background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; }
 .json-btn { background-color: #8b5cf6; }
-.import-section { background: #f8fafc; border: 2px dashed #cbd5e1; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
-.import-btn { background: #3b82f6; color: white; font-weight: bold; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; }
+.import-section { background: #f8fafc; border: 2px dashed #cbd5e1; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.import-controls { display: flex; gap: 10px; align-items: center;}
+.import-btn { background: #3b82f6; color: white; font-weight: bold; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; transition: 0.2s; }
+.import-btn:disabled { background: #94a3b8; cursor: not-allowed; }
 .table-responsive { overflow-x: auto; padding-bottom: 15px; }
 
-/* 💡 修正：增加最小寬度，以容納更多欄位 */
 .student-edit-table { min-width: 2000px; border-collapse: separate; border-spacing: 0; background: white; font-size: 0.95rem; }
-
 .student-edit-table th, .student-edit-table td { padding: 8px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
 .student-edit-table th { background-color: #f8fafc; color: #64748b; font-weight: bold; position: sticky; top: 0; z-index: 10; text-align: left; }
 .edit-input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; width: 100%; }
-.num-input { width: 100%; min-width: 60px; text-align: center; } /* 稍微加寬數字輸入框以顯示四位數班級 */
+.num-input { width: 100%; min-width: 60px; text-align: center; } 
 .small-input { width: 100%; }
 .email-input { font-family: monospace; font-size: 0.8rem; }
 .action-cell { display: flex; gap: 5px; justify-content: center; }
