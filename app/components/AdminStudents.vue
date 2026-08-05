@@ -3,6 +3,10 @@
     <div class="table-header">
       <h3>👩‍🎓 學生名單與資料維護</h3>
       <div class="export-actions">
+        <!-- 💡 新增全體儲存按鈕 -->
+        <button @click="saveAllStudents" class="export-btn save-all-btn" :disabled="isSavingAll">
+          {{ isSavingAll ? '⏳ 儲存中...' : '💾 全體儲存' }}
+        </button>
         <button @click="exportStudents('json')" class="export-btn json-btn">📥 匯出 JSON</button>
         <button @click="exportStudents('csv')" class="export-btn">📤 匯出 CSV</button>
       </div>
@@ -74,6 +78,7 @@ const adminStudents = ref([])
 const selectedFile = ref(null)
 const fileInput = ref(null)
 const isImporting = ref(false)
+const isSavingAll = ref(false) // 💡 控制全體儲存的狀態
 
 const fetchData = async () => {
   const { data: sData } = await supabase.from('students').select('*').order('student_number')
@@ -91,7 +96,8 @@ const fetchData = async () => {
 }
 onMounted(() => fetchData())
 
-const saveStudent = async (student) => {
+// 💡 將儲存單筆學生的邏輯獨立，並增加 showAlert 參數，方便全體儲存時不跳一堆警告
+const saveStudent = async (student, showAlert = true) => {
   try {
     await supabase.from('students').update({ 
       seat_number: student.seat_number, 
@@ -110,15 +116,50 @@ const saveStudent = async (student) => {
     if (student.p3_rel || student.p3_tel || student.p3_mail) parentsToInsert.push({ student_id: student.id, relationship: student.p3_rel, phone: student.p3_tel, email: student.p3_mail })
     if (parentsToInsert.length > 0) await supabase.from('parents').insert(parentsToInsert)
     
-    alert(`✅ ${student.real_name || student.student_number} 資料儲存成功！`)
-    await fetchData()
-  } catch(e) { alert('❌ 儲存失敗，請檢查學號是否有重複。') }
+    if (showAlert) {
+      alert(`✅ ${student.real_name || student.student_number} 資料儲存成功！`)
+      await fetchData()
+    }
+  } catch(e) { 
+    if (showAlert) alert('❌ 儲存失敗，請檢查資料是否有誤。') 
+    throw e // 讓全體儲存的函數可以捕捉到錯誤
+  }
 }
 
+// 💡 實作：全體儲存
+const saveAllStudents = async () => {
+  if (!confirm('⚠️ 確定要儲存畫面上所有的修改嗎？這將會更新全體資料。')) return
+  isSavingAll.value = true
+  try {
+    // 逐筆進行儲存
+    for (const student of adminStudents.value) {
+      await saveStudent(student, false) // 傳入 false 避免每存一筆就跳一次 alert
+    }
+    alert('✅ 全體資料儲存成功！')
+    await fetchData()
+  } catch (err) {
+    alert('❌ 全體儲存過程中發生部分錯誤，請檢查。')
+  } finally {
+    isSavingAll.value = false
+  }
+}
+
+// 💡 修復：刪除按鈕
 const deleteStudent = async (id, name) => { 
-  if (confirm(`⚠️ 確定要刪除學生 ${name} 嗎？`)) { 
-    await supabase.from('students').delete().eq('id', id); 
-    await fetchData() 
+  if (confirm(`⚠️ 確定要刪除學生 ${name || '此學生'} 嗎？`)) { 
+    try {
+      // 關鍵修復：因為資料庫外鍵限制，必須先刪除綁定在該學生底下的家長資料
+      await supabase.from('parents').delete().eq('student_id', id); 
+      
+      // 再刪除學生本人
+      const { error } = await supabase.from('students').delete().eq('id', id); 
+      if (error) throw error
+
+      alert(`✅ 學生 ${name || ''} 刪除成功。`)
+      await fetchData() 
+    } catch (err) {
+      alert(`❌ 刪除失敗：${err.message}`)
+    }
   } 
 }
 
@@ -163,7 +204,6 @@ const processImport = async () => {
           if (!studentObj.school_name) studentObj.school_name = '新化國中'
           if (!studentObj.enroll_year) studentObj.enroll_year = 115
           if (!studentObj.class_name) studentObj.class_name = '7'
-          // 💡 關鍵修復：解決 student_id 不能為空值的報錯，直接代入學號
           if (!studentObj.student_id) studentObj.student_id = studentObj.student_number 
           
           studentsToUpsert.push(studentObj)
@@ -205,8 +245,14 @@ const processImport = async () => {
 .table-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; }
 .table-header h3 { margin: 0; color: #334155; }
 .export-actions { display: flex; gap: 10px; }
-.export-btn { background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+.export-btn { background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
 .json-btn { background-color: #8b5cf6; }
+
+/* 💡 新增全體儲存按鈕的樣式 */
+.save-all-btn { background-color: #2563eb; }
+.save-all-btn:hover:not(:disabled) { background-color: #1d4ed8; }
+.save-all-btn:disabled { background-color: #94a3b8; cursor: not-allowed; }
+
 .import-section { background: #f8fafc; border: 2px dashed #cbd5e1; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .import-controls { display: flex; gap: 10px; align-items: center;}
 .import-btn { background: #3b82f6; color: white; font-weight: bold; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; transition: 0.2s; }
