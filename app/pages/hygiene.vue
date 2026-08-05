@@ -227,43 +227,43 @@
           </thead>
           <tbody>
             <tr v-for="n in 6" :key="'ld-'+n">
-              <td v-if="n===1" rowspan="6">小隊長</td>
-              <!-- 💡 將「細項」改為綁定變數 -->
+              <!-- 💡 將「小隊職務」改為綁定變數 -->
+              <td v-if="n===1" rowspan="6"><EditText v-model="d.squad.role_1" :edit="isEditing" class="h-full" /></td>
               <td><EditText v-model="d.squad.leader_items[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.leaders[n-1]" :edit="isEditing" /></td>
               <td v-if="n===1" rowspan="6"><EditText v-model="d.squad.leader_desc" :edit="isEditing" class="h-full" /></td>
             </tr>
             <tr v-for="n in 6" :key="'dy-'+n">
-              <td v-if="n===1" rowspan="6">值日生<br><span class="text-xs">(每天第 7 節下課到辦公室簽到)</span></td>
-              <!-- 💡 將「細項」改為綁定變數 -->
+              <!-- 💡 將「小隊職務」改為綁定變數 -->
+              <td v-if="n===1" rowspan="6"><EditText v-model="d.squad.role_2" :edit="isEditing" class="h-full" /></td>
               <td><EditText v-model="d.squad.duty_items[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.duties[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.duty_desc[n-1]" :edit="isEditing" /></td>
             </tr>
             <tr v-for="n in 5" :key="'hp-'+n">
-              <td v-if="n===1" rowspan="5">小幫手<br><span class="text-xs">(每天第 1 節下課到辦公室簽到)</span></td>
-              <!-- 💡 將「細項」改為綁定變數 -->
+              <!-- 💡 將「小隊職務」改為綁定變數 -->
+              <td v-if="n===1" rowspan="5"><EditText v-model="d.squad.role_3" :edit="isEditing" class="h-full" /></td>
               <td><EditText v-model="d.squad.helper_items[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.helpers[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.helper_desc[n-1]" :edit="isEditing" /></td>
             </tr>
             <tr v-for="n in 4" :key="'er-'+n">
-              <td v-if="n===1" rowspan="4">公差<br><span class="text-xs">(每天第 2 節下課到辦公室簽到...)</span></td>
-              <!-- 💡 將「細項」改為綁定變數 -->
+              <!-- 💡 將「小隊職務」改為綁定變數 -->
+              <td v-if="n===1" rowspan="4"><EditText v-model="d.squad.role_4" :edit="isEditing" class="h-full" /></td>
               <td><EditText v-model="d.squad.errand_items[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.errands[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.errand_desc[n-1]" :edit="isEditing" /></td>
             </tr>
             <tr v-for="n in 2" :key="'mn-'+n">
-              <td v-if="n===1" rowspan="2">小小兵<br><span class="text-xs">(每天第 3 節下課到辦公室簽到)</span></td>
-              <!-- 💡 將「細項」改為綁定變數 -->
+              <!-- 💡 將「小隊職務」改為綁定變數 -->
+              <td v-if="n===1" rowspan="2"><EditText v-model="d.squad.role_5" :edit="isEditing" class="h-full" /></td>
               <td><EditText v-model="d.squad.minion_items[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.minions[n-1]" :edit="isEditing" /></td>
               <td v-if="n===1" rowspan="2"><EditText v-model="d.squad.minion_desc" :edit="isEditing" class="h-full" /></td>
             </tr>
             <tr v-for="n in 3" :key="'ot-'+n">
-              <td v-if="n===1" rowspan="3">其他</td>
-              <!-- 💡 將「細項」改為綁定變數 -->
+              <!-- 💡 將「小隊職務」改為綁定變數 -->
+              <td v-if="n===1" rowspan="3"><EditText v-model="d.squad.role_6" :edit="isEditing" class="h-full" /></td>
               <td><EditText v-model="d.squad.other_items[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.others[n-1]" :edit="isEditing" /></td>
               <td v-if="n===1" rowspan="3"><EditText v-model="d.squad.other_desc" :edit="isEditing" class="h-full" /></td>
@@ -301,7 +301,7 @@ const isEditing = ref(false)
 const isSaving = ref(false)
 const activeTab = ref('morning')
 
-// 💡 預設資料：加入了各項目的「細項」陣列變數
+// 💡 預設資料：加入了 role_1 到 role_6 變數
 const defaultData = {
   isVisibleOnIndex: false, 
   morning: {
@@ -334,6 +334,12 @@ const defaultData = {
   },
   squad: {
     title: '704 各項小隊成員工作 20210901',
+    role_1: '小隊長',
+    role_2: '值日生\n<span class="text-xs">(每天第 7 節下課到辦公室簽到)</span>',
+    role_3: '小幫手\n<span class="text-xs">(每天第 1 節下課到辦公室簽到)</span>',
+    role_4: '公差\n<span class="text-xs">(每天第 2 節下課到辦公室簽到...)</span>',
+    role_5: '小小兵\n<span class="text-xs">(每天第 3 節下課到辦公室簽到)</span>',
+    role_6: '其他',
     leader_items: ['小隊長 1', '小隊長 2', '小隊長 3', '小隊長 4', '小隊長 5', '小隊長 6'],
     leader_desc: '監督小隊員，提醒各項事物，登記其他小隊違規行為。每天第 3,7 節下課到辦公室登記違規行為。',
     leaders: ['王聰文', '田孟任', '許壹淳', '沈沂宣', '葉柏妍', '季昀苓'],
@@ -385,7 +391,6 @@ const handleLogin = async () => {
 
 const logout = () => { sessionStorage.removeItem('hygiene_admin_logged_in'); isLoggedIn.value = false; navigateTo('/') }
 
-// 💡 更新：分層合併資料，確保舊資料庫紀錄不會覆寫掉新增加的預設陣列結構
 const fetchLayout = async () => {
   const { data } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'hygiene_management_data').maybeSingle()
   if (data?.setting_value) {
