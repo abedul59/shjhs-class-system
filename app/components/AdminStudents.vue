@@ -160,11 +160,10 @@ const processImport = async () => {
         })
 
         if (studentObj.student_number) {
-          // 💡 終極防呆：一次補齊所有可能的必填預設值
+          // 💡 只保留確定存在的必填欄位預設值，刪除會報錯的 grade
           if (!studentObj.school_name) studentObj.school_name = '新化國中'
           if (!studentObj.enroll_year) studentObj.enroll_year = 115
-          if (!studentObj.class_name) studentObj.class_name = '7' // 修復 class_name 報錯
-          if (!studentObj.grade) studentObj.grade = 7             // 預防 grade 報錯
+          if (!studentObj.class_name) studentObj.class_name = '7'
           
           studentsToUpsert.push(studentObj)
         }
