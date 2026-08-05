@@ -3,7 +3,6 @@
     <div class="table-header">
       <h3>👩‍🎓 學生名單與資料維護</h3>
       <div class="export-actions">
-        <!-- 💡 新增全體儲存按鈕 -->
         <button @click="saveAllStudents" class="export-btn save-all-btn" :disabled="isSavingAll">
           {{ isSavingAll ? '⏳ 儲存中...' : '💾 全體儲存' }}
         </button>
@@ -78,7 +77,7 @@ const adminStudents = ref([])
 const selectedFile = ref(null)
 const fileInput = ref(null)
 const isImporting = ref(false)
-const isSavingAll = ref(false) // 💡 控制全體儲存的狀態
+const isSavingAll = ref(false)
 
 const fetchData = async () => {
   const { data: sData } = await supabase.from('students').select('*').order('student_number')
@@ -96,7 +95,6 @@ const fetchData = async () => {
 }
 onMounted(() => fetchData())
 
-// 💡 將儲存單筆學生的邏輯獨立，並增加 showAlert 參數，方便全體儲存時不跳一堆警告
 const saveStudent = async (student, showAlert = true) => {
   try {
     await supabase.from('students').update({ 
@@ -122,18 +120,16 @@ const saveStudent = async (student, showAlert = true) => {
     }
   } catch(e) { 
     if (showAlert) alert('❌ 儲存失敗，請檢查資料是否有誤。') 
-    throw e // 讓全體儲存的函數可以捕捉到錯誤
+    throw e 
   }
 }
 
-// 💡 實作：全體儲存
 const saveAllStudents = async () => {
   if (!confirm('⚠️ 確定要儲存畫面上所有的修改嗎？這將會更新全體資料。')) return
   isSavingAll.value = true
   try {
-    // 逐筆進行儲存
     for (const student of adminStudents.value) {
-      await saveStudent(student, false) // 傳入 false 避免每存一筆就跳一次 alert
+      await saveStudent(student, false)
     }
     alert('✅ 全體資料儲存成功！')
     await fetchData()
@@ -144,14 +140,17 @@ const saveAllStudents = async () => {
   }
 }
 
-// 💡 修復：刪除按鈕
+// 💡 終極修復：先刪除關聯資料庫中的紀錄，再刪除學生
 const deleteStudent = async (id, name) => { 
-  if (confirm(`⚠️ 確定要刪除學生 ${name || '此學生'} 嗎？`)) { 
+  if (confirm(`⚠️ 確定要刪除學生 ${name || '此學生'} 嗎？這將會一併刪除他的家長綁定與聯絡紀錄！`)) { 
     try {
-      // 關鍵修復：因為資料庫外鍵限制，必須先刪除綁定在該學生底下的家長資料
+      // 1. 先刪除聯絡紀錄，避免 communication_logs_student_id_fkey 報錯
+      await supabase.from('communication_logs').delete().eq('student_id', id); 
+      
+      // 2. 刪除家長綁定資料，避免 parents_student_id_fkey 報錯
       await supabase.from('parents').delete().eq('student_id', id); 
       
-      // 再刪除學生本人
+      // 3. 最後刪除學生本人
       const { error } = await supabase.from('students').delete().eq('id', id); 
       if (error) throw error
 
@@ -248,7 +247,6 @@ const processImport = async () => {
 .export-btn { background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
 .json-btn { background-color: #8b5cf6; }
 
-/* 💡 新增全體儲存按鈕的樣式 */
 .save-all-btn { background-color: #2563eb; }
 .save-all-btn:hover:not(:disabled) { background-color: #1d4ed8; }
 .save-all-btn:disabled { background-color: #94a3b8; cursor: not-allowed; }
