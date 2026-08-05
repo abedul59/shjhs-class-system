@@ -1,324 +1,214 @@
 <template>
-  <div class="message-container">
-    <div class="message-card">
-      <div v-if="!isVerified" class="verify-section">
-        <div class="card-header">
-          <h2>💬 班級私訊聊天室</h2>
-          <div class="security-notice">
-            🔒 提醒家長：為維護資安與嚴格保護學生個資，請擇一方式進行身分驗證，完成後即可檢視與導師的對話紀錄。
-          </div>
-        </div>
-
-        <form @submit.prevent="verifyIdentity" class="message-form">
-          <div class="form-group">
-            <label>👩‍🎓 選擇學生</label>
-            <select v-model="selectedStudentId" required :disabled="isLoading">
-              <option value="" disabled selected>請選擇座號與姓名...</option>
-              <option v-for="student in students" :key="student.id" :value="student.id">
-                {{ student.seat_number }}號 - {{ student.hidden_name }}
-              </option>
-            </select>
-          </div>
-
-          <div class="auth-method-toggle">
-            <label :class="{ 'active': authMethod === 'id' }">
-              <input type="radio" v-model="authMethod" value="id" />
-              📝 生日 + 身分證
-            </label>
-            <label :class="{ 'active': authMethod === 'email' }">
-              <input type="radio" v-model="authMethod" value="email" />
-              📧 Email 前五碼
-            </label>
-          </div>
-
-          <!-- 驗證方式一：生日與身分證後四碼 -->
-          <template v-if="authMethod === 'id'">
-            <div class="form-group">
-              <label>🎂 學生生日</label>
-              <input v-model="studentBirthday" type="password" placeholder="西元生日 (例: 20130514)" required :disabled="isLoading" />
-            </div>
-            <div class="form-group">
-              <label>🪪 身分證後四碼</label>
-              <input v-model="studentIdLast4" type="password" maxlength="4" placeholder="請輸入身分證後四碼" required :disabled="isLoading" />
-            </div>
-          </template>
-
-          <!-- 驗證方式二：綁定的 Email 前五碼 -->
-          <template v-if="authMethod === 'email'">
-            <div class="form-group">
-              <label>📧 綁定之 Email 前五碼</label>
-              <input 
-                v-model="emailPrefix" 
-                type="text" 
-                maxlength="5" 
-                placeholder="請輸入 Email @ 前面的 5 個英數字" 
-                required 
-                :disabled="isLoading" 
-              />
-              <p class="input-hint">例如您的信箱為 abcde.fgh@gmail.com，請輸入 <strong>abcde</strong> (任一家長皆可)</p>
-            </div>
-          </template>
-
-          <div v-if="sysMessage.text" :class="['message-box', sysMessage.type]">{{ sysMessage.text }}</div>
-
-          <button type="submit" class="submit-btn" :disabled="isLoading">
-            {{ isLoading ? '驗證中...' : '🔐 雙重驗證並進入' }}
-          </button>
-          <div style="text-align: center; margin-top: 15px;">
-            <NuxtLink to="/" class="back-link">返回打卡首頁</NuxtLink>
-          </div>
-        </form>
+  <div class="bind-container">
+    <div class="bind-card">
+      <div class="card-header">
+        <h2>👨‍👩‍👧 家長系統通知綁定</h2>
+        <p>請選擇您的孩子並完成身分驗證，以便接收通知。</p>
       </div>
 
-      <!-- 聊天室介面 -->
-      <div v-else class="chat-section">
-        <div class="chat-header">
-          <h3>💬 與導師的私訊 ({{ verifiedStudentName }})</h3>
-          <button @click="logout" class="logout-btn">登出</button>
+      <form @submit.prevent="submitBinding" class="bind-form">
+        <div class="form-group">
+          <label>👩‍🎓 選擇學生</label>
+          <select v-model="selectedStudentId" required :disabled="isLoading">
+            <option value="" disabled selected>請選擇學號與姓名...</option>
+            <!-- 💡 改為顯示學號 -->
+            <option v-for="student in students" :key="student.id" :value="student.id">
+              {{ student.student_number }} - {{ student.hidden_name }}
+            </option>
+          </select>
         </div>
-        <div class="chat-history" id="chatContainer">
-          <div v-if="chatMessages.length === 0" class="empty-chat">目前尚無對話紀錄，請在下方輸入訊息開始溝通。</div>
-          <div v-for="msg in chatMessages" :key="msg.id" :class="['chat-bubble', msg.sender_role === '家長' ? 'my-msg' : 'teacher-msg']">
-            <div class="msg-info">
-              <span class="sender">{{ msg.sender_role === '家長' ? '我 (家長)' : '👨‍🏫 導師' }}</span>
-              <span class="time">{{ formatTime(msg.created_at) }}</span>
-            </div>
-            <div class="msg-content">{{ msg.content }}</div>
+
+        <div class="form-group">
+          <label>🎂 學生出生西元年和生日</label>
+          <input v-model="studentBirthday" type="password" placeholder="西元生日 (例: 20130514)" required :disabled="isLoading" />
+        </div>
+
+        <!-- 💡 驗證方式改為畢業國小與班級 -->
+        <div class="form-group-row">
+          <div class="form-group half-width">
+            <label>🏫 畢業國小</label>
+            <input v-model="elementarySchool" type="text" placeholder="例: 臺南市正新" required :disabled="isLoading" />
+          </div>
+          <div class="form-group half-width">
+            <label>🔢 國小班級</label>
+            <input v-model="elementaryClass" type="number" placeholder="例: 4" required :disabled="isLoading" />
           </div>
         </div>
-        <form @submit.prevent="sendMessage" class="reply-form">
-          <textarea v-model="newMessage" rows="2" placeholder="請輸入訊息..." required :disabled="isSending"></textarea>
-          <button type="submit" class="send-btn" :disabled="isSending">{{ isSending ? '...' : '📤 傳送' }}</button>
-        </form>
+
+        <hr class="divider" />
+
+        <div class="form-group">
+          <label>🤝 您與學生的關係</label>
+          <select v-model="parentRelationship" required :disabled="isLoading">
+            <option value="" disabled selected>請選擇關係...</option>
+            <option value="爸爸">爸爸</option>
+            <option value="媽媽">媽媽</option>
+            <option value="爺爺">爺爺</option>
+            <option value="奶奶">奶奶</option>
+            <option value="外公">外公</option>
+            <option value="外婆">外婆</option>
+            <option value="其他">其他 (自行填寫)</option>
+          </select>
+          <input 
+            v-if="parentRelationship === '其他'" 
+            v-model="customRelationship" 
+            type="text" 
+            placeholder="請填寫關係 (例如: 姑姑、伯父)" 
+            required 
+            class="custom-input"
+            :disabled="isLoading"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>📱 您的聯絡手機號碼</label>
+          <input v-model="parentPhone" type="tel" placeholder="例如: 0912345678" required :disabled="isLoading" />
+        </div>
+
+        <div class="form-group">
+          <label>✉️ 您的 Email 常用信箱（綁定可收到班級重要事項公告）</label>
+          <input v-model="parentEmail" type="email" placeholder="例如: example@gmail.com" required :disabled="isLoading" />
+        </div>
+
+        <div v-if="sysMessage.text" :class="['message-box', sysMessage.type]">{{ sysMessage.text }}</div>
+
+        <button type="submit" class="submit-btn" :disabled="isLoading">
+          {{ isLoading ? '處理中...' : '✅ 驗證並綁定' }}
+        </button>
+        
+        <div style="text-align: center; margin-top: 15px;">
+          <NuxtLink to="/" class="back-link">返回打卡首頁</NuxtLink>
+        </div>
+      </form>
+
+      <div class="footer-note">
+        * 註：每位學生最多可綁定 3 位家長聯絡資訊。若需修改，請透過私訊聯繫導師。
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted } from 'vue'
 const supabase = useSupabaseClient()
 
+// 學生資料
 const students = ref([])
 const selectedStudentId = ref('')
-const authMethod = ref('id') 
-
 const studentBirthday = ref('')
-const studentIdLast4 = ref('')
-const emailPrefix = ref('')
+const elementarySchool = ref('')
+const elementaryClass = ref('')
+
+// 家長填寫資料
+const parentRelationship = ref('')
+const customRelationship = ref('')
+const parentPhone = ref('')
+const parentEmail = ref('')
 
 const isLoading = ref(false)
-const isSending = ref(false)
-const isVerified = ref(false)
-const verifiedStudentName = ref('')
 const sysMessage = ref({ type: '', text: '' })
-const chatMessages = ref([])
-const newMessage = ref('')
 
-const checkSchoolNetwork = async () => {
-  try {
-    const res = await fetch('https://api.ipify.org?format=json')
-    const { ip: clientIp } = await res.json()
-    
-    const { data: blacklists } = await supabase
-      .from('ip_rules') 
-      .select('ip_range') 
-      .eq('rule_type', '黑名單')
-
-    if (blacklists && blacklists.length > 0) {
-      const isBlocked = blacklists.some(rule => {
-        return rule.ip_range && clientIp.startsWith(rule.ip_range.trim())
-      })
-      
-      if (isBlocked) {
-        alert('🚫 學校網域限制：為維護上課專注度，校內網路禁止使用私訊功能。請回家或使用個人手機網路再進行操作！')
-        navigateTo('/') 
-      }
-    }
-  } catch (error) {
-    console.error('IP 驗證發生錯誤:', error)
-  }
-}
-
-const showMessage = (type, text) => { 
+const showMessage = (type, text) => {
   sysMessage.value = { type, text }
-  if (type === 'success') setTimeout(() => sysMessage.value = { type: '', text: '' }, 3000) 
+  if (type === 'success') setTimeout(() => { sysMessage.value = { type: '', text: '' } }, 5000)
 }
 
-const fetchStudents = async () => { 
-  const { data } = await supabase.from('students').select('id, seat_number, hidden_name').order('seat_number')
-  if (data) students.value = data 
+const fetchStudents = async () => {
+  // 💡 抓取學號 (student_number)
+  const { data } = await supabase.from('students').select('id, student_number, hidden_name').order('student_number')
+  if (data) students.value = data
 }
 
-const extractAlphanumericPrefix = (email) => {
-  if (!email || typeof email !== 'string') return ''
-  const beforeAt = email.split('@')[0]
-  return beforeAt.replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toLowerCase()
-}
+const submitBinding = async () => {
+  if (!selectedStudentId.value || !parentEmail.value || !studentBirthday.value || !elementarySchool.value || !elementaryClass.value || !parentRelationship.value || !parentPhone.value) return
+  
+  const finalRelationship = parentRelationship.value === '其他' ? customRelationship.value.trim() : parentRelationship.value
+  if (!finalRelationship) return showMessage('error', '請填寫您與學生的關係！')
 
-const verifyIdentity = async () => {
-  if (!selectedStudentId.value) {
-    showMessage('error', '❌ 請先選擇學生！')
-    return
-  }
-
-  isLoading.value = true
-  sysMessage.value = { type: '', text: '' }
+  isLoading.value = true; sysMessage.value = { type: '', text: '' } 
 
   try {
-    const { data: stData, error: stError } = await supabase
-      .from('students')
-      .select('*')
+    // 💡 驗證生日、畢業國小、國小班級
+    const { data: verifyData, error: verifyError } = await supabase
+      .from('students').select('id')
       .eq('id', selectedStudentId.value)
+      .eq('birthday', studentBirthday.value)
+      .eq('elementary_school', elementarySchool.value.trim())
+      .eq('elementary_class', elementaryClass.value)
       .single()
 
-    if (stError || !stData) throw new Error('Student not found')
-
-    let isValid = false
-
-    if (authMethod.value === 'id') {
-      const idStr = (stData.id_number || stData.id_last_5 || '').slice(-4)
-      if (stData.birthday === studentBirthday.value && idStr === studentIdLast4.value) {
-        isValid = true
-      }
-    } 
-    else if (authMethod.value === 'email') {
-      const userInputPrefix = emailPrefix.value.replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toLowerCase()
-      let emailsToCheck = []
-
-      // 💡 修正：正確抓取 parents 資料表中的信箱 (對應 AdminStudents.vue)
-      const { data: parentsData } = await supabase
-        .from('parents')
-        .select('email')
-        .eq('student_id', selectedStudentId.value)
-        
-      if (parentsData) {
-        emailsToCheck.push(...parentsData.map(p => p.email).filter(Boolean))
-      }
-
-      // 備用：若有額外的 parent_bindings 資料表
-      const { data: bindings } = await supabase
-        .from('parent_bindings')
-        .select('email')
-        .eq('student_id', selectedStudentId.value)
-        
-      if (bindings) {
-        emailsToCheck.push(...bindings.map(b => b.email).filter(Boolean))
-      }
-
-      isValid = emailsToCheck.some(email => {
-        return extractAlphanumericPrefix(email) === userInputPrefix
-      })
+    if (verifyError || !verifyData) {
+      showMessage('error', '❌ 身分驗證失敗：生日、國小或班級輸入不正確！')
+      isLoading.value = false; return
     }
 
-    if (!isValid) {
-      showMessage('error', '❌ 驗證失敗：您輸入的資料錯誤或尚未綁定！')
-      isLoading.value = false
-      return
+    const { data: existingParents } = await supabase.from('parents').select('id').eq('student_id', selectedStudentId.value)
+    if (existingParents.length >= 3) { 
+      showMessage('error', '❌ 此學生已達綁定上限 (3位)。')
+      isLoading.value = false; return 
     }
 
-    verifiedStudentName.value = stData.real_name
-    isVerified.value = true
-    await loadChatHistory()
+    const { data: duplicateEmail } = await supabase.from('parents').select('id').eq('student_id', selectedStudentId.value).eq('email', parentEmail.value)
+    if (duplicateEmail.length > 0) { 
+      showMessage('error', '⚠️ 此 Email 已綁定過這位學生囉！')
+      isLoading.value = false; return 
+    }
+
+    await supabase.from('parents').insert({ 
+      student_id: selectedStudentId.value, 
+      email: parentEmail.value,
+      relationship: finalRelationship,
+      phone: parentPhone.value
+    })
+
+    showMessage('success', '🎉 驗證通過！綁定成功！')
+    
+    // 清空表單
+    parentEmail.value = ''; studentBirthday.value = ''; elementarySchool.value = ''; elementaryClass.value = ''; selectedStudentId.value = ''
+    parentRelationship.value = ''; customRelationship.value = ''; parentPhone.value = ''
 
   } catch (error) { 
-    showMessage('error', '❌ 系統發生異常，請稍後再試。') 
+    showMessage('error', '系統錯誤，請稍後再試。') 
   } finally { 
     isLoading.value = false 
   }
 }
-
-const loadChatHistory = async () => { 
-  const { data } = await supabase
-    .from('private_messages')
-    .select('*')
-    .eq('student_id', selectedStudentId.value)
-    .eq('chat_type', '家長')
-    .order('created_at', { ascending: true })
-    
-  if (data) { 
-    chatMessages.value = data
-    scrollToBottom() 
-  } 
-}
-
-const sendMessage = async () => {
-  if (!newMessage.value.trim()) return
-  isSending.value = true
-  try {
-    await supabase.from('private_messages').insert({ 
-      student_id: selectedStudentId.value, 
-      sender_role: '家長', 
-      chat_type: '家長', 
-      content: newMessage.value, 
-      is_read_by_teacher: false 
-    })
-    newMessage.value = ''
-    await loadChatHistory()
-  } catch (error) { 
-    alert('傳送失敗') 
-  } finally { 
-    isSending.value = false 
-  }
-}
-
-const logout = () => { 
-  isVerified.value = false
-  studentBirthday.value = ''
-  studentIdLast4.value = ''
-  emailPrefix.value = ''
-  chatMessages.value = [] 
-}
-
-const formatTime = (isoString) => new Date(isoString).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-const scrollToBottom = () => { nextTick(() => { const c = document.getElementById('chatContainer'); if (c) c.scrollTop = c.scrollHeight }) }
-
-onMounted(async () => {
-  await checkSchoolNetwork() 
-  fetchStudents()
-})
+onMounted(() => fetchStudents())
 </script>
 
 <style scoped>
-.message-container { min-height: 100vh; display: flex; justify-content: center; align-items: center; background-color: #f0fdf4; padding: 10px; font-family: 'sans-serif'; }
-.message-card { background: white; width: 100%; max-width: 500px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); overflow: hidden; border-top: 8px solid #10b981; }
-.verify-section { padding: 30px; }
-.card-header { text-align: center; margin-bottom: 25px; }
-.card-header h2 { color: #047857; margin-bottom: 15px; font-size: 1.6rem; }
+.bind-container { min-height: 100vh; display: flex; justify-content: center; align-items: center; background-color: #fdf6e3; padding: 20px; font-family: 'sans-serif'; }
+.bind-card { background: white; width: 100%; max-width: 480px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); padding: 30px; border-top: 8px solid #f59e0b; }
+.card-header { text-align: center; margin-bottom: 20px; }
+.card-header h2 { color: #b45309; margin-bottom: 10px; font-size: 1.6rem; }
+.card-header p { color: #78716c; font-size: 0.95rem; line-height: 1.5; }
 
-.security-notice { background-color: #fef2f2; color: #991b1b; padding: 12px 15px; border-radius: 8px; font-size: 0.9rem; line-height: 1.5; border: 1px solid #fecaca; text-align: left; }
-
-.auth-method-toggle { display: flex; gap: 10px; margin-bottom: 20px; background: #f1f5f9; padding: 5px; border-radius: 10px; }
-.auth-method-toggle label { flex: 1; text-align: center; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: bold; color: #64748b; transition: all 0.2s; font-size: 0.95rem; }
-.auth-method-toggle label input { display: none; }
-.auth-method-toggle label.active { background: white; color: #10b981; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+.divider { border: 0; border-top: 2px dashed #fcd34d; margin: 25px 0; opacity: 0.6; }
 
 .form-group { margin-bottom: 20px; }
-.form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #374151; }
-select, input { width: 100%; padding: 12px 15px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 1.1rem; background-color: #f9fafb; box-sizing: border-box; }
-select:focus, input:focus { outline: none; border-color: #10b981; background-color: white; }
-.input-hint { font-size: 0.85rem; color: #6b7280; margin-top: 6px; }
+.form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #444; }
 
-.submit-btn { width: 100%; padding: 14px; background-color: #10b981; color: white; border: none; border-radius: 8px; font-size: 1.2rem; font-weight: bold; cursor: pointer; transition: 0.2s; margin-top: 10px; }
+/* 💡 讓國小和班級可以並排顯示 */
+.form-group-row { display: flex; gap: 15px; margin-bottom: 20px; }
+.half-width { flex: 1; margin-bottom: 0; }
+
+select, input { width: 100%; padding: 12px 15px; border: 1px solid #d6d3d1; border-radius: 8px; font-size: 1.1rem; background-color: #fafaf9; box-sizing: border-box; transition: border-color 0.2s; font-family: inherit; }
+select:focus, input:focus { outline: none; border-color: #f59e0b; background-color: white; }
+
+.custom-input { margin-top: 10px; background-color: #fffbeb; border-color: #fcd34d; }
+.custom-input:focus { background-color: white; }
+
+.submit-btn { width: 100%; padding: 14px; background-color: #10b981; color: white; border: none; border-radius: 8px; font-size: 1.2rem; font-weight: bold; cursor: pointer; margin-top: 10px; transition: 0.2s; }
+.submit-btn:hover:not(:disabled) { background-color: #059669; }
+.submit-btn:disabled { background-color: #9ca3af; cursor: not-allowed; }
+
 .message-box { padding: 12px; border-radius: 8px; margin-bottom: 20px; text-align: center; font-weight: bold; }
 .message-box.error { background-color: #fee2e2; color: #dc2626; border: 1px solid #fecaca; }
-.back-link { color: #10b981; text-decoration: none; font-weight: bold; font-size: 0.9rem; }
+.message-box.success { background-color: #d1fae5; color: #059669; border: 1px solid #a7f3d0; }
+.back-link { color: #f59e0b; text-decoration: none; font-weight: bold; font-size: 0.95rem; }
+.footer-note { margin-top: 25px; font-size: 0.85rem; color: #a8a29e; text-align: center; line-height: 1.4; }
 
-.chat-section { display: flex; flex-direction: column; height: 80vh; max-height: 650px; }
-.chat-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: #ecfdf5; border-bottom: 1px solid #d1fae5; }
-.chat-header h3 { margin: 0; color: #065f46; font-size: 1.1rem; }
-.logout-btn { background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.9rem; cursor: pointer; }
-.chat-history { flex: 1; overflow-y: auto; padding: 20px; background: #f8fafc; display: flex; flex-direction: column; gap: 15px; }
-.empty-chat { text-align: center; color: #94a3b8; font-size: 0.95rem; margin-top: 50px; }
-.chat-bubble { max-width: 80%; padding: 10px 14px; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
-.my-msg { background: #dbeafe; align-self: flex-end; border-bottom-right-radius: 2px; }
-.teacher-msg { background: #dcfce7; align-self: flex-start; border-bottom-left-radius: 2px; }
-.msg-info { display: flex; justify-content: space-between; gap: 15px; margin-bottom: 4px; font-size: 0.75rem; color: #64748b; }
-.my-msg .sender { color: #1d4ed8; font-weight: bold; }
-.teacher-msg .sender { color: #15803d; font-weight: bold; }
-.msg-content { font-size: 1.05rem; color: #1e293b; line-height: 1.4; white-space: pre-wrap; word-break: break-all; }
-.reply-form { display: flex; gap: 10px; padding: 15px; background: white; border-top: 1px solid #e2e8f0; }
-.reply-form textarea { flex: 1; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1rem; resize: none; font-family: inherit; }
-.reply-form textarea:focus { outline: none; border-color: #10b981; }
-.send-btn { background: #10b981; color: white; border: none; padding: 0 20px; border-radius: 8px; font-weight: bold; cursor: pointer; white-space: nowrap; }
+@media (max-width: 480px) {
+  .form-group-row { flex-direction: column; gap: 20px; }
+}
 </style>
