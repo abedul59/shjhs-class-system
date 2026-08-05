@@ -164,10 +164,15 @@ const processImport = async () => {
 
         // 確保至少有學號才能寫入
         if (studentObj.student_number) {
-          // 💡 關鍵修復：如果 CSV 沒有提供 school_name，系統自動補上，避免資料庫報錯
+          // 如果 CSV 沒有提供 school_name，系統自動補上
           if (!studentObj.school_name) {
             studentObj.school_name = '新化國中'
           }
+          // 💡 關鍵修復：如果 CSV 沒有提供 enroll_year，系統自動補上 115
+          if (!studentObj.enroll_year) {
+            studentObj.enroll_year = 115
+          }
+          
           studentsToUpsert.push(studentObj)
         }
       }
