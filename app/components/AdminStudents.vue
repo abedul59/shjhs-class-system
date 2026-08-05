@@ -3,6 +3,8 @@
     <div class="table-header">
       <h3>👩‍🎓 學生名單與資料維護</h3>
       <div class="export-actions">
+        <!-- 💡 新增的按鈕 -->
+        <button @click="addNewStudent" class="export-btn add-btn">➕ 新增一位學生資料</button>
         <button @click="saveAllStudents" class="export-btn save-all-btn" :disabled="isSavingAll">
           {{ isSavingAll ? '⏳ 儲存中...' : '💾 全體儲存' }}
         </button>
@@ -34,6 +36,8 @@
             <th width="120">畢業國小</th>
             <th width="70">國小班級</th>
             <th width="90">生日(YYYYMMDD)</th>
+            <!-- 💡 恢復身分證後五碼欄位 -->
+            <th width="100">身分證後五碼</th>
             <th width="90">稱謂1</th><th width="110">電話1</th><th width="160">信箱1</th>
             <th width="90">稱謂2</th><th width="110">電話2</th><th width="160">信箱2</th>
             <th width="90">稱謂3</th><th width="110">電話3</th><th width="160">信箱3</th>
@@ -49,6 +53,8 @@
             <td><input type="text" v-model="student.elementary_school" class="edit-input" placeholder="例: 臺南市大新"/></td>
             <td><input type="number" v-model="student.elementary_class" class="edit-input num-input" placeholder="班級"/></td>
             <td><input type="text" v-model="student.birthday" class="edit-input" placeholder="YYYYMMDD"/></td>
+            <!-- 💡 恢復身分證後五碼輸入框 -->
+            <td><input type="text" v-model="student.id_last_5" class="edit-input num-input" placeholder="後五碼"/></td>
             
             <td><input type="text" v-model="student.p1_rel" class="edit-input small-input" placeholder="關係"/></td>
             <td><input type="tel" v-model="student.p1_tel" class="edit-input small-input" placeholder="電話"/></td>
@@ -95,6 +101,27 @@ const fetchData = async () => {
 }
 onMounted(() => fetchData())
 
+// 💡 新增一位空白學生資料的功能
+const addNewStudent = async () => {
+  const tempNum = `T${Math.floor(Math.random() * 10000)}` // 產生臨時學號避免重複
+  try {
+    const { error } = await supabase.from('students').insert({
+      student_number: tempNum,
+      student_id: tempNum, // 滿足不可為空值限制
+      school_name: '新化國中',
+      enroll_year: 115,
+      class_name: '7',
+      real_name: '新學生'
+    })
+    
+    if (error) throw error
+    alert('✅ 已新增一筆空白學生資料，請修改完成後點擊儲存！')
+    await fetchData()
+  } catch (err) {
+    alert(`❌ 新增失敗：${err.message}`)
+  }
+}
+
 const saveStudent = async (student, showAlert = true) => {
   try {
     await supabase.from('students').update({ 
@@ -104,7 +131,8 @@ const saveStudent = async (student, showAlert = true) => {
       hidden_name: student.hidden_name, 
       elementary_school: student.elementary_school,
       elementary_class: student.elementary_class,
-      birthday: student.birthday 
+      birthday: student.birthday,
+      id_last_5: student.id_last_5 // 💡 確保身分證後五碼有被儲存
     }).eq('id', student.id)
     
     await supabase.from('parents').delete().eq('student_id', student.id)
@@ -140,17 +168,11 @@ const saveAllStudents = async () => {
   }
 }
 
-// 💡 終極修復：先刪除關聯資料庫中的紀錄，再刪除學生
 const deleteStudent = async (id, name) => { 
   if (confirm(`⚠️ 確定要刪除學生 ${name || '此學生'} 嗎？這將會一併刪除他的家長綁定與聯絡紀錄！`)) { 
     try {
-      // 1. 先刪除聯絡紀錄，避免 communication_logs_student_id_fkey 報錯
       await supabase.from('communication_logs').delete().eq('student_id', id); 
-      
-      // 2. 刪除家長綁定資料，避免 parents_student_id_fkey 報錯
       await supabase.from('parents').delete().eq('student_id', id); 
-      
-      // 3. 最後刪除學生本人
       const { error } = await supabase.from('students').delete().eq('id', id); 
       if (error) throw error
 
@@ -247,6 +269,10 @@ const processImport = async () => {
 .export-btn { background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
 .json-btn { background-color: #8b5cf6; }
 
+/* 💡 新增學生的按鈕樣式 */
+.add-btn { background-color: #f59e0b; }
+.add-btn:hover { background-color: #d97706; }
+
 .save-all-btn { background-color: #2563eb; }
 .save-all-btn:hover:not(:disabled) { background-color: #1d4ed8; }
 .save-all-btn:disabled { background-color: #94a3b8; cursor: not-allowed; }
@@ -258,7 +284,7 @@ const processImport = async () => {
 .import-tips { font-size: 0.9rem; color: #64748b; margin-left: 10px; }
 .table-responsive { overflow-x: auto; padding-bottom: 15px; }
 
-.student-edit-table { min-width: 2000px; border-collapse: separate; border-spacing: 0; background: white; font-size: 0.95rem; }
+.student-edit-table { min-width: 2100px; /* 稍微增加寬度以容納新欄位 */ border-collapse: separate; border-spacing: 0; background: white; font-size: 0.95rem; }
 .student-edit-table th, .student-edit-table td { padding: 8px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
 .student-edit-table th { background-color: #f8fafc; color: #64748b; font-weight: bold; position: sticky; top: 0; z-index: 10; text-align: left; }
 .edit-input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; width: 100%; }
