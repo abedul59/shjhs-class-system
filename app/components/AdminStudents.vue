@@ -3,7 +3,6 @@
     <div class="table-header">
       <h3>👩‍🎓 學生名單與資料維護</h3>
       <div class="export-actions">
-        <!-- 這裡保留原本的按鈕外觀，但我們主要處理匯入 -->
         <button @click="exportStudents('json')" class="export-btn json-btn">📥 匯出 JSON</button>
         <button @click="exportStudents('csv')" class="export-btn">📤 匯出 CSV</button>
       </div>
@@ -16,8 +15,8 @@
           {{ isImporting ? '⏳ 匯入中...' : '🚀 執行匯入 (CSV)' }}
         </button>
       </div>
-      <div class="import-tips" style="font-size: 0.9rem; color: #64748b; margin-left: 10px;">
-        💡 請上傳包含 seat_number, student_number 等英文標題的 CSV 檔案。
+      <div class="import-tips">
+        💡 請上傳包含 student_number 等英文標題的 CSV 檔案。
       </div>
     </div>
 
@@ -130,7 +129,6 @@ const handleFileUpload = (e) => {
   if (file) selectedFile.value = file 
 }
 
-// 💡 實作 CSV 解析與寫入 DB 的邏輯
 const processImport = async () => {
   if (!selectedFile.value) return
   if (!confirm('即將匯入學生名單。若學號已存在將會自動更新資料，確定要執行嗎？')) return
@@ -155,9 +153,7 @@ const processImport = async () => {
         const studentObj = {}
         
         headers.forEach((header, index) => {
-          // 只處理有對應到值的欄位
           if (values[index] !== undefined && values[index] !== '') {
-            // 如果是數字型態，嘗試轉換
             if (header === 'seat_number' || header === 'elementary_class') {
               studentObj[header] = parseInt(values[index], 10)
             } else {
@@ -168,6 +164,10 @@ const processImport = async () => {
 
         // 確保至少有學號才能寫入
         if (studentObj.student_number) {
+          // 💡 關鍵修復：如果 CSV 沒有提供 school_name，系統自動補上，避免資料庫報錯
+          if (!studentObj.school_name) {
+            studentObj.school_name = '新化國中'
+          }
           studentsToUpsert.push(studentObj)
         }
       }
@@ -175,7 +175,6 @@ const processImport = async () => {
       if (studentsToUpsert.length === 0) throw new Error('沒有找到有效的學生資料 (可能缺少 student_number 欄位)')
 
       // 執行 Supabase Upsert (寫入/更新)
-      // 使用 student_number 作為判斷重複的鍵值
       const { error } = await supabase
         .from('students')
         .upsert(studentsToUpsert, { onConflict: 'student_number' })
@@ -202,7 +201,6 @@ const processImport = async () => {
     isImporting.value = false
   }
 
-  // 將檔案讀取為純文字
   reader.readAsText(selectedFile.value, 'utf-8')
 }
 </script>
@@ -217,6 +215,7 @@ const processImport = async () => {
 .import-controls { display: flex; gap: 10px; align-items: center;}
 .import-btn { background: #3b82f6; color: white; font-weight: bold; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; transition: 0.2s; }
 .import-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+.import-tips { font-size: 0.9rem; color: #64748b; margin-left: 10px; }
 .table-responsive { overflow-x: auto; padding-bottom: 15px; }
 
 .student-edit-table { min-width: 2000px; border-collapse: separate; border-spacing: 0; background: white; font-size: 0.95rem; }
