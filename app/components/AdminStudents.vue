@@ -139,15 +139,12 @@ const processImport = async () => {
   reader.onload = async (e) => {
     try {
       const text = e.target.result
-      // 解析 CSV：依換行符號分割，並過濾掉空行
       const rows = text.split(/\r?\n/).filter(row => row.trim() !== '')
       if (rows.length < 2) throw new Error('檔案內容為空或缺少標題列')
 
-      // 第一行為標題 (英文欄位)
       const headers = rows[0].split(',').map(h => h.trim())
       const studentsToUpsert = []
 
-      // 迴圈處理每一筆資料
       for (let i = 1; i < rows.length; i++) {
         const values = rows[i].split(',').map(v => v.trim())
         const studentObj = {}
@@ -162,16 +159,12 @@ const processImport = async () => {
           }
         })
 
-        // 確保至少有學號才能寫入
         if (studentObj.student_number) {
-          // 如果 CSV 沒有提供 school_name，系統自動補上
-          if (!studentObj.school_name) {
-            studentObj.school_name = '新化國中'
-          }
-          // 💡 關鍵修復：如果 CSV 沒有提供 enroll_year，系統自動補上 115
-          if (!studentObj.enroll_year) {
-            studentObj.enroll_year = 115
-          }
+          // 💡 終極防呆：一次補齊所有可能的必填預設值
+          if (!studentObj.school_name) studentObj.school_name = '新化國中'
+          if (!studentObj.enroll_year) studentObj.enroll_year = 115
+          if (!studentObj.class_name) studentObj.class_name = '7' // 修復 class_name 報錯
+          if (!studentObj.grade) studentObj.grade = 7             // 預防 grade 報錯
           
           studentsToUpsert.push(studentObj)
         }
@@ -179,7 +172,6 @@ const processImport = async () => {
 
       if (studentsToUpsert.length === 0) throw new Error('沒有找到有效的學生資料 (可能缺少 student_number 欄位)')
 
-      // 執行 Supabase Upsert (寫入/更新)
       const { error } = await supabase
         .from('students')
         .upsert(studentsToUpsert, { onConflict: 'student_number' })
@@ -188,7 +180,6 @@ const processImport = async () => {
 
       alert(`✅ 成功匯入 ${studentsToUpsert.length} 筆學生資料！`)
       
-      // 清空選擇的檔案並重新抓取資料
       selectedFile.value = null
       if (fileInput.value) fileInput.value.value = ''
       await fetchData()
