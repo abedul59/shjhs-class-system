@@ -160,10 +160,11 @@ const processImport = async () => {
         })
 
         if (studentObj.student_number) {
-          // 💡 只保留確定存在的必填欄位預設值，刪除會報錯的 grade
           if (!studentObj.school_name) studentObj.school_name = '新化國中'
           if (!studentObj.enroll_year) studentObj.enroll_year = 115
           if (!studentObj.class_name) studentObj.class_name = '7'
+          // 💡 關鍵修復：解決 student_id 不能為空值的報錯，直接代入學號
+          if (!studentObj.student_id) studentObj.student_id = studentObj.student_number 
           
           studentsToUpsert.push(studentObj)
         }
