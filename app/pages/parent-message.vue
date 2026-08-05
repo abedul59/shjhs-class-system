@@ -27,7 +27,7 @@
             </label>
             <label :class="{ 'active': authMethod === 'email' }">
               <input type="radio" v-model="authMethod" value="email" />
-              📧 Email 前五碼
+              📧 家長綁定的Email 前五碼
             </label>
           </div>
 
