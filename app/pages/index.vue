@@ -20,12 +20,12 @@
             <NuxtLink to="/parent-bind" class="btn btn-orange">👨‍👩‍👧 綁定</NuxtLink>
             <NuxtLink to="/parent-message" class="btn btn-green">💬 家長私訊</NuxtLink>
             <NuxtLink to="/student-message" class="btn btn-blue">💬 學生私訊</NuxtLink>
-            <NuxtLink to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
             <NuxtLink to="/assignments" class="btn btn-purple">📚 作業管理</NuxtLink>
             <button @click="openDiscipline" class="btn btn-dark-blue">⚖️ 秩序管理</button>
-            <button @click="openEmergencyModal" class="btn btn-red">🚨 緊急通知</button>
+            <NuxtLink to="/hygiene" class="btn btn-cyan">🧹 衛生管理</NuxtLink>            
             <NuxtLink to="/seats" class="btn btn-teal">🪑 座位管理</NuxtLink>
-            <NuxtLink to="/hygiene" class="btn btn-cyan">🧹 衛生管理</NuxtLink>
+            <button @click="openEmergencyModal" class="btn btn-red">🚨 緊急通知</button>
+            <NuxtLink to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
             
             <button 
               v-if="seatingChart.isVisible" 
