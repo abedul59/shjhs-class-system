@@ -5,13 +5,12 @@
       <div class="lock-box">
         <h2>📚 各科作業登記系統</h2>
         <select v-model="selectedSubject" class="subject-select">
-          <option value="" disabled selected>請選擇科目輸入密碼（導師、任課老師或小老師）...</option>
-          <!-- 💡 新增：導師專區選項 -->
+          <option value="" disabled selected>請選擇科目或身分...</option>
           <option value="導師">👑 導師專區 (總覽全科)</option>
           <option disabled>──────────</option>
           <option v-for="t in teachersList" :key="t.id" :value="t.subject_name">{{ t.subject_name }}</option>
         </select>
-        <input v-model="passwordInput" type="password" placeholder="請輸入導師、任課老師或小老師的密碼..." @keyup.enter="verifyPassword"/>
+        <input v-model="passwordInput" type="password" placeholder="請輸入密碼..." @keyup.enter="verifyPassword"/>
         <button @click="verifyPassword" :disabled="!selectedSubject">解鎖進入</button>
         <NuxtLink to="/" class="back-link">返回首頁</NuxtLink>
       </div>
@@ -21,7 +20,6 @@
     <div v-else class="dashboard">
       <header class="assign-header">
         <div class="header-title">
-          <!-- 💡 標題根據身分動態變化 -->
           <h2>{{ activeRole === '導師' ? '👑 班級作業總覽中心' : `🧑‍🏫 ${selectedSubject} 專屬作業中心` }}</h2>
           <span :class="['role-badge', activeRole === '導師' ? 'admin-badge' : (activeRole === '科任老師' ? 'teacher-badge' : 'assistant-badge')]">
             目前身分：{{ activeRole }}
@@ -34,7 +32,6 @@
         <!-- 左側：作業清單與新增作業 -->
         <div class="left-panel data-panel">
           
-          <!-- 💡 導師模式下隱藏新增作業，只供檢視與批改 -->
           <div v-if="activeRole !== '導師'">
             <h3>📝 新增作業項目</h3>
             <div class="add-form">
@@ -52,7 +49,6 @@
                  :class="['assign-item', { active: currentAssignment?.id === assign.id }]"
                  @click="selectAssignment(assign)">
               <div class="assign-info">
-                <!-- 💡 導師模式下，在標題前方顯示科目名稱 -->
                 <strong>
                   <span v-if="activeRole === '導師'" class="subject-tag">[{{ assign.subject_name }}]</span>
                   {{ assign.title }}
@@ -120,11 +116,10 @@ const fetchTeachers = async () => {
   if (data) teachersList.value = data
 }
 
-// 💡 更新：雙重密碼驗證 (加入導師邏輯)
+// 雙重密碼驗證 (加入導師邏輯)
 const verifyPassword = async () => {
   if (!selectedSubject.value || !passwordInput.value) return
   
-  // 處理導師登入
   if (selectedSubject.value === '導師') {
     try {
       const { data } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'admin_password').maybeSingle()
@@ -155,7 +150,6 @@ const verifyPassword = async () => {
     alert('❌ 導師密碼錯誤！'); passwordInput.value = ''; return
   }
 
-  // 處理科任老師與小老師登入
   const teacherInfo = teachersList.value.find(t => t.subject_name === selectedSubject.value)
   if (teacherInfo && passwordInput.value === teacherInfo.password) {
     activeRole.value = '科任老師'
@@ -168,13 +162,11 @@ const verifyPassword = async () => {
   }
 }
 
-// 💡 更新：根據身分撈取作業資料
 const fetchDashboardData = async () => {
   const { data: sData } = await supabase.from('students').select('*').order('seat_number')
   if (sData) students.value = sData
 
   let query = supabase.from('assignments').select('*').order('created_at', { ascending: false })
-  // 若非導師，則只撈取該科目的作業
   if (activeRole.value !== '導師') {
     query = query.eq('subject_name', selectedSubject.value)
   }
@@ -199,7 +191,13 @@ const addAssignment = async () => {
   }
 }
 
+// 💡 更新：加入小老師刪除權限檢查
 const deleteAssignment = async (id, title) => {
+  if (activeRole.value === '小老師') {
+    alert('❌ 權限提示：小老師僅能新增作業與登記繳交狀態，無權限刪除作業。\n\n若需刪除，請聯繫科任老師或導師協助。')
+    return
+  }
+
   if (!window.confirm(`⚠️ 確定刪除【${title}】？(相關的繳交紀錄也會一併刪除)`)) return
   await supabase.from('assignments').delete().eq('id', id)
   assignments.value = assignments.value.filter(a => a.id !== id)
@@ -252,7 +250,6 @@ onMounted(() => fetchTeachers())
 .role-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.9rem; font-weight: bold; }
 .teacher-badge { background-color: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
 .assistant-badge { background-color: #fef08a; color: #854d0e; border: 1px solid #fde047; }
-/* 💡 新增導師專用 Badge 樣式 */
 .admin-badge { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
 
 .back-btn { text-decoration: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; background: #ef4444; color: white; }
@@ -273,7 +270,6 @@ h3 { color: #334155; margin-top: 0; margin-bottom: 15px; border-bottom: 2px soli
 .assign-item:hover { border-color: #8b5cf6; }
 .assign-item.active { background: #f3e8ff; border-color: #9333ea; box-shadow: 0 0 0 2px rgba(147, 51, 234, 0.2); }
 .assign-info { display: flex; flex-direction: column; gap: 5px; }
-/* 💡 新增科目標籤樣式 */
 .subject-tag { color: #d946ef; font-size: 0.9rem; margin-right: 4px; }
 
 .deadline { font-size: 0.85rem; color: #64748b; }
@@ -286,7 +282,6 @@ h3 { color: #334155; margin-top: 0; margin-bottom: 15px; border-bottom: 2px soli
 .submitted-stat { color: #16a34a; } .missing-stat { color: #dc2626; }
 .help-text { font-size: 0.9rem; color: #64748b; margin-bottom: 20px; }
 
-/* 神奇的座號方格表 */
 .seat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)); gap: 10px; }
 .seat-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 15px 5px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: 0.1s transform; user-select: none; }
 .seat-btn:active { transform: scale(0.95); }
