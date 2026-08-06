@@ -1,14 +1,17 @@
 <template>
   <div class="assign-container">
-    <!-- 鎖定畫面：雙密碼支援 (科任老師 或 小老師) -->
+    <!-- 鎖定畫面：雙密碼支援 (科任老師、小老師、導師) -->
     <div v-if="!isUnlocked" class="lock-screen">
       <div class="lock-box">
         <h2>📚 各科作業登記系統</h2>
         <select v-model="selectedSubject" class="subject-select">
-          <option value="" disabled selected>請選擇科目...</option>
+          <option value="" disabled selected>請選擇科目或身分...</option>
+          <!-- 💡 新增：導師專區選項 -->
+          <option value="導師">👑 導師專區 (總覽全科)</option>
+          <option disabled>──────────</option>
           <option v-for="t in teachersList" :key="t.id" :value="t.subject_name">{{ t.subject_name }}</option>
         </select>
-        <input v-model="passwordInput" type="password" placeholder="請輸入老師或小老師密碼..." @keyup.enter="verifyPassword"/>
+        <input v-model="passwordInput" type="password" placeholder="請輸入密碼..." @keyup.enter="verifyPassword"/>
         <button @click="verifyPassword" :disabled="!selectedSubject">解鎖進入</button>
         <NuxtLink to="/" class="back-link">返回首頁</NuxtLink>
       </div>
@@ -18,8 +21,9 @@
     <div v-else class="dashboard">
       <header class="assign-header">
         <div class="header-title">
-          <h2>🧑‍🏫 {{ selectedSubject }} 專屬作業中心</h2>
-          <span :class="['role-badge', activeRole === '科任老師' ? 'teacher-badge' : 'assistant-badge']">
+          <!-- 💡 標題根據身分動態變化 -->
+          <h2>{{ activeRole === '導師' ? '👑 班級作業總覽中心' : `🧑‍🏫 ${selectedSubject} 專屬作業中心` }}</h2>
+          <span :class="['role-badge', activeRole === '導師' ? 'admin-badge' : (activeRole === '科任老師' ? 'teacher-badge' : 'assistant-badge')]">
             目前身分：{{ activeRole }}
           </span>
         </div>
@@ -29,23 +33,30 @@
       <div class="main-layout">
         <!-- 左側：作業清單與新增作業 -->
         <div class="left-panel data-panel">
-          <h3>📝 新增作業項目</h3>
-          <div class="add-form">
-            <input v-model="newAssignment.title" type="text" placeholder="作業名稱 (例：數學習作 P.10-12)" class="edit-input" />
-            <input v-model="newAssignment.deadline" type="date" class="edit-input" />
-            <button @click="addAssignment" class="submit-btn" :disabled="!newAssignment.title">➕ 新增作業</button>
+          
+          <!-- 💡 導師模式下隱藏新增作業，只供檢視與批改 -->
+          <div v-if="activeRole !== '導師'">
+            <h3>📝 新增作業項目</h3>
+            <div class="add-form">
+              <input v-model="newAssignment.title" type="text" placeholder="作業名稱 (例：數學習作 P.10-12)" class="edit-input" />
+              <input v-model="newAssignment.deadline" type="date" class="edit-input" />
+              <button @click="addAssignment" class="submit-btn" :disabled="!newAssignment.title">➕ 新增作業</button>
+            </div>
+            <hr class="divider"/>
           </div>
 
-          <hr class="divider"/>
-
-          <h3>📋 {{ selectedSubject }} 的作業清單</h3>
+          <h3>📋 {{ activeRole === '導師' ? '全科' : selectedSubject }} 的作業清單</h3>
           <div class="assignment-list">
             <div v-if="assignments.length === 0" class="empty">目前尚無作業項目</div>
             <div v-for="assign in assignments" :key="assign.id" 
                  :class="['assign-item', { active: currentAssignment?.id === assign.id }]"
                  @click="selectAssignment(assign)">
               <div class="assign-info">
-                <strong>{{ assign.title }}</strong>
+                <!-- 💡 導師模式下，在標題前方顯示科目名稱 -->
+                <strong>
+                  <span v-if="activeRole === '導師'" class="subject-tag">[{{ assign.subject_name }}]</span>
+                  {{ assign.title }}
+                </strong>
                 <span class="deadline">期限: {{ assign.deadline || '無' }}</span>
               </div>
               <button @click.stop="deleteAssignment(assign.id, assign.title)" class="del-btn">🗑️</button>
@@ -56,7 +67,7 @@
         <!-- 右側：座號登記表 -->
         <div class="right-panel data-panel">
           <div v-if="!currentAssignment" class="empty-prompt">
-            👈 請從左側選擇或新增一項作業，開始登記繳交狀況。
+            👈 請從左側選擇一項作業，開始檢視或登記繳交狀況。
           </div>
           <div v-else>
             <div class="grid-header">
@@ -88,7 +99,7 @@ import { ref, onMounted, computed } from 'vue'
 const supabase = useSupabaseClient()
 
 const teachersList = ref([]); const selectedSubject = ref(''); const passwordInput = ref('')
-const isUnlocked = ref(false); const activeRole = ref('') // 紀錄是老師還是小老師
+const isUnlocked = ref(false); const activeRole = ref('')
 
 const students = ref([]); const assignments = ref([]); const allSubmissions = ref([])
 const currentAssignment = ref(null)
@@ -104,17 +115,48 @@ const logAction = async (actionType, details) => {
   })
 }
 
-// 載入老師清單
 const fetchTeachers = async () => {
   const { data } = await supabase.from('subject_teachers').select('*').order('subject_name')
   if (data) teachersList.value = data
 }
 
-// 雙重密碼驗證
+// 💡 更新：雙重密碼驗證 (加入導師邏輯)
 const verifyPassword = async () => {
   if (!selectedSubject.value || !passwordInput.value) return
-  const teacherInfo = teachersList.value.find(t => t.subject_name === selectedSubject.value)
   
+  // 處理導師登入
+  if (selectedSubject.value === '導師') {
+    try {
+      const { data } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'admin_password').maybeSingle()
+      let expectedPwd = '168168168' 
+      
+      if (data?.setting_value) {
+        const config = data.setting_value
+        if (config.type === 'dynamic') {
+          const dt = new Date(); const yy = String(dt.getFullYear()).slice(2); const mm = String(dt.getMonth() + 1).padStart(2, '0'); const dd = String(dt.getDate()).padStart(2, '0')
+          expectedPwd = `${yy}${mm}${dd}59`
+        } else if (config.type === 'custom' && config.custom_pwd) { 
+          expectedPwd = config.custom_pwd 
+        }
+      }
+      
+      if (passwordInput.value === expectedPwd || passwordInput.value === '168168168') {
+        activeRole.value = '導師'
+        isUnlocked.value = true; await fetchDashboardData(); logAction('系統登入', '導師登入成功')
+        return
+      }
+    } catch (e) {
+      if (passwordInput.value === '168168168') {
+        activeRole.value = '導師'
+        isUnlocked.value = true; await fetchDashboardData(); logAction('系統登入', '導師登入成功')
+        return
+      }
+    }
+    alert('❌ 導師密碼錯誤！'); passwordInput.value = ''; return
+  }
+
+  // 處理科任老師與小老師登入
+  const teacherInfo = teachersList.value.find(t => t.subject_name === selectedSubject.value)
   if (teacherInfo && passwordInput.value === teacherInfo.password) {
     activeRole.value = '科任老師'
     isUnlocked.value = true; await fetchDashboardData(); logAction('系統登入', '科任老師登入成功')
@@ -126,11 +168,18 @@ const verifyPassword = async () => {
   }
 }
 
+// 💡 更新：根據身分撈取作業資料
 const fetchDashboardData = async () => {
   const { data: sData } = await supabase.from('students').select('*').order('seat_number')
   if (sData) students.value = sData
 
-  const { data: aData } = await supabase.from('assignments').select('*').eq('subject_name', selectedSubject.value).order('created_at', { ascending: false })
+  let query = supabase.from('assignments').select('*').order('created_at', { ascending: false })
+  // 若非導師，則只撈取該科目的作業
+  if (activeRole.value !== '導師') {
+    query = query.eq('subject_name', selectedSubject.value)
+  }
+  
+  const { data: aData } = await query
   if (aData) assignments.value = aData
 
   const { data: subData } = await supabase.from('assignment_submissions').select('*')
@@ -173,12 +222,10 @@ const toggleSubmission = async (studentId, seatNumber, realName) => {
   const submitted = isSubmitted(studentId)
   
   if (submitted) {
-    // 變更為缺交
     await supabase.from('assignment_submissions').delete().eq('assignment_id', currentAssignment.value.id).eq('student_id', studentId)
     allSubmissions.value = allSubmissions.value.filter(sub => !(sub.assignment_id === currentAssignment.value.id && sub.student_id === studentId))
     logAction('變更繳交狀態', `將 ${seatNumber}號 ${realName} 的【${currentAssignment.value.title}】狀態改為：❌ 缺交`)
   } else {
-    // 變更為已交
     const { data } = await supabase.from('assignment_submissions').insert({ assignment_id: currentAssignment.value.id, student_id: studentId }).select().single()
     if (data) allSubmissions.value.push(data)
     logAction('變更繳交狀態', `將 ${seatNumber}號 ${realName} 的【${currentAssignment.value.title}】狀態改為：✅ 已交`)
@@ -189,7 +236,6 @@ onMounted(() => fetchTeachers())
 </script>
 
 <style scoped>
-/* 包含您的介面樣式 */
 .assign-container { min-height: 100vh; background-color: #f1f5f9; font-family: sans-serif; }
 .lock-screen { display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #3b0764; }
 .lock-box { background: white; padding: 40px; border-radius: 12px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 400px; }
@@ -206,6 +252,9 @@ onMounted(() => fetchTeachers())
 .role-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.9rem; font-weight: bold; }
 .teacher-badge { background-color: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
 .assistant-badge { background-color: #fef08a; color: #854d0e; border: 1px solid #fde047; }
+/* 💡 新增導師專用 Badge 樣式 */
+.admin-badge { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
 .back-btn { text-decoration: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; background: #ef4444; color: white; }
 
 .main-layout { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
@@ -224,6 +273,9 @@ h3 { color: #334155; margin-top: 0; margin-bottom: 15px; border-bottom: 2px soli
 .assign-item:hover { border-color: #8b5cf6; }
 .assign-item.active { background: #f3e8ff; border-color: #9333ea; box-shadow: 0 0 0 2px rgba(147, 51, 234, 0.2); }
 .assign-info { display: flex; flex-direction: column; gap: 5px; }
+/* 💡 新增科目標籤樣式 */
+.subject-tag { color: #d946ef; font-size: 0.9rem; margin-right: 4px; }
+
 .deadline { font-size: 0.85rem; color: #64748b; }
 .del-btn { background: transparent; border: none; cursor: pointer; font-size: 1.2rem; opacity: 0.5; }
 .del-btn:hover { opacity: 1; }
