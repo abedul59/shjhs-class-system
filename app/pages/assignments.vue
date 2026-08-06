@@ -5,13 +5,13 @@
       <div class="lock-box">
         <h2>📚 各科作業登記系統</h2>
         <select v-model="selectedSubject" class="subject-select">
-          <option value="" disabled selected>請選擇科目或身分...</option>
+          <option value="" disabled selected>請選擇科目輸入密碼（導師、任課老師或小老師）...</option>
           <!-- 💡 新增：導師專區選項 -->
           <option value="導師">👑 導師專區 (總覽全科)</option>
           <option disabled>──────────</option>
           <option v-for="t in teachersList" :key="t.id" :value="t.subject_name">{{ t.subject_name }}</option>
         </select>
-        <input v-model="passwordInput" type="password" placeholder="請輸入密碼..." @keyup.enter="verifyPassword"/>
+        <input v-model="passwordInput" type="password" placeholder="請輸入導師、任課老師或小老師的密碼..." @keyup.enter="verifyPassword"/>
         <button @click="verifyPassword" :disabled="!selectedSubject">解鎖進入</button>
         <NuxtLink to="/" class="back-link">返回首頁</NuxtLink>
       </div>
