@@ -16,7 +16,6 @@
           </select>
         </div>
 
-        <!-- 💡 當選擇任課老師/小老師時，自動載入 assignments.vue 使用的科目清單 -->
         <div v-if="loginForm.role === 'subject'" class="form-group">
           <label>任課科目 (必填)：</label>
           <select v-model="loginForm.subject" class="form-control">
@@ -48,7 +47,7 @@
       </div>
     </div>
 
-    <!-- ================= 主操作介面 (保留您原本的違規管理與統計) ================= -->
+    <!-- ================= 主操作介面 ================= -->
     <div v-else class="main-content-wrapper">
       <header class="page-header">
         <h2>⚖️ 班級秩序與違規管理系統</h2>
@@ -83,7 +82,33 @@
               </select>
             </div>
 
-            <button @click="submitRecord" class="btn-primary" :disabled="!form.studentId || !form.violationName || isSubmitting">
+            <!-- 💡 新增：發生日期與節數 -->
+            <div class="form-group">
+              <label>📅 發生日期：</label>
+              <input type="date" v-model="form.violationDate" class="form-control" />
+            </div>
+
+            <div class="form-group">
+              <label>⏰ 發生節數：</label>
+              <select v-model="form.violationPeriod" class="form-control">
+                <option value="" disabled selected>請選擇發生節數...</option>
+                <option value="早自修">早自修</option>
+                <option value="第1節">第1節</option>
+                <option value="第2節">第2節</option>
+                <option value="第3節">第3節</option>
+                <option value="第4節">第4節</option>
+                <option value="午休">午休</option>
+                <option value="第5節">第5節</option>
+                <option value="第6節">第6節</option>
+                <option value="第7節">第7節</option>
+                <option value="第8節">第8節</option>
+                <option value="放學後">放學後</option>
+              </select>
+            </div>
+
+            <!-- 💡 更新：防呆機制，四個欄位皆需填寫才可送出 -->
+            <button @click="submitRecord" class="btn-primary" 
+                    :disabled="!form.studentId || !form.violationName || !form.violationDate || !form.violationPeriod || isSubmitting">
               {{ isSubmitting ? '登記中...' : '送出登記' }}
             </button>
           </div>
@@ -135,8 +160,9 @@
                     </td>
                     <td class="time-cell">
                       <ul class="time-list">
+                        <!-- 💡 更新：改用 formatRecordTime 函式處理顯示邏輯 -->
                         <li v-for="rec in group.records" :key="rec.id">
-                          {{ formatTime(rec.created_at) }}
+                          {{ formatRecordTime(rec) }}
                         </li>
                       </ul>
                     </td>
@@ -157,26 +183,38 @@
 import { ref, computed, onMounted } from 'vue'
 const supabase = useSupabaseClient()
 
+// 💡 取得今天的日期 (格式 YYYY-MM-DD)，作為預設值
+const getToday = () => {
+  const d = new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 // 登入狀態與清單
 const isLoggedIn = ref(false)
 const isLoggingIn = ref(false)
 const loginForm = ref({ role: 'discipline', subject: '', password: '' })
-const teachersList = ref([]) // 同步 assignments.vue 的科目清單
+const teachersList = ref([])
 
 // 業務資料
 const userRole = ref('')
 const students = ref([])
 const violationTypes = ref([])
 const disciplineRecords = ref([])
-const form = ref({ studentId: '', violationName: '' })
+// 💡 更新 form，加入 violationDate 與 violationPeriod 預設值
+const form = ref({ 
+  studentId: '', 
+  violationName: '', 
+  violationDate: getToday(), 
+  violationPeriod: '' 
+})
 const newTypeName = ref('')
 const isSubmitting = ref(false)
 
-// 進入頁面時檢查權限與抓取基礎資料
 onMounted(async () => {
-  // 先抓取科目老師清單，供登入選單使用
   await fetchTeachers()
-
   const role = sessionStorage.getItem('discipline_role')
   if (role) {
     userRole.value = role
@@ -185,13 +223,11 @@ onMounted(async () => {
   }
 })
 
-// 載入科目清單 (與 assignments.vue 同步)
 const fetchTeachers = async () => {
   const { data } = await supabase.from('subject_teachers').select('*').order('subject_name')
   if (data) teachersList.value = data
 }
 
-// 處理登入驗證
 const handleLogin = async () => {
   if (!loginForm.value.password) {
     alert('請輸入密碼！')
@@ -200,7 +236,6 @@ const handleLogin = async () => {
 
   isLoggingIn.value = true
   try {
-    // 判斷是否為導師或風紀股長
     if (loginForm.value.role === 'teacher' || loginForm.value.role === 'discipline') {
       const { data, error } = await supabase
         .from('system_settings')
@@ -218,14 +253,12 @@ const handleLogin = async () => {
         alert('密碼錯誤，請重新輸入！')
       }
     } 
-    // 判斷是否為任課老師或小老師
     else if (loginForm.value.role === 'subject') {
       if (!loginForm.value.subject) {
         alert('請選擇任課科目！')
         return
       }
       
-      // 從剛才抓好的 teachersList 進行密碼比對
       const teacherInfo = teachersList.value.find(t => t.subject_name === loginForm.value.subject)
       
       if (teacherInfo && loginForm.value.password === teacherInfo.password) {
@@ -257,7 +290,6 @@ const logout = () => {
   isLoggedIn.value = false
 }
 
-// 載入主要業務資料
 const loadMainData = async () => {
   await Promise.all([
     fetchStudents(),
@@ -281,21 +313,26 @@ const fetchRecords = async () => {
   if (data) disciplineRecords.value = data
 }
 
-// 提交違規紀錄
+// 💡 更新：送出違規紀錄 (加入 Date 與 Period 寫入)
 const submitRecord = async () => {
   isSubmitting.value = true
   try {
     const { error } = await supabase.from('discipline_records').insert({
       student_id: form.value.studentId,
       violation_name: form.value.violationName,
+      violation_date: form.value.violationDate,     // 寫入日期
+      violation_period: form.value.violationPeriod, // 寫入節數
       recorded_by: userRole.value
     })
     
     if (error) throw error
     alert('✅ 違規登記成功！')
     
+    // 清空表單，但保留今天的日期
     form.value.studentId = ''
     form.value.violationName = ''
+    form.value.violationDate = getToday() 
+    form.value.violationPeriod = ''
     await fetchRecords()
   } catch (error) {
     alert('❌ 登記失敗：' + error.message)
@@ -304,7 +341,6 @@ const submitRecord = async () => {
   }
 }
 
-// --- 導師專屬管理功能 ---
 const addViolationType = async () => {
   if (!newTypeName.value.trim()) return
   const { error } = await supabase.from('violation_types').insert({ name: newTypeName.value.trim() })
@@ -323,13 +359,22 @@ const deleteViolationType = async (id) => {
   }
 }
 
-// --- 報表轉換與格式化 ---
 const getStudentName = (id) => students.value.find(s => s.id === id)?.real_name || '未知'
 const getStudentSeat = (id) => students.value.find(s => s.id === id)?.seat_number || '?'
 
 const formatTime = (isoString) => {
   const date = new Date(isoString)
   return `${date.getMonth()+1}/${date.getDate()} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`
+}
+
+// 💡 新增：向後相容的資料格式化工具
+const formatRecordTime = (rec) => {
+  // 如果資料庫裡已經有新寫入的「日期」與「節數」，就顯示新版格式
+  if (rec.violation_date && rec.violation_period) {
+    return `${rec.violation_date} (${rec.violation_period})`
+  }
+  // 如果是舊的資料，就回退到顯示原本的「建立時間」
+  return formatTime(rec.created_at)
 }
 
 const groupedRecords = computed(() => {
