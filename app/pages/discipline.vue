@@ -58,10 +58,11 @@
       </header>
 
       <div class="main-content">
-        <!-- ================= 左側：登記違規 ================= -->
+        <!-- ================= 左側：登記/編輯違規 ================= -->
         <div class="left-col">
           <div class="card form-card">
-            <h3>📝 登記違規行為</h3>
+            <!-- 💡 根據是否在編輯模式切換標題 -->
+            <h3>{{ editingRecordId ? '✏️ 編輯違規紀錄' : '📝 登記違規行為' }}</h3>
             <div class="form-group">
               <label>👩‍🎓 選擇學生：</label>
               <select v-model="form.studentId" class="form-control">
@@ -105,10 +106,14 @@
               </select>
             </div>
 
-            <button @click="submitRecord" class="btn-primary" 
-                    :disabled="!form.studentId || !form.violationName || !form.violationDate || !form.violationPeriod || isSubmitting">
-              {{ isSubmitting ? '登記中...' : '送出登記' }}
-            </button>
+            <!-- 💡 新增編輯模式的按鈕群組 -->
+            <div class="form-actions">
+              <button @click="submitRecord" class="btn-primary" 
+                      :disabled="!form.studentId || !form.violationName || !form.violationDate || !form.violationPeriod || isSubmitting">
+                {{ isSubmitting ? '處理中...' : (editingRecordId ? '儲存變更' : '送出登記') }}
+              </button>
+              <button v-if="editingRecordId" @click="cancelEdit" class="btn-cancel">取消編輯</button>
+            </div>
           </div>
 
           <!-- 導師專屬：管理違規種類 -->
@@ -131,7 +136,6 @@
         <div class="right-col">
           <div class="card history-card">
             
-            <!-- 💡 新增：雙模式切換標籤 -->
             <div class="view-tabs">
               <button :class="['tab-btn', { active: viewMode === 'overview' }]" @click="viewMode = 'overview'">
                 📊 統計總覽
@@ -141,7 +145,7 @@
               </button>
             </div>
             
-            <!-- 模式 1：原本的統計總覽 -->
+            <!-- 模式 1：統計總覽 -->
             <div v-if="viewMode === 'overview'">
               <div v-if="groupedRecords.length === 0" class="empty-state">
                 目前班上表現優良，尚無違規紀錄！🎉
@@ -169,8 +173,13 @@
                       </td>
                       <td class="time-cell">
                         <ul class="time-list">
-                          <li v-for="rec in group.records" :key="rec.id">
+                          <li v-for="rec in group.records" :key="rec.id" class="time-list-item">
                             {{ formatRecordTime(rec) }}
+                            <!-- 💡 導師專屬：編輯與刪除按鈕 -->
+                            <span v-if="userRole === '導師'" class="action-icons">
+                              <button @click="editRecord(rec)" class="icon-btn edit-icon" title="編輯">✏️</button>
+                              <button @click="deleteRecord(rec.id)" class="icon-btn del-icon" title="刪除">🗑️</button>
+                            </span>
                           </li>
                         </ul>
                       </td>
@@ -181,7 +190,7 @@
               </div>
             </div>
 
-            <!-- 💡 模式 2：日期/節數查詢模式 -->
+            <!-- 模式 2：日期/節數查詢模式 -->
             <div v-else class="calendar-view">
               <div class="filter-bar">
                 <div class="filter-group">
@@ -216,9 +225,11 @@
                   <thead>
                     <tr>
                       <th width="15%">節數</th>
-                      <th width="25%">座號姓名</th>
-                      <th width="40%">違規項目</th>
-                      <th width="20%">登記人</th>
+                      <th width="20%">座號姓名</th>
+                      <th width="35%">違規項目</th>
+                      <th width="15%">登記人</th>
+                      <!-- 💡 導師專屬：操作欄位 -->
+                      <th width="15%" v-if="userRole === '導師'">操作</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -232,6 +243,11 @@
                       </td>
                       <td class="violation-cell">{{ rec.violation_name }}</td>
                       <td>{{ rec.recorded_by }}</td>
+                      <!-- 💡 導師專屬：編輯與刪除按鈕 -->
+                      <td v-if="userRole === '導師'" class="action-cell">
+                        <button @click="editRecord(rec)" class="btn-edit-sm">編輯</button>
+                        <button @click="deleteRecord(rec.id)" class="btn-del-sm">刪除</button>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -269,6 +285,10 @@ const userRole = ref('')
 const students = ref([])
 const violationTypes = ref([])
 const disciplineRecords = ref([])
+
+// 💡 編輯狀態變數
+const editingRecordId = ref(null)
+
 const form = ref({ 
   studentId: '', 
   violationName: '', 
@@ -278,8 +298,7 @@ const form = ref({
 const newTypeName = ref('')
 const isSubmitting = ref(false)
 
-// 💡 新增：視圖切換與搜尋過濾變數
-const viewMode = ref('overview') // 'overview' 或 'calendar'
+const viewMode = ref('overview')
 const searchDate = ref(getToday())
 const searchPeriod = ref('')
 
@@ -383,29 +402,83 @@ const fetchRecords = async () => {
   if (data) disciplineRecords.value = data
 }
 
+// 💡 進入編輯模式
+const editRecord = (rec) => {
+  editingRecordId.value = rec.id
+  form.value.studentId = rec.student_id
+  form.value.violationName = rec.violation_name
+  // 處理舊資料沒有日期的狀況
+  form.value.violationDate = rec.violation_date || rec.created_at.split('T')[0]
+  form.value.violationPeriod = rec.violation_period || ''
+  
+  // 滾動到頁面頂端方便編輯
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+// 💡 取消編輯，清空表單
+const cancelEdit = () => {
+  editingRecordId.value = null
+  form.value.studentId = ''
+  form.value.violationName = ''
+  form.value.violationDate = getToday()
+  form.value.violationPeriod = ''
+}
+
+// 💡 整合新增與更新的送出函式
 const submitRecord = async () => {
   isSubmitting.value = true
   try {
-    const { error } = await supabase.from('discipline_records').insert({
-      student_id: form.value.studentId,
-      violation_name: form.value.violationName,
-      violation_date: form.value.violationDate,
-      violation_period: form.value.violationPeriod,
-      recorded_by: userRole.value
-    })
+    if (editingRecordId.value) {
+      // 編輯更新模式
+      const { error } = await supabase.from('discipline_records')
+        .update({
+          student_id: form.value.studentId,
+          violation_name: form.value.violationName,
+          violation_date: form.value.violationDate,
+          violation_period: form.value.violationPeriod,
+        })
+        .eq('id', editingRecordId.value)
+      
+      if (error) throw error
+      alert('✅ 違規紀錄更新成功！')
+    } else {
+      // 全新登入模式
+      const { error } = await supabase.from('discipline_records').insert({
+        student_id: form.value.studentId,
+        violation_name: form.value.violationName,
+        violation_date: form.value.violationDate,
+        violation_period: form.value.violationPeriod,
+        recorded_by: userRole.value
+      })
+      
+      if (error) throw error
+      alert('✅ 違規登記成功！')
+    }
     
-    if (error) throw error
-    alert('✅ 違規登記成功！')
-    
-    form.value.studentId = ''
-    form.value.violationName = ''
-    form.value.violationPeriod = ''
-    // 日期保留今天，方便連續登記
+    cancelEdit() // 復原表單為預設狀態
     await fetchRecords()
   } catch (error) {
-    alert('❌ 登記失敗：' + error.message)
+    alert('❌ 處理失敗：' + error.message)
   } finally {
     isSubmitting.value = false
+  }
+}
+
+// 💡 刪除單筆紀錄
+const deleteRecord = async (id) => {
+  if (!confirm("確定要刪除這筆違規紀錄嗎？(此動作無法復原)")) return
+  try {
+    const { error } = await supabase.from('discipline_records').delete().eq('id', id)
+    if (error) throw error
+    alert('✅ 紀錄已刪除！')
+    
+    // 如果正在編輯該筆紀錄，一併取消編輯狀態
+    if (editingRecordId.value === id) {
+      cancelEdit()
+    }
+    await fetchRecords()
+  } catch (error) {
+    alert('❌ 刪除失敗：' + error.message)
   }
 }
 
@@ -442,7 +515,6 @@ const formatRecordTime = (rec) => {
   return formatTime(rec.created_at)
 }
 
-// 💡 用於「統計總覽」：分組統計資料
 const groupedRecords = computed(() => {
   const groups = {}
   disciplineRecords.value.forEach(record => {
@@ -462,21 +534,13 @@ const groupedRecords = computed(() => {
   })
 })
 
-// 💡 新增用於「日期查詢」：依條件篩選出特定日期的資料，舊資料如果沒有日期會去抓建立時間
 const filteredRecordsByDate = computed(() => {
   return disciplineRecords.value.filter(rec => {
-    // 找出該筆紀錄的發生日期
     const recDate = rec.violation_date || rec.created_at.split('T')[0]
-    
-    // 日期篩選
     if (searchDate.value && recDate !== searchDate.value) return false
-    
-    // 節數篩選
     if (searchPeriod.value && rec.violation_period !== searchPeriod.value) return false
-    
     return true
   }).sort((a, b) => {
-    // 預設按節數/時間排序 (這裡簡單以原始紀錄時間排序)
     return new Date(b.created_at) - new Date(a.created_at)
   })
 })
@@ -532,10 +596,15 @@ const filteredRecordsByDate = computed(() => {
   font-weight: bold; 
   cursor: pointer; 
   font-size: 1.1rem; 
-  margin-top: 10px;
 }
 .btn-primary { background: #10b981; }
 .btn-submit:disabled, .btn-primary:disabled { background: #9ca3af; cursor: not-allowed; }
+
+/* 💡 新增：表單按鈕群組與取消按鈕 */
+.form-actions { display: flex; gap: 10px; margin-top: 15px; }
+.form-actions button { flex: 1; }
+.btn-cancel { background: #94a3b8; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1.1rem; transition: 0.2s;}
+.btn-cancel:hover { background: #64748b; }
 
 .back-link { text-align: center; margin-top: 20px; }
 .back-link a { color: #64748b; text-decoration: none; font-weight: bold; }
@@ -607,6 +676,17 @@ const filteredRecordsByDate = computed(() => {
 .count-badge { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 12px; font-size: 0.85rem; margin-left: 8px; }
 .period-badge { background: #dbeafe; color: #1e40af; padding: 4px 8px; border-radius: 6px; font-size: 0.85rem; font-weight: bold;}
 .time-list { margin: 0; padding-left: 15px; font-size: 0.9rem; color: #64748b;}
+
+/* 💡 新增：清單與表格中的操作按鈕樣式 */
+.time-list-item { display: flex; align-items: center; margin-bottom: 4px; }
+.action-icons { margin-left: 10px; display: inline-flex; gap: 5px; }
+.icon-btn { background: none; border: none; cursor: pointer; font-size: 0.9rem; opacity: 0.5; transition: 0.2s; padding: 0;}
+.icon-btn:hover { opacity: 1; }
+.action-cell { display: flex; gap: 5px; }
+.btn-edit-sm { background: #f59e0b; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85rem;}
+.btn-edit-sm:hover { background: #d97706; }
+.btn-del-sm { background: #ef4444; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85rem;}
+.btn-del-sm:hover { background: #dc2626; }
 
 @media (max-width: 1024px) {
   .main-content { flex-direction: column; }
