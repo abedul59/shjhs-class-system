@@ -35,13 +35,21 @@
               {{ showSeatingChartLocal ? '🙈 隱藏教室座位表' : '👀 顯示教室座位表' }}
             </button>
 
-            <!-- 💡 新增：加入 v-if 綁定導師後台的設定值 -->
             <button 
               v-if="hygieneData.isVisibleOnIndex"
               @click="showHygieneLocal = !showHygieneLocal" 
               class="btn btn-sky"
             >
               {{ showHygieneLocal ? '🙈 隱藏衛生工作' : '🧹 顯示衛生工作' }}
+            </button>
+
+            <!-- 💡 新增：查詢聯絡簿歷史按鈕 -->
+            <button 
+              v-if="isHistoryVisibleOnIndex" 
+              @click="openContactHistory" 
+              class="btn btn-pink"
+            >
+              📅 查詢近期聯絡簿
             </button>
           </div>
         </div>
@@ -120,11 +128,10 @@
       </div>
     </div>
 
-    <!-- 班級衛生工作顯示區 (加入雙重 v-if 保險判斷) -->
+    <!-- 班級衛生工作顯示區 -->
     <div v-if="hygieneData.isVisibleOnIndex && showHygieneLocal" class="hygiene-display-board">
       <h3 class="hygiene-main-title">🧹 班級衛生工作管理</h3>
       
-      <!-- 唯讀版分頁切換 -->
       <div class="tabs-container-readonly">
         <button class="tab-btn" :class="{ active: activeHygieneTab === 'morning' }" @click="activeHygieneTab = 'morning'">🌅 早上掃地</button>
         <button class="tab-btn" :class="{ active: activeHygieneTab === 'lunch' }" @click="activeHygieneTab = 'lunch'">🍱 中午搬餐</button>
@@ -132,7 +139,6 @@
       </div>
 
       <div class="hygiene-wrapper">
-        <!-- 1. 早上掃地管理 -->
         <div v-show="activeHygieneTab === 'morning'" class="hygiene-content">
           <h3 class="hygiene-content-title" v-html="formatNL(hygieneData.morning.title)"></h3>
           <table class="custom-table morning-table">
@@ -169,7 +175,6 @@
           <div class="footer-note" v-html="formatNL(hygieneData.morning.note)"></div>
         </div>
 
-        <!-- 2. 中午搬餐管理 -->
         <div v-show="activeHygieneTab === 'lunch'" class="hygiene-content">
           <h3 class="hygiene-content-title" v-html="formatNL(hygieneData.lunch.title)"></h3>
           <div class="hygiene-sub-title" v-html="formatNL(hygieneData.lunch.sub)"></div>
@@ -209,7 +214,6 @@
           <div class="footer-note mt-10 text-sm" v-html="formatNL(hygieneData.lunch.note2)"></div>
         </div>
 
-        <!-- 3. 小隊工作管理 -->
         <div v-show="activeHygieneTab === 'squad'" class="hygiene-content">
           <h3 class="hygiene-content-title" v-html="formatNL(hygieneData.squad.title)"></h3>
           <table class="custom-table squad-table">
@@ -248,6 +252,28 @@
       </div>
     </div>
 
+    <!-- 💡 新增：歷史聯絡簿查詢的彈出視窗 -->
+    <div v-if="showContactHistoryModal" class="modal-overlay" @click.self="showContactHistoryModal = false">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>📅 近七日聯絡簿紀錄</h3>
+          <button @click="showContactHistoryModal = false" class="close-btn">✖</button>
+        </div>
+        <div class="modal-body">
+          <div v-if="isLoadingHistory" class="loading-state">⏳ 載入中...</div>
+          <div v-else-if="contactHistoryList.length === 0" class="empty-state">近七日無聯絡簿紀錄</div>
+          <div v-else class="history-timeline">
+            <div v-for="hist in contactHistoryList" :key="hist.record_date" class="history-card">
+              <div class="history-date">{{ formatHistDate(hist.record_date) }}</div>
+              <ul class="item-list contact-list-dark">
+                <li v-for="(item, idx) in hist.contact_items" :key="idx">{{ idx + 1 }}. {{ item }}</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <EmergencyModal v-if="showEmergencyModal" @close="showEmergencyModal = false" />
   </div>
 </template>
@@ -261,8 +287,14 @@ const showSeatingChartLocal = ref(false)
 const showHygieneLocal = ref(false)
 const activeHygieneTab = ref('morning')
 
+// 💡 新增歷史查詢相關變數
+const isHistoryVisibleOnIndex = ref(false)
+const showContactHistoryModal = ref(false)
+const isLoadingHistory = ref(false)
+const contactHistoryList = ref([])
+
 const defaultHygieneData = {
-  isVisibleOnIndex: false, // 💡 新增控制變數預設值
+  isVisibleOnIndex: false,
   morning: {
     title: '704 班 教室和外掃區 早上掃地工作分配表 2021/10/18 開始',
     note: '請先做好垃圾分類。每天早上和週五下午都要倒資源回收垃圾。\n每天早上和週五下午打掃時間視情況倒一般垃圾，超過八分滿時得立刻倒。週五下午和例假日前一天下午一定得倒光。',
@@ -322,10 +354,10 @@ const openEmergencyModal = () => {
 
 const openDiscipline = () => { navigateTo('/discipline') }
 
-const d = new Date()
-const todayISO = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+const dDate = new Date()
+const todayISO = `${dDate.getFullYear()}-${String(dDate.getMonth()+1).padStart(2,'0')}-${String(dDate.getDate()).padStart(2,'0')}`
 const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
-const todayDisplay = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日${days[d.getDay()]}`
+const todayDisplay = `${dDate.getFullYear()}年${dDate.getMonth()+1}月${dDate.getDate()}日${days[dDate.getDay()]}`
 
 const currentTime = ref('')
 let timer = null
@@ -362,12 +394,17 @@ const fetchData = async () => {
   parentNotices.value = boardData?.notices || []
   contactBookItems.value = boardData?.contact_items || []
 
-  const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data'])
+  // 💡 確保讀取 contact_history_visible 開關設定
+  const { data: sysData } = await supabase.from('system_settings').select('*')
+    .in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible'])
   
   if (sysData) {
     const pwdSetting = sysData.find(s => s.setting_key === 'board_officer_passwords')
     if (pwdSetting) officerPasswords.value = { ...officerPasswords.value, ...pwdSetting.setting_value }
     
+    const histSetting = sysData.find(s => s.setting_key === 'contact_history_visible')
+    if (histSetting) isHistoryVisibleOnIndex.value = histSetting.setting_value
+
     const seatSetting = sysData.find(s => s.setting_key === 'seating_chart_data')
     if (seatSetting) {
       const rawValue = seatSetting.setting_value || {}
@@ -427,6 +464,38 @@ const saveContactItems = async () => {
     contactBookItems.value = [...editingContactItems.value]; isEditingContact.value = false
   } catch (error) { alert("❌ 聯絡簿儲存失敗：" + error.message) }
 }
+
+// 💡 新增：處理開啟歷史查詢與撈取過去 7 天資料的邏輯
+const openContactHistory = async () => {
+  showContactHistoryModal.value = true
+  isLoadingHistory.value = true
+  
+  const dObj = new Date()
+  const endStr = `${dObj.getFullYear()}-${String(dObj.getMonth()+1).padStart(2,'0')}-${String(dObj.getDate()).padStart(2,'0')}`
+  
+  dObj.setDate(dObj.getDate() - 7)
+  const startStr = `${dObj.getFullYear()}-${String(dObj.getMonth()+1).padStart(2,'0')}-${String(dObj.getDate()).padStart(2,'0')}`
+
+  const { data } = await supabase.from('contact_books')
+    .select('record_date, contact_items')
+    .gte('record_date', startStr)
+    .lte('record_date', endStr)
+    .order('record_date', { ascending: false })
+
+  if (data) {
+    contactHistoryList.value = data.filter(r => r.contact_items && r.contact_items.length > 0)
+  } else {
+    contactHistoryList.value = []
+  }
+  isLoadingHistory.value = false
+}
+
+const formatHistDate = (dateStr) => {
+  const [y, m, d] = dateStr.split('-')
+  const dt = new Date(y, m - 1, d)
+  const daysOfWeek = ['日', '一', '二', '三', '四', '五', '六']
+  return `${m}月${d}日 (星期${daysOfWeek[dt.getDay()]})`
+}
 </script>
 
 <style scoped>
@@ -460,6 +529,7 @@ const saveContactItems = async () => {
 .btn-cyan { background: #06b6d4; }
 .btn-indigo { background: #6366f1; } 
 .btn-sky { background: #0ea5e9; }
+.btn-pink { background: #ec4899; } /* 💡 歷史紀錄按鈕的顏色 */
 
 .stats-row { display: flex; gap: 15px; }
 .stat-box { flex: 1; padding: 12px; border-radius: 6px; text-align: center; font-size: 1.05rem; font-weight: bold; }
@@ -488,6 +558,18 @@ const saveContactItems = async () => {
 .action-right { display: flex; gap: 10px; }
 .cancel-btn { background: #64748b; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; }
 .save-btn { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+
+/* 💡 新增：歷史聯絡簿視窗樣式 */
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 9999; padding: 20px; box-sizing: border-box; }
+.modal-content { background: white; width: 100%; max-width: 500px; border-radius: 12px; display: flex; flex-direction: column; max-height: 85vh; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+.modal-header h3 { margin: 0; color: #1e293b; font-size: 1.2rem; }
+.close-btn { background: none; border: none; font-size: 1.3rem; cursor: pointer; color: #64748b; }
+.modal-body { padding: 20px; overflow-y: auto; background: #f1f5f9; }
+.history-card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
+.history-date { font-weight: bold; color: #f59e0b; border-bottom: 1px dashed #cbd5e1; padding-bottom: 8px; margin-bottom: 10px; font-size: 1.1rem; }
+.loading-state, .empty-state { text-align: center; padding: 30px; color: #64748b; font-size: 1.1rem; }
+.contact-list-dark li { color: #334155; } /* 強制在白底的彈出視窗中顯示深色文字 */
 
 /* 座位表顯示區 */
 .seating-display-board { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-top: 10px; }
