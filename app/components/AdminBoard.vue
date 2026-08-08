@@ -48,7 +48,6 @@
         <div class="editor-panel">
           <h4 class="section-title">📝 聯絡簿事項 (前台黑板)</h4>
           
-          <!-- 💡 新增：前台查詢開關 -->
           <div class="toggle-setting-box">
             <label class="toggle-label">
               <input type="checkbox" v-model="isHistoryVisibleOnIndex" @change="saveHistorySetting" />
@@ -128,23 +127,67 @@
             👈 請從上方/左側月曆點選日期以查看歷史紀錄
           </div>
           <div v-else class="detail-content">
-            <h5 class="detail-title">🗓️ {{ selectedHistoryDate }} 歷史紀錄</h5>
             
-            <div class="history-section">
-              <h6>📢 家長須知</h6>
-              <div v-if="selectedHistoryNotices.length > 0" class="history-list">
-                <div v-for="(n, i) in selectedHistoryNotices" :key="'hn-'+i" class="history-item"><span class="bullet">📌</span> {{ n }}</div>
+            <!-- 💡 新增：標題與編輯按鈕並排 -->
+            <div class="detail-header-flex">
+              <h5 class="detail-title">🗓️ {{ selectedHistoryDate }} 歷史紀錄</h5>
+              <button v-if="!isEditingHistory" @click="startEditHistory" class="edit-history-btn">✏️ 編輯</button>
+            </div>
+            
+            <!-- 💡 唯讀模式 -->
+            <div v-if="!isEditingHistory">
+              <div class="history-section">
+                <h6>📢 家長須知</h6>
+                <div v-if="selectedHistoryNotices.length > 0" class="history-list">
+                  <div v-for="(n, i) in selectedHistoryNotices" :key="'hn-'+i" class="history-item"><span class="bullet">📌</span> {{ n }}</div>
+                </div>
+                <div v-else class="empty-text">無發布須知</div>
               </div>
-              <div v-else class="empty-text">無發布須知</div>
+
+              <div class="history-section" style="margin-top: 20px;">
+                <h6>📝 聯絡簿事項</h6>
+                <div v-if="selectedHistoryContactItems.length > 0" class="history-list">
+                  <div v-for="(c, i) in selectedHistoryContactItems" :key="'hc-'+i" class="history-item"><span class="bullet">✏️</span> {{ c }}</div>
+                </div>
+                <div v-else class="empty-text">無聯絡簿事項</div>
+              </div>
             </div>
 
-            <div class="history-section" style="margin-top: 20px;">
-              <h6>📝 聯絡簿事項</h6>
-              <div v-if="selectedHistoryContactItems.length > 0" class="history-list">
-                <div v-for="(c, i) in selectedHistoryContactItems" :key="'hc-'+i" class="history-item"><span class="bullet">✏️</span> {{ c }}</div>
+            <!-- 💡 編輯模式 -->
+            <div v-else class="history-edit-mode">
+              <div class="history-section">
+                <h6>📢 家長須知 (編輯)</h6>
+                <div class="notice-edit-list">
+                  <div v-for="(n, i) in editHistoryNotices" :key="'ehn-'+i" class="edit-item">
+                    <span class="bullet">📌</span>
+                    <input v-model="editHistoryNotices[i]" type="text" class="edit-input notice-input" />
+                    <button @click="removeHistoryNotice(i)" class="del-row-btn">🗑️</button>
+                  </div>
+                  <button @click="addHistoryNotice" class="add-btn">➕ 新增</button>
+                </div>
               </div>
-              <div v-else class="empty-text">無聯絡簿事項</div>
+
+              <div class="history-section" style="margin-top: 20px;">
+                <h6>📝 聯絡簿事項 (編輯)</h6>
+                <div class="notice-edit-list">
+                  <div v-for="(c, i) in editHistoryContactItems" :key="'ehc-'+i" class="edit-item">
+                    <span class="bullet">✏️</span>
+                    <input v-model="editHistoryContactItems[i]" type="text" class="edit-input notice-input" />
+                    <button @click="removeHistoryContactItem(i)" class="del-row-btn">🗑️</button>
+                  </div>
+                  <button @click="addHistoryContactItem" class="add-btn">➕ 新增</button>
+                </div>
+              </div>
+
+              <!-- 儲存/取消按鈕 -->
+              <div class="edit-actions-row">
+                <button @click="cancelEditHistory" class="cancel-btn">取消</button>
+                <button @click="saveHistory" class="save-btn" :disabled="isSavingHistory">
+                  {{ isSavingHistory ? '儲存中...' : '💾 儲存歷史紀錄' }}
+                </button>
+              </div>
             </div>
+
           </div>
         </div>
 
@@ -163,8 +206,6 @@ const todayDisplay = d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'lo
 const adminNotices = ref([]) 
 const contactBookItems = ref([]) 
 const officerPasswords = ref({ academic: '', counseling: '' }) 
-
-// 💡 新增：前台查詢開關狀態
 const isHistoryVisibleOnIndex = ref(false)
 
 const isSavingBoard = ref(false); const isSendingEmail = ref(false); const isSavingNoticeTemplate = ref(false); const isSavingPwd = ref(false)
@@ -176,6 +217,12 @@ const monthRecords = ref([])
 const selectedHistoryDate = ref('')
 const selectedHistoryNotices = ref([])
 const selectedHistoryContactItems = ref([])
+
+// 💡 歷史紀錄編輯專用變數
+const isEditingHistory = ref(false)
+const isSavingHistory = ref(false)
+const editHistoryNotices = ref([])
+const editHistoryContactItems = ref([])
 
 const fetchData = async () => {
   const { data: boardData } = await supabase.from('contact_books').select('notices, contact_items').eq('record_date', todayISO).maybeSingle()
@@ -190,7 +237,6 @@ const fetchData = async () => {
     const pwdData = sysData.find(s => s.setting_key === 'board_officer_passwords')
     if (pwdData) officerPasswords.value = pwdData.setting_value
 
-    // 💡 讀取開關狀態
     const histData = sysData.find(s => s.setting_key === 'contact_history_visible')
     if (histData) isHistoryVisibleOnIndex.value = histData.setting_value
   }
@@ -199,7 +245,6 @@ const fetchData = async () => {
 }
 onMounted(() => fetchData())
 
-// 💡 新增：即時儲存開關狀態
 const saveHistorySetting = async () => {
   await supabase.from('system_settings').upsert({
     setting_key: 'contact_history_visible',
@@ -301,13 +346,65 @@ const calendarDays = computed(() => {
   return days
 })
 
-const prevMonth = async () => { if (calMonth.value === 0) { calYear.value--; calMonth.value = 11 } else { calMonth.value-- } selectedHistoryDate.value = ''; await fetchMonthRecords() }
-const nextMonth = async () => { if (calMonth.value === 11) { calYear.value++; calMonth.value = 0 } else { calMonth.value++ } selectedHistoryDate.value = ''; await fetchMonthRecords() }
+const prevMonth = async () => { if (calMonth.value === 0) { calYear.value--; calMonth.value = 11 } else { calMonth.value-- } selectedHistoryDate.value = ''; isEditingHistory.value = false; await fetchMonthRecords() }
+const nextMonth = async () => { if (calMonth.value === 11) { calYear.value++; calMonth.value = 0 } else { calMonth.value++ } selectedHistoryDate.value = ''; isEditingHistory.value = false; await fetchMonthRecords() }
+
 const viewHistory = (day) => {
   if (day.empty) return
   selectedHistoryDate.value = day.dateStr
   selectedHistoryNotices.value = day.notices
   selectedHistoryContactItems.value = day.contactItems
+  // 💡 切換日期時自動關閉編輯模式
+  isEditingHistory.value = false
+}
+
+// 💡 歷史紀錄的編輯邏輯
+const startEditHistory = () => {
+  editHistoryNotices.value = [...selectedHistoryNotices.value]
+  editHistoryContactItems.value = [...selectedHistoryContactItems.value]
+  isEditingHistory.value = true
+}
+
+const cancelEditHistory = () => {
+  isEditingHistory.value = false
+}
+
+const addHistoryNotice = () => editHistoryNotices.value.push('')
+const removeHistoryNotice = (i) => editHistoryNotices.value.splice(i, 1)
+const addHistoryContactItem = () => editHistoryContactItems.value.push('')
+const removeHistoryContactItem = (i) => editHistoryContactItems.value.splice(i, 1)
+
+const saveHistory = async () => {
+  isSavingHistory.value = true
+  try {
+    // 將修改寫入資料庫
+    await supabase.from('contact_books').upsert({
+      record_date: selectedHistoryDate.value,
+      notices: editHistoryNotices.value,
+      contact_items: editHistoryContactItems.value
+    }, { onConflict: 'record_date' })
+    
+    alert('✅ 歷史紀錄已成功更新！')
+    
+    // 更新本地畫面的唯讀狀態
+    selectedHistoryNotices.value = [...editHistoryNotices.value]
+    selectedHistoryContactItems.value = [...editHistoryContactItems.value]
+    isEditingHistory.value = false
+    
+    // 重新抓取月曆小圓點狀態
+    await fetchMonthRecords()
+    
+    // 💡 智慧連動：如果編輯的剛好是「今天」，上半部的輸入框也跟著更新
+    if (selectedHistoryDate.value === todayISO) {
+      adminNotices.value = [...editHistoryNotices.value]
+      contactBookItems.value = [...editHistoryContactItems.value]
+    }
+
+  } catch (error) {
+    alert('❌ 儲存失敗：' + error.message)
+  } finally {
+    isSavingHistory.value = false
+  }
 }
 </script>
 
@@ -316,7 +413,6 @@ const viewHistory = (day) => {
 .table-header h3 { margin: 0; color: #334155; }
 .section-title { margin: 0 0 10px 0; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; font-size: 1.15rem; }
 
-/* 💡 新增開關樣式 */
 .toggle-setting-box { margin-bottom: 15px; padding: 10px; background: #f0fdfa; border: 1px dashed #0f766e; border-radius: 6px; }
 .toggle-label { font-weight: bold; color: #0f766e; display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.95rem; }
 
@@ -332,8 +428,9 @@ const viewHistory = (day) => {
 
 .full-width-action { display: flex; justify-content: center; padding-top: 15px; border-top: 2px dashed #cbd5e1; }
 .lg-btn { font-size: 1.2rem; padding: 15px 30px; width: 100%; max-width: 600px; }
-.save-btn { background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; } 
+.save-btn { background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; padding: 10px 15px;} 
 .email-btn { background: #f59e0b; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; }
+.cancel-btn { background: #64748b; color: white; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; }
 
 .email-editor-section { background: #f1f5f9; border-radius: 8px; padding: 15px; border: 1px solid #cbd5e1; }
 .editor-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;}
@@ -372,8 +469,13 @@ const viewHistory = (day) => {
 .cal-date-num { font-weight: bold; font-size: 1.1rem; }
 .record-dot { width: 6px; height: 6px; background: #3b82f6; border-radius: 50%; margin-top: 4px; }
 
+/* 💡 新增：歷史紀錄編輯相關樣式 */
+.detail-header-flex { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #cbd5e1; padding-bottom: 10px; margin-bottom: 15px; }
+.edit-history-btn { background: #f59e0b; color: white; border: none; padding: 5px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.9rem; }
+.edit-actions-row { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px dashed #cbd5e1;}
+
 .empty-detail { text-align: center; color: #94a3b8; margin-top: 50px; font-size: 1.1rem; }
-.detail-title { margin: 0 0 15px 0; font-size: 1.2rem; color: #1e293b; border-bottom: 1px dashed #cbd5e1; padding-bottom: 10px; }
+.detail-title { margin: 0; font-size: 1.2rem; color: #1e293b; }
 .history-section h6 { font-size: 1.05rem; color: #475569; margin: 0 0 10px 0; }
 .history-list { display: flex; flex-direction: column; gap: 8px; }
 .history-item { font-size: 1.05rem; color: #334155; line-height: 1.4; word-break: break-all; }
