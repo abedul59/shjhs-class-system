@@ -49,7 +49,6 @@
           <button @click="toggleRotation" class="btn-rotate">
             🔄 旋轉版面 (目前: {{ isRotated ? '反向' : '正向' }})
           </button>
-          <!-- 💡 新增：匯出/列印按鈕 -->
           <button @click="showPrintModal = true" class="btn-print">
             📄 產生 PDF / 列印
           </button>
@@ -133,7 +132,7 @@
       </div>
     </div>
 
-    <!-- 💡 新增：列印設定彈出視窗 -->
+    <!-- 列印設定彈出視窗 -->
     <div v-if="showPrintModal" class="modal-overlay screen-only">
       <div class="modal-content">
         <h3 class="modal-title">📄 設定匯出內容</h3>
@@ -161,21 +160,29 @@
             <textarea v-model="printData.rolesRight" class="form-control" rows="8"></textarea>
           </div>
         </div>
+        
+        <!-- 💡 更新：加入記憶設定的按鈕 -->
         <div class="modal-actions">
-          <button @click="showPrintModal = false" class="btn-cancel">取消</button>
-          <button @click="triggerPrint" class="btn-print-confirm">🖨️ 確定產生 PDF / 列印</button>
+          <div class="action-left">
+            <button @click="savePrintTemplate" class="btn-save-template" :disabled="isSavingPrint">
+              {{ isSavingPrint ? '儲存中...' : '💾 記憶設定' }}
+            </button>
+          </div>
+          <div class="action-right">
+            <button @click="showPrintModal = false" class="btn-cancel">取消</button>
+            <button @click="triggerPrint" class="btn-print-confirm">🖨️ 確定產生 PDF / 列印</button>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- 💡 新增：純粹用於列印/匯出 PDF 的隱藏版面 -->
+    <!-- 純粹用於列印/匯出 PDF 的隱藏版面 -->
     <div class="print-only-layout">
       <div class="print-page-header">
         {{ printData.title }} 共 {{ printData.count }} 人 實施日期：{{ printData.date }}
       </div>
       
       <table class="print-seat-table">
-        <!-- 依照圖片，5行6列 -->
         <tr v-for="rowIndex in 5" :key="'p-row-'+rowIndex">
           <td v-for="colIndex in 6" :key="'p-col-'+colIndex">
             <template v-if="!getPrintSeat(rowIndex, colIndex).isHidden">
@@ -226,8 +233,9 @@ const seatSettings = ref({
   otherSize: 14, otherColor: '#94a3b8'
 })
 
-// 💡 列印設定資料
 const showPrintModal = ref(false)
+const isSavingPrint = ref(false) // 💡 記憶設定的狀態
+
 const printData = ref({
   title: '7年 4 班 座位表',
   count: 26,
@@ -313,6 +321,11 @@ const fetchLayout = async () => {
         seatSettings.value.otherColor = data.setting_value.settings.fontColor
       }
     }
+    
+    // 💡 讀取暫存的列印設定
+    if (data.setting_value.printData) {
+      printData.value = { ...printData.value, ...data.setting_value.printData }
+    }
   } else {
     seatsList.value = initSeats()
   }
@@ -321,10 +334,25 @@ const fetchLayout = async () => {
 const saveLayout = async () => {
   isSaving.value = true
   try {
-    const payload = { seats: seatsList.value, isRotated: isRotated.value, isVisible: isVisibleOnIndex.value, settings: seatSettings.value }
+    // 💡 主儲存也順便包含列印資料
+    const payload = { seats: seatsList.value, isRotated: isRotated.value, isVisible: isVisibleOnIndex.value, settings: seatSettings.value, printData: printData.value }
     await supabase.from('system_settings').upsert({ setting_key: 'seating_chart_data', setting_value: payload }, { onConflict: 'setting_key' })
     alert('✅ 座位表設定已成功儲存並發布！')
   } catch (error) { alert('❌ 儲存失敗') } finally { isSaving.value = false }
+}
+
+// 💡 專屬儲存列印文字的按鈕行為
+const savePrintTemplate = async () => {
+  isSavingPrint.value = true
+  try {
+    const payload = { seats: seatsList.value, isRotated: isRotated.value, isVisible: isVisibleOnIndex.value, settings: seatSettings.value, printData: printData.value }
+    await supabase.from('system_settings').upsert({ setting_key: 'seating_chart_data', setting_value: payload }, { onConflict: 'setting_key' })
+    alert('✅ 列印文字內容已成功記憶！下次開啟將自動載入。')
+  } catch (error) {
+    alert('❌ 記憶設定失敗：' + error.message)
+  } finally {
+    isSavingPrint.value = false
+  }
 }
 
 const toggleSeatVisibility = (seat) => { seat.isHidden = !seat.isHidden }
@@ -340,7 +368,6 @@ const onDrop = (event, dropIndex) => {
 }
 const toggleRotation = () => { isRotated.value = !isRotated.value }
 
-// 💡 計算實際對應的座位物件 (考量是否旋轉版面)
 const getPrintSeat = (row, col) => {
   let index = (row - 1) * 6 + (col - 1)
   if (isRotated.value) {
@@ -349,7 +376,6 @@ const getPrintSeat = (row, col) => {
   return seatsList.value[index] || { isHidden: true }
 }
 
-// 💡 觸發列印
 const triggerPrint = () => {
   showPrintModal.value = false
   setTimeout(() => {
@@ -429,14 +455,19 @@ const triggerPrint = () => {
 .desk-controls { background: white; padding: 5px 10px; border-radius: 4px; border: 1px solid #cbd5e1; }
 .toggle-label { font-weight: bold; color: #475569; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; }
 
-/* 💡 匯出設定視窗樣式 */
+/* 匯出設定視窗樣式 */
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000;}
 .modal-content { background: white; padding: 25px; border-radius: 12px; width: 100%; max-width: 600px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
 .modal-title { margin-top: 0; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; color: #1e293b; }
 .form-row { display: flex; gap: 15px; }
 .flex-1 { flex: 1; }
 textarea.form-control { resize: vertical; line-height: 1.5; font-family: inherit;}
-.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+/* 💡 更新：分開排版的按鈕列 */
+.modal-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
+.action-right { display: flex; gap: 10px; }
+.btn-save-template { background: #10b981; color: white; border: none; padding: 10px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+.btn-save-template:disabled { background: #9ca3af; cursor: not-allowed; }
 .btn-cancel { background: #94a3b8; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer;}
 .btn-print-confirm { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer;}
 
@@ -448,20 +479,17 @@ textarea.form-control { resize: vertical; line-height: 1.5; font-family: inherit
 }
 
 /* =========================================
-   💡 列印模式專用樣式 (模仿 Word/PDF 版面)
+   列印模式專用樣式 (模仿 Word/PDF 版面)
    ========================================= */
 @media print {
   @page { size: A4 portrait; margin: 15mm; }
   
-  /* 隱藏網頁操作介面 */
   .screen-only { display: none !important; }
   
-  /* 顯示列印版面 */
   .print-only-layout { display: block !important; width: 100%; color: black; background: white; font-family: "微軟正黑體", sans-serif; }
   
   .print-page-header { text-align: center; font-size: 16pt; font-weight: bold; margin-bottom: 15px; }
   
-  /* 座位網格表 */
   .print-seat-table { width: 100%; border-collapse: collapse; text-align: center; margin-bottom: 20px; }
   .print-seat-table td { border: 1px solid black; height: 70px; vertical-align: middle; padding: 5px; width: 16.66%; }
   
@@ -471,11 +499,9 @@ textarea.form-control { resize: vertical; line-height: 1.5; font-family: inherit
   
   .p-col-label { height: 25px !important; background-color: #f3f3f3 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 12pt;}
   
-  /* 講桌 */
   .print-desk-wrapper { text-align: center; margin-bottom: 30px; }
   .print-desk { display: inline-block; border: 1px solid black; padding: 8px 30px; font-size: 14pt; font-weight: bold; }
   
-  /* 幹部小老師表 */
   .print-roles-title { text-align: center; font-size: 14pt; font-weight: bold; margin-bottom: 5px; }
   .print-roles-table { width: 100%; border-collapse: collapse; }
   .role-cell { border: 1px solid black; padding: 10px 15px; vertical-align: top; width: 50%; }
