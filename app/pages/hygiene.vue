@@ -26,7 +26,7 @@
 
     <!-- ================= 系統主介面 ================= -->
     <div v-else class="workspace">
-      <header class="workspace-header">
+      <header class="workspace-header screen-only">
         <h2>🧹 衛生管理系統</h2>
         <div class="header-actions">
           <label v-if="isEditing" class="toggle-label">
@@ -45,18 +45,24 @@
       </header>
 
       <!-- 分頁標籤 -->
-      <div class="tabs-container">
+      <div class="tabs-container screen-only">
         <button class="tab-btn" :class="{ active: activeTab === 'morning' }" @click="activeTab = 'morning'">🌅 早上掃地管理</button>
         <button class="tab-btn" :class="{ active: activeTab === 'lunch' }" @click="activeTab = 'lunch'">🍱 中午搬餐管理</button>
         <button class="tab-btn" :class="{ active: activeTab === 'squad' }" @click="activeTab = 'squad'">🛡️ 小隊工作管理</button>
       </div>
 
-      <div class="tips" v-if="isEditing">
+      <div class="tips screen-only" v-if="isEditing">
         💡 提示：您正在編輯模式，可以直接修改表格中的所有文字。如需變色，可輸入 HTML，例如：<code>&lt;span style="color:red; font-weight:bold"&gt;紅色文字&lt;/span&gt;</code>。
       </div>
 
       <!-- ================= 1. 早上掃地管理 ================= -->
       <div v-show="activeTab === 'morning'" class="table-card">
+        
+        <!-- 💡 新增：產生 PDF / 列印按鈕 -->
+        <div class="print-actions screen-only">
+          <button @click="triggerPrint" class="btn-print">📄 產生 PDF / 預覽</button>
+        </div>
+
         <div class="editable-title">
           <input v-if="isEditing" type="text" v-model="d.morning.title" class="title-input"/>
           <h3 v-else v-html="d.morning.title"></h3>
@@ -137,6 +143,12 @@
 
       <!-- ================= 2. 中午搬餐管理 ================= -->
       <div v-show="activeTab === 'lunch'" class="table-card">
+        
+        <!-- 💡 新增：產生 PDF / 列印按鈕 -->
+        <div class="print-actions screen-only">
+          <button @click="triggerPrint" class="btn-print">📄 產生 PDF / 預覽</button>
+        </div>
+
         <div class="editable-title">
           <input v-if="isEditing" type="text" v-model="d.lunch.title" class="title-input"/>
           <h3 v-else v-html="d.lunch.title"></h3>
@@ -214,6 +226,12 @@
 
       <!-- ================= 3. 小隊工作管理 ================= -->
       <div v-show="activeTab === 'squad'" class="table-card">
+        
+        <!-- 💡 新增：產生 PDF / 列印按鈕 -->
+        <div class="print-actions screen-only">
+          <button @click="triggerPrint" class="btn-print">📄 產生 PDF / 預覽</button>
+        </div>
+
         <div class="editable-title">
           <input v-if="isEditing" type="text" v-model="d.squad.title" class="title-input"/>
           <h3 v-else v-html="d.squad.title"></h3>
@@ -227,42 +245,36 @@
           </thead>
           <tbody>
             <tr v-for="n in 6" :key="'ld-'+n">
-              <!-- 💡 將「小隊職務」改為綁定變數 -->
               <td v-if="n===1" rowspan="6"><EditText v-model="d.squad.role_1" :edit="isEditing" class="h-full" /></td>
               <td><EditText v-model="d.squad.leader_items[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.leaders[n-1]" :edit="isEditing" /></td>
               <td v-if="n===1" rowspan="6"><EditText v-model="d.squad.leader_desc" :edit="isEditing" class="h-full" /></td>
             </tr>
             <tr v-for="n in 6" :key="'dy-'+n">
-              <!-- 💡 將「小隊職務」改為綁定變數 -->
               <td v-if="n===1" rowspan="6"><EditText v-model="d.squad.role_2" :edit="isEditing" class="h-full" /></td>
               <td><EditText v-model="d.squad.duty_items[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.duties[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.duty_desc[n-1]" :edit="isEditing" /></td>
             </tr>
             <tr v-for="n in 5" :key="'hp-'+n">
-              <!-- 💡 將「小隊職務」改為綁定變數 -->
               <td v-if="n===1" rowspan="5"><EditText v-model="d.squad.role_3" :edit="isEditing" class="h-full" /></td>
               <td><EditText v-model="d.squad.helper_items[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.helpers[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.helper_desc[n-1]" :edit="isEditing" /></td>
             </tr>
             <tr v-for="n in 4" :key="'er-'+n">
-              <!-- 💡 將「小隊職務」改為綁定變數 -->
               <td v-if="n===1" rowspan="4"><EditText v-model="d.squad.role_4" :edit="isEditing" class="h-full" /></td>
               <td><EditText v-model="d.squad.errand_items[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.errands[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.errand_desc[n-1]" :edit="isEditing" /></td>
             </tr>
             <tr v-for="n in 2" :key="'mn-'+n">
-              <!-- 💡 將「小隊職務」改為綁定變數 -->
               <td v-if="n===1" rowspan="2"><EditText v-model="d.squad.role_5" :edit="isEditing" class="h-full" /></td>
               <td><EditText v-model="d.squad.minion_items[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.minions[n-1]" :edit="isEditing" /></td>
               <td v-if="n===1" rowspan="2"><EditText v-model="d.squad.minion_desc" :edit="isEditing" class="h-full" /></td>
             </tr>
             <tr v-for="n in 3" :key="'ot-'+n">
-              <!-- 💡 將「小隊職務」改為綁定變數 -->
               <td v-if="n===1" rowspan="3"><EditText v-model="d.squad.role_6" :edit="isEditing" class="h-full" /></td>
               <td><EditText v-model="d.squad.other_items[n-1]" :edit="isEditing" /></td>
               <td><EditText v-model="d.squad.others[n-1]" :edit="isEditing" /></td>
@@ -301,7 +313,6 @@ const isEditing = ref(false)
 const isSaving = ref(false)
 const activeTab = ref('morning')
 
-// 💡 預設資料：加入了 role_1 到 role_6 變數
 const defaultData = {
   isVisibleOnIndex: false, 
   morning: {
@@ -417,6 +428,17 @@ const saveData = async () => {
     isEditing.value = false
   } catch (error) { alert('❌ 儲存失敗') } finally { isSaving.value = false }
 }
+
+// 💡 觸發列印功能
+const triggerPrint = () => {
+  if (isEditing.value) {
+    alert('💡 請先點擊右上角「👁️ 切換預覽模式」退出編輯，再產生 PDF 會有最完美的排版喔！')
+    return
+  }
+  setTimeout(() => {
+    window.print()
+  }, 300)
+}
 </script>
 
 <style>
@@ -457,6 +479,11 @@ const saveData = async () => {
 
 .tips { background: #fffbeb; color: #b45309; padding: 10px 15px; border-radius: 6px; border: 1px dashed #fcd34d; margin-bottom: 20px; font-size: 0.95rem; }
 
+/* 💡 新增列印按鈕樣式 */
+.print-actions { display: flex; justify-content: flex-end; margin-bottom: 15px; }
+.btn-print { background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+.btn-print:hover { background: #2563eb; }
+
 .table-card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow-x: auto; }
 .editable-title { text-align: center; margin-bottom: 20px; }
 .editable-title h3 { margin: 0; font-size: 1.5rem; letter-spacing: 1px; color: #1e293b;}
@@ -482,5 +509,34 @@ const saveData = async () => {
   .workspace-header { flex-direction: column; text-align: center;}
   .header-actions { flex-direction: column; width: 100%;}
   .header-actions button, .toggle-label { width: 100%; justify-content: center;}
+}
+
+/* =========================================
+   💡 專屬列印排版樣式
+   ========================================= */
+@media screen {
+  .print-only { display: none !important; }
+}
+
+@media print {
+  @page { size: A4 landscape; margin: 15mm; } 
+  
+  .screen-only, .login-container, .workspace-header, .tabs-container, .tips { display: none !important; }
+  
+  .hygiene-page, .workspace, .table-card { 
+    background: white !important; 
+    padding: 0 !important; 
+    margin: 0 !important; 
+    box-shadow: none !important; 
+    border: none !important; 
+    max-width: 100% !important;
+  }
+  
+  .custom-table { width: 100% !important; page-break-inside: auto; min-width: auto !important;}
+  tr { page-break-inside: avoid; page-break-after: auto; }
+  th { background-color: #f1f5f9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .header-row th { background-color: #e2e8f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  
+  .footer-note { background: transparent !important; border: none !important; padding: 10px 0 0 0 !important; }
 }
 </style>
