@@ -30,7 +30,6 @@
             <div class="form-group"><label>信件主旨：</label><input type="text" v-model="noticeEmailSubjectTemplate" class="edit-input" /></div>
             <div class="form-group"><label>信件內容：(變數: <span v-pre>{{須知清單}}</span>)</label><textarea v-model="noticeEmailContentTemplate" rows="4" class="edit-input textarea-input"></textarea></div>
             
-            <!-- ✨ 救回的預覽畫面 -->
             <div class="email-preview-section">
               <h5>👀 信件預覽</h5>
               <div class="preview-box">
@@ -45,9 +44,18 @@
           </div>
         </div>
 
-        <!-- 區塊 B：聯絡簿事項 (前台展示與股長密碼) -->
+        <!-- 區塊 B：聯絡簿事項 -->
         <div class="editor-panel">
           <h4 class="section-title">📝 聯絡簿事項 (前台黑板)</h4>
+          
+          <!-- 💡 新增：前台查詢開關 -->
+          <div class="toggle-setting-box">
+            <label class="toggle-label">
+              <input type="checkbox" v-model="isHistoryVisibleOnIndex" @change="saveHistorySetting" />
+              開放前台首頁讓家長查詢「近一週聯絡簿紀錄」
+            </label>
+          </div>
+
           <p class="help-text">用於記錄每日作業、明日攜帶物品。前台可由股長登入編輯。</p>
           <div class="notice-edit-list">
             <div v-for="(item, index) in contactBookItems" :key="'c-'+index" class="edit-item">
@@ -58,7 +66,6 @@
             <button @click="addContactItem" class="add-btn">➕ 新增聯絡簿事項</button>
           </div>
 
-          <!-- ✨ 新增的股長密碼設定區 -->
           <div class="officer-pwd-section">
             <h5>🔒 股長聯絡簿編輯密碼設定</h5>
             <div class="form-group">
@@ -94,7 +101,6 @@
       <h4 class="section-title">📅 歷史紀錄查詢</h4>
       <div class="calendar-layout">
         
-        <!-- 左側：月曆介面 -->
         <div class="calendar-box">
           <div class="calendar-header">
             <button @click="prevMonth" class="cal-nav-btn">◀</button>
@@ -117,7 +123,6 @@
           </div>
         </div>
 
-        <!-- 右側：選定日期的紀錄詳情 -->
         <div class="history-detail-box">
           <div v-if="!selectedHistoryDate" class="empty-detail">
             👈 請從上方/左側月曆點選日期以查看歷史紀錄
@@ -155,16 +160,17 @@ const d = new Date();
 const todayISO = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 const todayDisplay = d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })
 
-// --- 雙向狀態分離 ---
-const adminNotices = ref([]) // 家長須知
-const contactBookItems = ref([]) // 聯絡簿事項
-const officerPasswords = ref({ academic: '', counseling: '' }) // 股長密碼
+const adminNotices = ref([]) 
+const contactBookItems = ref([]) 
+const officerPasswords = ref({ academic: '', counseling: '' }) 
+
+// 💡 新增：前台查詢開關狀態
+const isHistoryVisibleOnIndex = ref(false)
 
 const isSavingBoard = ref(false); const isSendingEmail = ref(false); const isSavingNoticeTemplate = ref(false); const isSavingPwd = ref(false)
 const noticeEmailSubjectTemplate = ref('📢 班級須知推播 ({{今日日期}})')
 const noticeEmailContentTemplate = ref(`各位家長您好，今日班級重要須知推播如下：\n\n{{須知清單}}\n\n班級導師 敬上`)
 
-// --- 歷史月曆狀態 ---
 const calYear = ref(d.getFullYear()); const calMonth = ref(d.getMonth())
 const monthRecords = ref([])
 const selectedHistoryDate = ref('')
@@ -172,31 +178,41 @@ const selectedHistoryNotices = ref([])
 const selectedHistoryContactItems = ref([])
 
 const fetchData = async () => {
-  // 1. 抓取今日「雙」資料
   const { data: boardData } = await supabase.from('contact_books').select('notices, contact_items').eq('record_date', todayISO).maybeSingle()
   adminNotices.value = boardData?.notices || []
   contactBookItems.value = boardData?.contact_items || []
   
-  // 2. 抓取信件範本
   const { data: tmplData } = await supabase.from('email_templates').select('*').eq('template_id', 'notice_board').maybeSingle()
   if (tmplData) { noticeEmailSubjectTemplate.value = tmplData.subject; noticeEmailContentTemplate.value = tmplData.content }
   
-  // 3. 抓取股長密碼
-  const { data: pwdData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'board_officer_passwords').maybeSingle()
-  if (pwdData?.setting_value) { officerPasswords.value = pwdData.setting_value }
+  const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', ['board_officer_passwords', 'contact_history_visible'])
+  if (sysData) {
+    const pwdData = sysData.find(s => s.setting_key === 'board_officer_passwords')
+    if (pwdData) officerPasswords.value = pwdData.setting_value
+
+    // 💡 讀取開關狀態
+    const histData = sysData.find(s => s.setting_key === 'contact_history_visible')
+    if (histData) isHistoryVisibleOnIndex.value = histData.setting_value
+  }
 
   await fetchMonthRecords()
 }
 onMounted(() => fetchData())
 
-// --- 預覽畫面計算 ---
+// 💡 新增：即時儲存開關狀態
+const saveHistorySetting = async () => {
+  await supabase.from('system_settings').upsert({
+    setting_key: 'contact_history_visible',
+    setting_value: isHistoryVisibleOnIndex.value
+  }, { onConflict: 'setting_key' })
+}
+
 const noticePreviewSubject = computed(() => noticeEmailSubjectTemplate.value.replace(/{{今日日期}}/g, todayDisplay))
 const noticePreviewContent = computed(() => {
   const listStr = adminNotices.value.length > 0 ? adminNotices.value.map(n => '📌 ' + n).join('\n') : '📌 (尚無須知事項)'
   return noticeEmailContentTemplate.value.replace(/{{須知清單}}/g, listStr)
 })
 
-// --- 雙向列表與密碼操作 ---
 const addNotice = () => adminNotices.value.push('')
 const removeNotice = (i) => adminNotices.value.splice(i, 1)
 const addContactItem = () => contactBookItems.value.push('')
@@ -212,7 +228,6 @@ const saveOfficerPasswords = async () => {
   isSavingPwd.value = false
 }
 
-// --- 共用儲存 ---
 const saveBothBoards = async () => {
   isSavingBoard.value = true
   await supabase.from('contact_books').upsert({ 
@@ -225,7 +240,6 @@ const saveBothBoards = async () => {
   await fetchMonthRecords()
 }
 
-// --- 推播邏輯 (僅推播家長須知) ---
 const saveNoticeEmailTemplate = async () => {
   isSavingNoticeTemplate.value = true
   await supabase.from('email_templates').upsert({ template_id: 'notice_board', subject: noticeEmailSubjectTemplate.value, content: noticeEmailContentTemplate.value })
@@ -260,7 +274,6 @@ const sendNoticeEmail = async () => {
   alert(`✅ 已成功推播給 ${emailList.length} 位家長！`); isSendingEmail.value = false
 }
 
-// --- 月曆歷史查詢邏輯 ---
 const fetchMonthRecords = async () => {
   const y = calYear.value; const m = String(calMonth.value + 1).padStart(2, '0')
   const startDate = `${y}-${m}-01`; const endDate = `${y}-${m}-31`
@@ -303,7 +316,10 @@ const viewHistory = (day) => {
 .table-header h3 { margin: 0; color: #334155; }
 .section-title { margin: 0 0 10px 0; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; font-size: 1.15rem; }
 
-/* 雙向版面佈局 (加入手機 RWD) */
+/* 💡 新增開關樣式 */
+.toggle-setting-box { margin-bottom: 15px; padding: 10px; background: #f0fdfa; border: 1px dashed #0f766e; border-radius: 6px; }
+.toggle-label { font-weight: bold; color: #0f766e; display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.95rem; }
+
 .board-editor-container, .history-calendar-container { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 20px; }
 .split-layout { display: flex; gap: 20px; flex-wrap: nowrap; margin-bottom: 20px; }
 .editor-panel { flex: 1; min-width: 0; background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
@@ -319,7 +335,6 @@ const viewHistory = (day) => {
 .save-btn { background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; } 
 .email-btn { background: #f59e0b; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; }
 
-/* 信件編輯區與預覽 */
 .email-editor-section { background: #f1f5f9; border-radius: 8px; padding: 15px; border: 1px solid #cbd5e1; }
 .editor-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;}
 .editor-header h4 { margin: 0; font-size: 1rem; color: #1e293b; }
@@ -335,13 +350,11 @@ const viewHistory = (day) => {
 .preview-subject { font-size: 0.95rem; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; margin-bottom: 8px; }
 .preview-body { font-size: 0.9rem; color: #475569; line-height: 1.5; white-space: pre-wrap; }
 
-/* 股長密碼設定區 */
 .officer-pwd-section { margin-top: 25px; padding-top: 15px; border-top: 2px dashed #cbd5e1; }
 .officer-pwd-section h5 { margin: 0 0 10px 0; font-size: 1.05rem; color: #1e293b; }
 .pwd-input-group { display: flex; gap: 10px; }
 .pwd-btn { margin-top: 10px; width: 100%; padding: 10px; font-size: 1rem; }
 
-/* 月曆與詳情 (加入手機 RWD) */
 .calendar-layout { display: flex; gap: 20px; flex-wrap: nowrap; }
 .calendar-box { flex: 1; min-width: 0; background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; }
 .history-detail-box { flex: 1; min-width: 0; background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
@@ -366,7 +379,6 @@ const viewHistory = (day) => {
 .history-item { font-size: 1.05rem; color: #334155; line-height: 1.4; word-break: break-all; }
 .empty-text { color: #94a3b8; font-style: italic; }
 
-/* 📱 手機版 RWD (小於 768px 時觸發上下排列) */
 @media (max-width: 768px) {
   .split-layout { flex-direction: column; }
   .calendar-layout { flex-direction: column; }
