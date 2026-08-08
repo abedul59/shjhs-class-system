@@ -58,7 +58,6 @@
       <!-- ================= 1. 早上掃地管理 ================= -->
       <div v-show="activeTab === 'morning'" class="table-card">
         
-        <!-- 💡 新增：產生 PDF / 列印按鈕 -->
         <div class="print-actions screen-only">
           <button @click="triggerPrint" class="btn-print">📄 產生 PDF / 預覽</button>
         </div>
@@ -144,7 +143,6 @@
       <!-- ================= 2. 中午搬餐管理 ================= -->
       <div v-show="activeTab === 'lunch'" class="table-card">
         
-        <!-- 💡 新增：產生 PDF / 列印按鈕 -->
         <div class="print-actions screen-only">
           <button @click="triggerPrint" class="btn-print">📄 產生 PDF / 預覽</button>
         </div>
@@ -227,7 +225,6 @@
       <!-- ================= 3. 小隊工作管理 ================= -->
       <div v-show="activeTab === 'squad'" class="table-card">
         
-        <!-- 💡 新增：產生 PDF / 列印按鈕 -->
         <div class="print-actions screen-only">
           <button @click="triggerPrint" class="btn-print">📄 產生 PDF / 預覽</button>
         </div>
@@ -429,7 +426,6 @@ const saveData = async () => {
   } catch (error) { alert('❌ 儲存失敗') } finally { isSaving.value = false }
 }
 
-// 💡 觸發列印功能
 const triggerPrint = () => {
   if (isEditing.value) {
     alert('💡 請先點擊右上角「👁️ 切換預覽模式」退出編輯，再產生 PDF 會有最完美的排版喔！')
@@ -479,7 +475,6 @@ const triggerPrint = () => {
 
 .tips { background: #fffbeb; color: #b45309; padding: 10px 15px; border-radius: 6px; border: 1px dashed #fcd34d; margin-bottom: 20px; font-size: 0.95rem; }
 
-/* 💡 新增列印按鈕樣式 */
 .print-actions { display: flex; justify-content: flex-end; margin-bottom: 15px; }
 .btn-print { background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
 .btn-print:hover { background: #2563eb; }
@@ -512,14 +507,14 @@ const triggerPrint = () => {
 }
 
 /* =========================================
-   💡 專屬列印排版樣式
+   💡 專屬列印排版樣式 (極致壓縮版)
    ========================================= */
 @media screen {
   .print-only { display: none !important; }
 }
 
 @media print {
-  @page { size: A4 landscape; margin: 15mm; } 
+  @page { size: A4 landscape; margin: 8mm; } 
   
   .screen-only, .login-container, .workspace-header, .tabs-container, .tips { display: none !important; }
   
@@ -531,12 +526,39 @@ const triggerPrint = () => {
     border: none !important; 
     max-width: 100% !important;
   }
+
+  .editable-title { margin-bottom: 5px !important; }
+  .editable-title h3 { font-size: 14pt !important; margin: 0 !important; }
+  .sub-title { margin-bottom: 5px !important; font-size: 10pt !important; }
   
-  .custom-table { width: 100% !important; page-break-inside: auto; min-width: auto !important;}
+  .custom-table { 
+    width: 100% !important; 
+    page-break-inside: auto; 
+    min-width: auto !important;
+    font-size: 10pt !important;
+  }
+  .custom-table th, .custom-table td {
+    padding: 3px 5px !important;
+    line-height: 1.2 !important;
+  }
   tr { page-break-inside: avoid; page-break-after: auto; }
   th { background-color: #f1f5f9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .header-row th { background-color: #e2e8f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   
-  .footer-note { background: transparent !important; border: none !important; padding: 10px 0 0 0 !important; }
+  .h-full { min-height: auto !important; height: auto !important; }
+  .readonly-text { padding: 1px !important; line-height: 1.2 !important; }
+
+  .footer-note { 
+    background: transparent !important; 
+    border: none !important; 
+    padding: 5px 0 0 0 !important; 
+    margin-top: 5px !important;
+    font-size: 9pt !important;
+    line-height: 1.3 !important;
+  }
+  .text-sm { font-size: 9pt !important; }
+  .text-xs { font-size: 8pt !important; }
+  .mt-15 { margin-top: 5px !important; }
+  .mt-10 { margin-top: 5px !important; }
 }
 </style>
