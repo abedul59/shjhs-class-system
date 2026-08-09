@@ -507,14 +507,14 @@ const triggerPrint = () => {
 }
 
 /* =========================================
-   💡 專屬列印排版樣式 (徹底消除第二頁)
+   💡 專屬列印排版樣式 (極致壓縮直式版)
    ========================================= */
 @media screen {
   .print-only { display: none !important; }
 }
 
 @media print {
-  @page { size: A4 landscape; margin: 10mm; } 
+  @page { size: A4 portrait; margin: 8mm; } 
   
   html, body {
     margin: 0 !important;
@@ -540,42 +540,44 @@ const triggerPrint = () => {
   }
 
   .hygiene-content {
+    display: block !important;
     padding-bottom: 0 !important;
     margin-bottom: 0 !important;
   }
 
-  .editable-title { margin-bottom: 10px !important; }
-  .editable-title h3 { font-size: 18pt !important; margin: 0 !important; }
-  .sub-title { margin-bottom: 10px !important; font-size: 12pt !important; }
+  .editable-title { margin-bottom: 5px !important; }
+  .editable-title h3 { font-size: 14pt !important; margin: 0 !important; }
+  .sub-title { margin-bottom: 5px !important; font-size: 10pt !important; }
   
   .custom-table { 
     width: 100% !important; 
     page-break-inside: auto; 
     min-width: auto !important;
-    font-size: 11pt !important; /* 放大一點，填補空白 */
+    font-size: 9pt !important;
   }
   .custom-table th, .custom-table td {
-    padding: 8px 6px !important; /* 增加留白，讓表格撐高一點 */
-    line-height: 1.4 !important;
+    padding: 2px 4px !important;
+    line-height: 1.15 !important;
+    word-wrap: break-word;
   }
   tr { page-break-inside: avoid; page-break-after: auto; }
   th { background-color: #f1f5f9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .header-row th { background-color: #e2e8f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   
   .h-full { min-height: auto !important; height: auto !important; }
-  .readonly-text { padding: 2px !important; line-height: 1.4 !important; }
+  .readonly-text { padding: 1px !important; line-height: 1.15 !important; }
 
   .footer-note { 
     background: transparent !important; 
     border: none !important; 
-    padding: 10px 0 0 0 !important; 
-    margin-top: 5px !important;
-    font-size: 10pt !important; /* 放大一點 */
-    line-height: 1.4 !important;
+    padding: 5px 0 0 0 !important; 
+    margin-top: 2px !important;
+    font-size: 8pt !important;
+    line-height: 1.2 !important;
   }
-  .text-sm { font-size: 10pt !important; }
-  .text-xs { font-size: 9pt !important; }
-  .mt-15 { margin-top: 10px !important; }
-  .mt-10 { margin-top: 10px !important; }
+  .text-sm { font-size: 8pt !important; }
+  .text-xs { font-size: 7pt !important; }
+  .mt-15 { margin-top: 5px !important; }
+  .mt-10 { margin-top: 5px !important; }
 }
 </style>
