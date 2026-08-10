@@ -17,18 +17,19 @@
           <div class="clock-display">🕒 {{ currentTime }}</div>
           
           <div class="button-group">
-            <NuxtLink to="/parent-bind" class="btn btn-orange">👨‍👩‍👧 綁定</NuxtLink>
-            <NuxtLink to="/parent-message" class="btn btn-green">💬 家長私訊</NuxtLink>
-            <NuxtLink to="/student-message" class="btn btn-blue">💬 學生私訊</NuxtLink>
-            <NuxtLink to="/assignments" class="btn btn-purple">📚 作業管理</NuxtLink>
-            <button @click="openDiscipline" class="btn btn-dark-blue">⚖️ 秩序管理</button>
-            <NuxtLink to="/hygiene" class="btn btn-cyan">🧹 衛生管理</NuxtLink>            
-            <NuxtLink to="/seats" class="btn btn-teal">🪑 座位管理</NuxtLink>
-            <button @click="openEmergencyModal" class="btn btn-red">🚨 緊急通知</button>
-            <NuxtLink to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
+            <!-- 💡 新增：全面套用 v-if 根據後台設定判斷是否顯示按鈕 -->
+            <NuxtLink v-if="indexButtonSettings.parentBind" to="/parent-bind" class="btn btn-orange">👨‍👩‍👧 綁定</NuxtLink>
+            <NuxtLink v-if="indexButtonSettings.parentMsg" to="/parent-message" class="btn btn-green">💬 家長私訊</NuxtLink>
+            <NuxtLink v-if="indexButtonSettings.studentMsg" to="/student-message" class="btn btn-blue">💬 學生私訊</NuxtLink>
+            <NuxtLink v-if="indexButtonSettings.assignments" to="/assignments" class="btn btn-purple">📚 作業管理</NuxtLink>
+            <button v-if="indexButtonSettings.discipline" @click="openDiscipline" class="btn btn-dark-blue">⚖️ 秩序管理</button>
+            <NuxtLink v-if="indexButtonSettings.hygiene" to="/hygiene" class="btn btn-cyan">🧹 衛生管理</NuxtLink>            
+            <NuxtLink v-if="indexButtonSettings.seats" to="/seats" class="btn btn-teal">🪑 座位管理</NuxtLink>
+            <button v-if="indexButtonSettings.emergency" @click="openEmergencyModal" class="btn btn-red">🚨 緊急通知</button>
+            <NuxtLink v-if="indexButtonSettings.admin" to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
             
             <button 
-              v-if="seatingChart.isVisible" 
+              v-if="seatingChart.isVisible && indexButtonSettings.seats" 
               @click="showSeatingChartLocal = !showSeatingChartLocal" 
               class="btn btn-indigo"
             >
@@ -36,14 +37,13 @@
             </button>
 
             <button 
-              v-if="hygieneData.isVisibleOnIndex"
+              v-if="hygieneData.isVisibleOnIndex && indexButtonSettings.hygiene"
               @click="showHygieneLocal = !showHygieneLocal" 
               class="btn btn-sky"
             >
               {{ showHygieneLocal ? '🙈 隱藏衛生工作' : '🧹 顯示衛生工作' }}
             </button>
 
-            <!-- 💡 新增：查詢聯絡簿歷史按鈕 -->
             <button 
               v-if="isHistoryVisibleOnIndex" 
               @click="openContactHistory" 
@@ -106,7 +106,7 @@
     </div>
 
     <!-- 班級座位表顯示區 -->
-    <div v-if="seatingChart.isVisible && showSeatingChartLocal" class="seating-display-board">
+    <div v-if="seatingChart.isVisible && showSeatingChartLocal && indexButtonSettings.seats" class="seating-display-board">
       <h3 class="seating-title">🪑 班級座位表</h3>
       <div class="seating-wrapper">
         <div :class="['seating-area', { 'is-rotated': seatingChart.isRotated }]">
@@ -129,7 +129,7 @@
     </div>
 
     <!-- 班級衛生工作顯示區 -->
-    <div v-if="hygieneData.isVisibleOnIndex && showHygieneLocal" class="hygiene-display-board">
+    <div v-if="hygieneData.isVisibleOnIndex && showHygieneLocal && indexButtonSettings.hygiene" class="hygiene-display-board">
       <h3 class="hygiene-main-title">🧹 班級衛生工作管理</h3>
       
       <div class="tabs-container-readonly">
@@ -252,7 +252,6 @@
       </div>
     </div>
 
-    <!-- 💡 新增：歷史聯絡簿查詢的彈出視窗 -->
     <div v-if="showContactHistoryModal" class="modal-overlay" @click.self="showContactHistoryModal = false">
       <div class="modal-content">
         <div class="modal-header">
@@ -287,11 +286,23 @@ const showSeatingChartLocal = ref(false)
 const showHygieneLocal = ref(false)
 const activeHygieneTab = ref('morning')
 
-// 💡 新增歷史查詢相關變數
 const isHistoryVisibleOnIndex = ref(false)
 const showContactHistoryModal = ref(false)
 const isLoadingHistory = ref(false)
 const contactHistoryList = ref([])
+
+// 💡 新增：首頁按鈕顯示設定，預設全部開啟
+const indexButtonSettings = ref({
+  parentBind: true,
+  parentMsg: true,
+  studentMsg: true,
+  assignments: true,
+  discipline: true,
+  hygiene: true,
+  seats: true,
+  emergency: true,
+  admin: true
+})
 
 const defaultHygieneData = {
   isVisibleOnIndex: false,
@@ -320,7 +331,7 @@ const defaultHygieneData = {
     move_n1: '鄭人閤、王\n聰文', move_n2: '劉子涵、楊\n佩綺', move_n3: '王翊潔、周\n宥芸', move_n4: '楊元豪', move_n5: '王麟賢、\n劉沅翰', move_n6: '林科甫',
     serve_header: '配膳組 (先打菜，\n全部同學分配\n完，再用餐)', serve_h1: '飯盒\n1-1', serve_h2: '大菜盒 A\n1-2', serve_h3: '大菜盒 B\n1-3', serve_h4: '小菜盒\n1-4', serve_h5: '湯桶\n1-5', serve_h6: '清潔消毒餐\n桌且移動桌\n子並歸位\n1-6',
     serve_n1: '黃鈺淳', serve_n2: '林毓庭', serve_n3: '黃芊樺', serve_n4: '許珮萱', serve_n5: '副衛生股長', serve_n6: '衛生股長',
-    note1: '1. 1200-1215 為用餐時間，用餐時請勿聊天，活動範圍為教室、陽台和走廊，要上廁所或外出請詢問導師。\n2. 最晚 1215 用餐結束（老師會看用餐狀況調整），每個人請將廚餘丟至「一般垃圾桶」，並用衛生紙將餐盤整理收好，整理抽屜和書櫃，最後自己搬上椅子，沒有工作者請退到掃地區域以外等候，<span style="color:blue">拖地完、地板吹乾後</span>，方可進入。整理組搬椅子的同學請在 1225 前按照導師指示搬下，勿亂跑。\n3. <span style="background:black; color:white; font-weight:bold;">副衛生股長</span>監督「飯菜的搬送」；<span style="background:black; color:white; font-weight:bold;">正衛生股長</span>監督「中午掃地情況」，一遇有缺人則請詢問導師。\n4. <span style="font-weight:bold; text-decoration:underline;">正副衛生股長</span>負責午休鐘響之後<span style="text-decoration:underline;">檢查室內外地板垃圾</span>。(每天輪流)\n5. <span style="font-weight:bold; text-decoration:underline;">禁止私下更換搬運之飯菜，違者下個階段續搬</span>。除非第四節上課老師延後下課，全班之飯菜需於<span style="font-weight:bold; text-decoration:underline;">每天 1200 前</span>搬至教室。\n6. 導師未到教室前不得私自打菜。<span style="font-weight:bold;">若導師在 1205 尚未到教室，由班長宣佈開始打菜。</span>\n7. <span style="text-decoration:underline;">每週不定期</span>有水果或點心，同學記得去廚房搬運<span style="font-weight:bold; text-decoration:underline;">全部搬運回來</span>。(或由老師指派)\n若餐盒配置不太相同時，整組 8 人必須負責全部搬回來，先到者先選擇搬運東西。',
+    note1: '1. 1200-1215 為用餐時間，用餐時請勿聊天，活動範圍為教室、陽台和走廊，要上廁所或外出請詢問導師。\n2. 最晚 1215 用餐結束（老師會看用餐狀況調整），每個人請將廚餘丟至「一般垃圾桶」，並用衛生紙將餐盘整理收好，整理抽屜和書櫃，最後自己搬上椅子，沒有工作者請退到掃地區域以外等候，<span style="color:blue">拖地完、地板吹乾後</span>，方可進入。整理組搬椅子的同學請在 1225 前按照導師指示搬下，勿亂跑。\n3. <span style="background:black; color:white; font-weight:bold;">副衛生股長</span>監督「飯菜的搬送」；<span style="background:black; color:white; font-weight:bold;">正衛生股長</span>監督「中午掃地情況」，一遇有缺人則請詢問導師。\n4. <span style="font-weight:bold; text-decoration:underline;">正副衛生股長</span>負責午休鐘響之後<span style="text-decoration:underline;">檢查室內外地板垃圾</span>。(每天輪流)\n5. <span style="font-weight:bold; text-decoration:underline;">禁止私下更換搬運之飯菜，違者下個階段續搬</span>。除非第四節上課老師延後下課，全班之飯菜需於<span style="font-weight:bold; text-decoration:underline;">每天 1200 前</span>搬至教室。\n6. 導師未到教室前不得私自打菜。<span style="font-weight:bold;">若導師在 1205 尚未到教室，由班長宣佈開始打菜。</span>\n7. <span style="text-decoration:underline;">每週不定期</span>有水果或點心，同學記得去廚房搬運<span style="font-weight:bold; text-decoration:underline;">全部搬運回來</span>。(或由老師指派)\n若餐盒配置不太相同時，整組 8 人必須負責全部搬回來，先到者先選擇搬運東西。',
     note2: '----------------------------清潔組（中午打掃）工作守則----------------------------\n1. 清潔組負責「講台桌黑板、餐桌」者，請用抹布擦餐桌，處理廚餘（第一優先），然後擦粉筆槽，請勿在午休時間教室內板擦，然後擦黑板，將粉筆排好，<span style="color:blue">然後掃和拖</span>講台，講桌也要擦，上面的東西請擺好。請將垃圾桶周圍垃圾清理乾淨，將必要垃圾分類。\n2. 清潔組負責「教室掃地」和「座位拖地」者，請於大部分的同學吃完飯後，開始打掃。先掃，後拖。「座位拖地」代表只拖桌子和椅子下方地板。\n3. 清潔組負責「走廊掃拖」者，請「最慢」在 12:20 開始掃地。<span style="font-weight:bold;">唯有拖地的人，必須在 12:25 打鐘後，才開始拖，一共兩次。<span style="text-decoration:underline;">正副衛生股長請在教室內最後進行善後補強工作。</span></span>\n4. 清潔組負責「整理垃圾、用具、洗手臺」者，請將洗手臺廚餘清理乾淨，抹布擺好。然後將垃圾桶旁垃圾整理，垃圾壓好。'
   },
   squad: {
@@ -394,9 +405,9 @@ const fetchData = async () => {
   parentNotices.value = boardData?.notices || []
   contactBookItems.value = boardData?.contact_items || []
 
-  // 💡 確保讀取 contact_history_visible 開關設定
+  // 💡 更新：一併抓取 index_button_settings
   const { data: sysData } = await supabase.from('system_settings').select('*')
-    .in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible'])
+    .in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings'])
   
   if (sysData) {
     const pwdSetting = sysData.find(s => s.setting_key === 'board_officer_passwords')
@@ -404,6 +415,11 @@ const fetchData = async () => {
     
     const histSetting = sysData.find(s => s.setting_key === 'contact_history_visible')
     if (histSetting) isHistoryVisibleOnIndex.value = histSetting.setting_value
+
+    const btnSetting = sysData.find(s => s.setting_key === 'index_button_settings')
+    if (btnSetting && btnSetting.setting_value) {
+      indexButtonSettings.value = { ...indexButtonSettings.value, ...btnSetting.setting_value }
+    }
 
     const seatSetting = sysData.find(s => s.setting_key === 'seating_chart_data')
     if (seatSetting) {
@@ -465,7 +481,6 @@ const saveContactItems = async () => {
   } catch (error) { alert("❌ 聯絡簿儲存失敗：" + error.message) }
 }
 
-// 💡 新增：處理開啟歷史查詢與撈取過去 7 天資料的邏輯
 const openContactHistory = async () => {
   showContactHistoryModal.value = true
   isLoadingHistory.value = true
@@ -529,7 +544,7 @@ const formatHistDate = (dateStr) => {
 .btn-cyan { background: #06b6d4; }
 .btn-indigo { background: #6366f1; } 
 .btn-sky { background: #0ea5e9; }
-.btn-pink { background: #ec4899; } /* 💡 歷史紀錄按鈕的顏色 */
+.btn-pink { background: #ec4899; } 
 
 .stats-row { display: flex; gap: 15px; }
 .stat-box { flex: 1; padding: 12px; border-radius: 6px; text-align: center; font-size: 1.05rem; font-weight: bold; }
@@ -559,7 +574,7 @@ const formatHistDate = (dateStr) => {
 .cancel-btn { background: #64748b; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; }
 .save-btn { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 
-/* 💡 新增：歷史聯絡簿視窗樣式 */
+/* 歷史聯絡簿視窗樣式 */
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 9999; padding: 20px; box-sizing: border-box; }
 .modal-content { background: white; width: 100%; max-width: 500px; border-radius: 12px; display: flex; flex-direction: column; max-height: 85vh; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
 .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
@@ -569,7 +584,7 @@ const formatHistDate = (dateStr) => {
 .history-card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
 .history-date { font-weight: bold; color: #f59e0b; border-bottom: 1px dashed #cbd5e1; padding-bottom: 8px; margin-bottom: 10px; font-size: 1.1rem; }
 .loading-state, .empty-state { text-align: center; padding: 30px; color: #64748b; font-size: 1.1rem; }
-.contact-list-dark li { color: #334155; } /* 強制在白底的彈出視窗中顯示深色文字 */
+.contact-list-dark li { color: #334155; }
 
 /* 座位表顯示區 */
 .seating-display-board { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-top: 10px; }
