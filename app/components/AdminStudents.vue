@@ -2,14 +2,27 @@
   <div>
     <div class="table-header">
       <h3>👩‍🎓 學生名單與資料維護</h3>
-      <div class="export-actions">
-        <!-- 💡 新增的按鈕 -->
-        <button @click="addNewStudent" class="export-btn add-btn">➕ 新增一位學生資料</button>
-        <button @click="saveAllStudents" class="export-btn save-all-btn" :disabled="isSavingAll">
-          {{ isSavingAll ? '⏳ 儲存中...' : '💾 全體儲存' }}
-        </button>
-        <button @click="exportStudents('json')" class="export-btn json-btn">📥 匯出 JSON</button>
-        <button @click="exportStudents('csv')" class="export-btn">📤 匯出 CSV</button>
+      
+      <!-- 💡 新增：排序切換與操作按鈕區 -->
+      <div class="header-controls">
+        <div class="sort-control">
+          <label>排序方式：</label>
+          <select v-model="sortBy" @change="applySort" class="sort-select">
+            <option value="student_number">依學號</option>
+            <option value="seat_number">依座號</option>
+          </select>
+        </div>
+
+        <div class="export-actions">
+          <button @click="addNewStudent" class="export-btn add-btn">➕ 新增一位學生資料</button>
+          <button @click="saveAllStudents" class="export-btn save-all-btn" :disabled="isSavingAll">
+            {{ isSavingAll ? '⏳ 儲存中...' : '💾 全體儲存' }}
+          </button>
+          <button @click="exportStudents('json')" class="export-btn json-btn">📥 匯出 JSON</button>
+          <button @click="exportStudents('csv')" class="export-btn">📤 匯出 CSV</button>
+          <!-- 💡 新增：危險的全部刪除按鈕 -->
+          <button @click="deleteAllStudents" class="export-btn danger-btn">🗑️ 清空所有學生資料</button>
+        </div>
       </div>
     </div>
     
@@ -36,7 +49,6 @@
             <th width="120">畢業國小</th>
             <th width="70">國小班級</th>
             <th width="90">生日(YYYYMMDD)</th>
-            <!-- 💡 恢復身分證後五碼欄位 -->
             <th width="100">身分證後五碼</th>
             <th width="90">稱謂1</th><th width="110">電話1</th><th width="160">信箱1</th>
             <th width="90">稱謂2</th><th width="110">電話2</th><th width="160">信箱2</th>
@@ -53,7 +65,6 @@
             <td><input type="text" v-model="student.elementary_school" class="edit-input" placeholder="例: 臺南市大新"/></td>
             <td><input type="number" v-model="student.elementary_class" class="edit-input num-input" placeholder="班級"/></td>
             <td><input type="text" v-model="student.birthday" class="edit-input" placeholder="YYYYMMDD"/></td>
-            <!-- 💡 恢復身分證後五碼輸入框 -->
             <td><input type="text" v-model="student.id_last_5" class="edit-input num-input" placeholder="後五碼"/></td>
             
             <td><input type="text" v-model="student.p1_rel" class="edit-input small-input" placeholder="關係"/></td>
@@ -85,8 +96,12 @@ const fileInput = ref(null)
 const isImporting = ref(false)
 const isSavingAll = ref(false)
 
+// 💡 排序變數
+const sortBy = ref('seat_number') 
+
 const fetchData = async () => {
-  const { data: sData } = await supabase.from('students').select('*').order('student_number')
+  // 💡 依據選定的排序方式向資料庫請求資料
+  const { data: sData } = await supabase.from('students').select('*').order(sortBy.value)
   const { data: pData } = await supabase.from('parents').select('*')
   
   if (sData) adminStudents.value = sData.map(student => {
@@ -101,13 +116,17 @@ const fetchData = async () => {
 }
 onMounted(() => fetchData())
 
-// 💡 新增一位空白學生資料的功能
+// 💡 當使用者切換選單時觸發重新排序
+const applySort = () => {
+  fetchData()
+}
+
 const addNewStudent = async () => {
-  const tempNum = `T${Math.floor(Math.random() * 10000)}` // 產生臨時學號避免重複
+  const tempNum = `T${Math.floor(Math.random() * 10000)}` 
   try {
     const { error } = await supabase.from('students').insert({
       student_number: tempNum,
-      student_id: tempNum, // 滿足不可為空值限制
+      student_id: tempNum, 
       school_name: '新化國中',
       enroll_year: 115,
       class_name: '7',
@@ -132,7 +151,7 @@ const saveStudent = async (student, showAlert = true) => {
       elementary_school: student.elementary_school,
       elementary_class: student.elementary_class,
       birthday: student.birthday,
-      id_last_5: student.id_last_5 // 💡 確保身分證後五碼有被儲存
+      id_last_5: student.id_last_5 
     }).eq('id', student.id)
     
     await supabase.from('parents').delete().eq('student_id', student.id)
@@ -182,6 +201,32 @@ const deleteStudent = async (id, name) => {
       alert(`❌ 刪除失敗：${err.message}`)
     }
   } 
+}
+
+// 💡 新增：危險的清空全班資料功能 (加入嚴格的防呆機制)
+const deleteAllStudents = async () => {
+  const confirmText = window.prompt('⚠️ 警告：這將會清空「所有學生」包含其「家長綁定」與「聯絡紀錄」！\n\n此動作無法復原。如果確定要執行，請在下方輸入「確認刪除」四個字：')
+  
+  if (confirmText === '確認刪除') {
+    try {
+      // 由於外鍵關聯，必須從最末端的資料表開始刪除
+      await supabase.from('communication_logs').delete().neq('id', '0'); // 刪除所有聯絡紀錄 (neq 0 是一種刪除全表的安全寫法)
+      await supabase.from('parents').delete().neq('id', '0');            // 刪除所有家長綁定
+      await supabase.from('assignment_submissions').delete().neq('id', '0'); // 刪除所有作業繳交紀錄
+      await supabase.from('attendances').delete().neq('id', '0');        // 刪除所有出缺席紀錄
+      await supabase.from('discipline_records').delete().neq('id', '0'); // 刪除所有秩序違規紀錄
+      
+      const { error } = await supabase.from('students').delete().neq('id', '0'); // 最後清空學生表
+      if (error) throw error
+
+      alert('✅ 所有學生資料已徹底清空。')
+      await fetchData() 
+    } catch (err) {
+      alert(`❌ 清空失敗：${err.message}`)
+    }
+  } else if (confirmText !== null) {
+    alert('❌ 輸入的文字不符，已取消刪除動作。')
+  }
 }
 
 const exportStudents = (type) => { alert(`📂 準備匯出 ${type.toUpperCase()} 格式名單... (待實作)`) }
@@ -263,19 +308,27 @@ const processImport = async () => {
 </script>
 
 <style scoped>
-.table-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; }
+/* 💡 新增：整理 header 排版的樣式 */
+.table-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;}
 .table-header h3 { margin: 0; color: #334155; }
-.export-actions { display: flex; gap: 10px; }
+.header-controls { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.sort-control { display: flex; align-items: center; gap: 8px; font-weight: bold; color: #475569; }
+.sort-select { padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; outline: none; }
+
+.export-actions { display: flex; gap: 10px; flex-wrap: wrap;}
 .export-btn { background-color: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
 .json-btn { background-color: #8b5cf6; }
 
-/* 💡 新增學生的按鈕樣式 */
 .add-btn { background-color: #f59e0b; }
 .add-btn:hover { background-color: #d97706; }
 
 .save-all-btn { background-color: #2563eb; }
 .save-all-btn:hover:not(:disabled) { background-color: #1d4ed8; }
 .save-all-btn:disabled { background-color: #94a3b8; cursor: not-allowed; }
+
+/* 💡 新增：危險按鈕樣式 */
+.danger-btn { background-color: #ef4444; }
+.danger-btn:hover { background-color: #dc2626; }
 
 .import-section { background: #f8fafc; border: 2px dashed #cbd5e1; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .import-controls { display: flex; gap: 10px; align-items: center;}
@@ -284,7 +337,7 @@ const processImport = async () => {
 .import-tips { font-size: 0.9rem; color: #64748b; margin-left: 10px; }
 .table-responsive { overflow-x: auto; padding-bottom: 15px; }
 
-.student-edit-table { min-width: 2100px; /* 稍微增加寬度以容納新欄位 */ border-collapse: separate; border-spacing: 0; background: white; font-size: 0.95rem; }
+.student-edit-table { min-width: 2100px; border-collapse: separate; border-spacing: 0; background: white; font-size: 0.95rem; }
 .student-edit-table th, .student-edit-table td { padding: 8px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
 .student-edit-table th { background-color: #f8fafc; color: #64748b; font-weight: bold; position: sticky; top: 0; z-index: 10; text-align: left; }
 .edit-input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; width: 100%; }
