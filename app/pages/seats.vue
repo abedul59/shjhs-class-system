@@ -26,7 +26,6 @@
     <div v-else class="workspace screen-only">
       <header class="workspace-header">
         
-        <!-- 上半部：標題與字體設定 -->
         <div class="header-top-row">
           <h2>🪑 座位排版系統</h2>
           
@@ -49,9 +48,7 @@
           </div>
         </div>
 
-        <!-- 下半部：操作按鈕 (靠左對齊) -->
         <div class="header-actions">
-          <!-- 💡 明確放置在最左邊的同步按鈕 -->
           <button @click="syncFromStudents(true)" class="btn-sync">
             📥 同步學生名單
           </button>
@@ -141,6 +138,81 @@
 
         </div>
       </div>
+      
+      <!-- ========================================== -->
+      <!-- 💡 新增：歷史紀錄查詢區塊 -->
+      <!-- ========================================== -->
+      <div class="history-calendar-container" style="margin-top: 30px;">
+        <div class="history-header">
+          <h4 class="section-title">📅 歷史紀錄查詢</h4>
+          <div class="export-btn-group">
+            <button @click="exportHistory('json')" class="btn-export-json">📥 匯出紀錄 (JSON)</button>
+            <button @click="exportHistory('csv')" class="btn-export-csv">📤 匯出紀錄 (CSV)</button>
+          </div>
+        </div>
+        
+        <div class="calendar-layout">
+          <!-- 左側：月曆介面 -->
+          <div class="calendar-box">
+            <div class="calendar-header">
+              <button @click="prevMonth" class="cal-nav-btn">◀</button>
+              <strong class="cal-title">{{ calYear }} 年 {{ calMonth + 1 }} 月</strong>
+              <button @click="nextMonth" class="cal-nav-btn">▶</button>
+            </div>
+            <div class="calendar-grid">
+              <div class="cal-day-name">日</div><div class="cal-day-name">一</div><div class="cal-day-name">二</div>
+              <div class="cal-day-name">三</div><div class="cal-day-name">四</div><div class="cal-day-name">五</div><div class="cal-day-name">六</div>
+              
+              <div 
+                v-for="(day, idx) in calendarDays" 
+                :key="idx" 
+                :class="['cal-cell', { 'empty': day.empty, 'has-record': day.hasRecord, 'selected': selectedHistoryDate === day.dateStr }]"
+                @click="viewHistory(day)"
+              >
+                <span v-if="!day.empty" class="cal-date-num">{{ day.day }}</span>
+                <span v-if="day.hasRecord" class="record-dot"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右側：選定日期的歷史座位預覽 -->
+          <div class="history-detail-box">
+            <div v-if="!selectedHistoryDate" class="empty-detail">
+              👈 請從左側月曆點選日期以查看歷史座位表
+            </div>
+            <div v-else class="detail-content">
+              <h5 class="detail-title">🗓️ {{ selectedHistoryDate }} 查詢結果</h5>
+              
+              <div class="history-status-badge" :class="{ 'is-fallback': effectiveDate !== selectedHistoryDate }">
+                {{ effectiveDate === selectedHistoryDate ? '✅ 當日有專屬紀錄' : (effectiveDate === '無紀錄' ? '⚠️ 過去尚無任何紀錄' : `🔄 當日無變更，沿用 ${effectiveDate} 的座位`) }}
+              </div>
+
+              <!-- 唯讀版座位預覽 (縮小比例顯示) -->
+              <div class="history-seating-preview" v-if="historyLayoutData">
+                <div class="seating-wrapper" style="transform: scale(0.85); transform-origin: top center;">
+                  <div :class="['seating-area', { 'is-rotated': historyLayoutData.isRotated }]">
+                    <div class="labels-grid-readonly">
+                      <div v-for="n in 6" :key="'h-label-'+n" class="row-label-readonly">第{{ n }}排</div>
+                    </div>
+                    <div class="seats-grid-readonly">
+                      <div v-for="seat in historyLayoutData.seats" :key="seat.id" :class="['seat-card-readonly', { 'is-hidden-seat-readonly': seat.isHidden }]">
+                        <div class="seat-id-readonly">{{ seat.id }}</div>
+                        <div class="seat-text-container">
+                          <div :style="{ fontSize: (historyLayoutData.settings?.numberSize || 16) + 'px', color: historyLayoutData.settings?.numberColor || '#64748b' }">{{ seat.seatNum }}</div>
+                          <div :style="{ fontSize: (historyLayoutData.settings?.nameSize || 20) + 'px', color: historyLayoutData.settings?.nameColor || '#e11d48' }">{{ seat.name }}</div>
+                          <div v-if="seat.other" :style="{ fontSize: (historyLayoutData.settings?.otherSize || 14) + 'px', color: historyLayoutData.settings?.otherColor || '#94a3b8' }">{{ seat.other }}</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="teacher-desk-readonly"><h3>講桌</h3></div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 列印設定彈出視窗 -->
@@ -225,7 +297,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 const supabase = useSupabaseClient()
 
 const isLoggedIn = ref(false)
@@ -254,6 +326,16 @@ const printData = ref({
   rolesRight: '國文小老師：\n英語小老師：\n數學小老師：\n自然小老師：\n社會小老師：\n表演藝術小老師：\n美術小老師：\n音樂小老師：\n綜合小老師：\n生活科技小老師：'
 })
 
+// 💡 歷史紀錄月曆變數
+const dDate = new Date()
+const todayISO = `${dDate.getFullYear()}-${String(dDate.getMonth()+1).padStart(2,'0')}-${String(dDate.getDate()).padStart(2,'0')}`
+const calYear = ref(dDate.getFullYear())
+const calMonth = ref(dDate.getMonth())
+const monthRecords = ref([])
+const selectedHistoryDate = ref('')
+const effectiveDate = ref('')
+const historyLayoutData = ref(null)
+
 const initSeats = () => {
   return Array.from({ length: 30 }, (_, i) => ({
     id: i + 1,
@@ -268,6 +350,7 @@ onMounted(async () => {
   if (sessionStorage.getItem('seats_admin_logged_in') === 'true') {
     isLoggedIn.value = true
     await fetchLayout()
+    await fetchMonthRecords()
   }
 })
 
@@ -289,36 +372,38 @@ const handleLogin = async () => {
       isLoggedIn.value = true
       sessionStorage.setItem('seats_admin_logged_in', 'true')
       await fetchLayout()
+      await fetchMonthRecords()
     } else alert('❌ 密碼錯誤！')
   } catch (e) {
-    if (passwordInput.value === '168168168') { isLoggedIn.value = true; sessionStorage.setItem('seats_admin_logged_in', 'true'); await fetchLayout() }
+    if (passwordInput.value === '168168168') { 
+      isLoggedIn.value = true; 
+      sessionStorage.setItem('seats_admin_logged_in', 'true'); 
+      await fetchLayout();
+      await fetchMonthRecords();
+    }
     else alert('驗證發生錯誤。')
   } finally { isLoggingIn.value = false; passwordInput.value = '' }
 }
 
 const logout = () => { sessionStorage.removeItem('seats_admin_logged_in'); isLoggedIn.value = false; navigateTo('/') }
 
-// 💡 執行同步的邏輯
 const syncFromStudents = async (showPrompt = false) => {
   if (showPrompt && !confirm('將從資料庫載入最新學生名單（依座號自動更新姓名），這不會改變您目前的排版位置。確定要執行嗎？')) return;
   try {
     const { data, error } = await supabase.from('students').select('seat_number, real_name')
     if (error) throw error
     
-    // 建立座號與姓名的對應表
     const studentMap = {}
     data.forEach(s => { studentMap[s.seat_number] = s.real_name })
 
-    // 更新現有的座位清單
     seatsList.value.forEach(seat => {
-      // 解析 "1號" 裡的數字 "1"
       const numMatch = String(seat.seatNum).match(/\d+/)
       if (numMatch) {
         const num = parseInt(numMatch[0], 10)
         if (studentMap[num]) {
-          seat.name = studentMap[num] // 套用資料庫的正確姓名
+          seat.name = studentMap[num] 
         } else {
-          seat.name = '' // 若資料庫沒有該座號，清空姓名
+          seat.name = '' 
         }
       }
     })
@@ -370,17 +455,137 @@ const fetchLayout = async () => {
     seatsList.value = initSeats()
   }
 
-  // 💡 讀取完版面後，自動執行一次靜默同步，確保顯示的都是最新學生資料
   await syncFromStudents(false)
 }
 
+// 💡 更新：儲存設定同時將記錄寫入 seating_records (供日後沿用與查詢)
 const saveLayout = async () => {
   isSaving.value = true
   try {
     const payload = { seats: seatsList.value, isRotated: isRotated.value, isVisible: isVisibleOnIndex.value, settings: seatSettings.value, printData: printData.value }
+    
+    // 1. 儲存最新設定到 system_settings
     await supabase.from('system_settings').upsert({ setting_key: 'seating_chart_data', setting_value: payload }, { onConflict: 'setting_key' })
-    alert('✅ 座位表設定已成功儲存並發布！')
-  } catch (error) { alert('❌ 儲存失敗') } finally { isSaving.value = false }
+    
+    // 2. 備份到今日的歷史紀錄
+    await supabase.from('seating_records').upsert({
+      record_date: todayISO,
+      layout_data: payload
+    }, { onConflict: 'record_date' })
+
+    alert('✅ 座位表設定已成功儲存並發布，並已記錄至今日歷史檔！')
+    
+    // 重新抓取月曆狀態
+    await fetchMonthRecords()
+  } catch (error) { 
+    alert('❌ 儲存失敗') 
+  } finally { 
+    isSaving.value = false 
+  }
+}
+
+// ================= 月曆與歷史紀錄相關邏輯 =================
+const fetchMonthRecords = async () => {
+  const y = calYear.value; 
+  const m = String(calMonth.value + 1).padStart(2, '0')
+  const startDate = `${y}-${m}-01`; 
+  const endDate = `${y}-${m}-31`
+  
+  const { data } = await supabase.from('seating_records')
+    .select('record_date')
+    .gte('record_date', startDate)
+    .lte('record_date', endDate)
+    
+  monthRecords.value = data || []
+}
+
+const calendarDays = computed(() => {
+  const days = []
+  const firstDayOfWeek = new Date(calYear.value, calMonth.value, 1).getDay()
+  const daysInMonth = new Date(calYear.value, calMonth.value + 1, 0).getDate()
+  for (let i = 0; i < firstDayOfWeek; i++) { days.push({ empty: true }) }
+  for (let i = 1; i <= daysInMonth; i++) {
+    const dateStr = `${calYear.value}-${String(calMonth.value + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`
+    const hasRecord = monthRecords.value.some(r => r.record_date === dateStr)
+    days.push({
+      empty: false, day: i, dateStr: dateStr, hasRecord: hasRecord
+    })
+  }
+  return days
+})
+
+const prevMonth = async () => { 
+  if (calMonth.value === 0) { calYear.value--; calMonth.value = 11 } else { calMonth.value-- } 
+  selectedHistoryDate.value = ''; historyLayoutData.value = null;
+  await fetchMonthRecords() 
+}
+const nextMonth = async () => { 
+  if (calMonth.value === 11) { calYear.value++; calMonth.value = 0 } else { calMonth.value++ } 
+  selectedHistoryDate.value = ''; historyLayoutData.value = null;
+  await fetchMonthRecords() 
+}
+
+const viewHistory = async (day) => {
+  if (day.empty) return
+  selectedHistoryDate.value = day.dateStr
+  historyLayoutData.value = null
+  
+  // 尋找目標日期(含)以前的最近一筆紀錄，實踐「沒有改就沿用」
+  const { data } = await supabase.from('seating_records')
+    .select('*')
+    .lte('record_date', day.dateStr)
+    .order('record_date', { ascending: false })
+    .limit(1)
+    
+  if (data && data.length > 0) {
+    historyLayoutData.value = data[0].layout_data
+    effectiveDate.value = data[0].record_date
+  } else {
+    // 找不到任何歷史資料時
+    effectiveDate.value = '無紀錄'
+    historyLayoutData.value = null
+  }
+}
+
+// 💡 新增匯出歷史紀錄功能
+const exportHistory = async (type) => {
+  const { data, error } = await supabase.from('seating_records').select('*').order('record_date', { ascending: false })
+  if (error || !data || data.length === 0) {
+    alert('⚠️ 獲取歷史紀錄失敗或尚無任何紀錄')
+    return
+  }
+
+  if (type === 'json') {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'seating_history_export.json'
+    link.click()
+    URL.revokeObjectURL(url)
+  } else if (type === 'csv') {
+    let csvContent = '\uFEFF' // BOM
+    csvContent += '紀錄日期,網格編號,座號,姓名,其他標註,是否隱藏\n'
+    
+    data.forEach(record => {
+      const layout = record.layout_data
+      const seats = layout?.seats || []
+      seats.forEach((seat, idx) => {
+         const sNum = (seat.seatNum || '').replace(/"/g, '""')
+         const sName = (seat.name || '').replace(/"/g, '""')
+         const sOther = (seat.other || '').replace(/"/g, '""')
+         csvContent += `"${record.record_date}","${idx+1}","${sNum}","${sName}","${sOther}","${seat.isHidden ? '是' : '否'}"\n`
+      })
+    })
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'seating_history_export.csv'
+    link.click()
+    URL.revokeObjectURL(url)
+  }
 }
 
 const savePrintTemplate = async () => {
@@ -441,8 +646,6 @@ const triggerPrint = () => {
 .back-link { margin-top: 15px; }
 
 .workspace { padding: 20px; max-width: 1200px; margin: 0 auto; }
-
-/* 💡 更新的 Header 排版：強制將 title 與 controls 放在第一列，actions 放在第二列 */
 .workspace-header { 
   display: flex; flex-direction: column; gap: 15px;
   background: white; padding: 15px 25px; border-radius: 8px; margin-bottom: 15px; 
@@ -457,7 +660,6 @@ const triggerPrint = () => {
 .num-input { width: 55px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px; text-align: center;}
 .color-input { width: 35px; height: 30px; padding: 0; border: none; cursor: pointer; border-radius: 4px;}
 
-/* 💡 將按鈕列改為強制靠左對齊，符合您的圖片習慣 */
 .header-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-start; width: 100%; }
 .btn-sync { background: #8b5cf6; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 .btn-rotate { background: #e2e8f0; color: #334155; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
@@ -502,6 +704,52 @@ const triggerPrint = () => {
 .desk-controls { background: white; padding: 5px 10px; border-radius: 4px; border: 1px solid #cbd5e1; }
 .toggle-label { font-weight: bold; color: #475569; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; }
 
+/* 💡 歷史紀錄查詢區塊樣式 */
+.history-calendar-container { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+.history-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;}
+.section-title { margin: 0; color: #1e293b; font-size: 1.3rem; }
+.export-btn-group { display: flex; gap: 10px; }
+.btn-export-json { background: #8b5cf6; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+.btn-export-csv { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+
+.calendar-layout { display: flex; gap: 20px; flex-wrap: nowrap; }
+.calendar-box { flex: 1; min-width: 0; background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; }
+.history-detail-box { flex: 1.5; min-width: 0; background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
+
+.calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+.cal-nav-btn { background: white; border: 1px solid #cbd5e1; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; color: #475569; }
+.cal-title { font-size: 1.2rem; color: #1e293b; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; text-align: center; }
+.cal-day-name { font-weight: bold; color: #64748b; padding-bottom: 10px; }
+.cal-cell { height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 6px; cursor: pointer; background: white; border: 1px solid #e2e8f0; transition: all 0.2s; }
+.cal-cell:not(.empty):hover { background: #e0e7ff; border-color: #a5b4fc; }
+.cal-cell.empty { background: transparent; border-color: transparent; cursor: default; }
+.cal-cell.selected { background: #3b82f6; color: white; border-color: #2563eb; }
+.cal-cell.selected .record-dot { background: white; }
+.cal-date-num { font-weight: bold; font-size: 1.1rem; }
+.record-dot { width: 6px; height: 6px; background: #10b981; border-radius: 50%; margin-top: 4px; }
+
+.empty-detail { text-align: center; color: #94a3b8; margin-top: 50px; font-size: 1.1rem; }
+.detail-title { margin: 0 0 10px 0; font-size: 1.2rem; color: #1e293b; }
+.history-status-badge { display: inline-block; padding: 6px 12px; border-radius: 6px; font-weight: bold; font-size: 0.9rem; margin-bottom: 15px; background: #dcfce7; color: #166534; border: 1px solid #bbf7d0;}
+.history-status-badge.is-fallback { background: #fef3c7; color: #92400e; border: 1px solid #fde68a;}
+.history-seating-preview { overflow-x: auto; background: white; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;}
+
+/* 唯讀座位表樣式 (複用首頁的展示邏輯) */
+.seating-wrapper { width: 100%; -webkit-overflow-scrolling: touch; }
+.seating-area { width: 100%; min-width: 900px; margin: 0 auto; transition: transform 0.5s ease; }
+.seating-area.is-rotated { transform: rotate(180deg); }
+.seating-area.is-rotated .seat-card-readonly, .seating-area.is-rotated .row-label-readonly, .seating-area.is-rotated .teacher-desk-readonly { transform: rotate(-180deg); }
+.labels-grid-readonly { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 15px; }
+.row-label-readonly { text-align: center; font-weight: bold; color: #0f766e; font-size: 1.1rem; transition: transform 0.5s ease; }
+.seats-grid-readonly { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 35px; }
+.seat-card-readonly { border: 2px solid #cbd5e1; border-radius: 8px; background: #f8fafc; padding: 10px; text-align: center; min-height: 110px; display: flex; flex-direction: column; transition: transform 0.5s ease; }
+.seat-card-readonly.is-hidden-seat-readonly { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
+.seat-id-readonly { font-size: 0.8rem; color: #94a3b8; text-align: left; margin-bottom: 5px; font-weight: bold; }
+.seat-text-container { display: flex; flex-direction: column; gap: 4px; font-weight: bold; justify-content: center; flex: 1;}
+.teacher-desk-readonly { border: 3px solid #0f766e; background: #f0fdfa; padding: 15px 20px; border-radius: 8px; text-align: center; width: 250px; margin: 0 auto; transition: transform 0.5s ease; }
+.teacher-desk-readonly h3 { margin: 0; color: #0f766e; font-size: 1.2rem; }
+
 /* 匯出設定視窗樣式 */
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000;}
 .modal-content { background: white; padding: 25px; border-radius: 12px; width: 100%; max-width: 600px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
@@ -521,6 +769,9 @@ textarea.form-control { resize: vertical; line-height: 1.5; font-family: inherit
   .style-controls-wrapper { flex-direction: column; gap: 10px; }
   .style-group { border-right: none; padding-right: 0; justify-content: center; }
   .header-actions { justify-content: center; }
+  .calendar-layout { flex-direction: column; }
+  .export-btn-group { width: 100%; justify-content: space-between;}
+  .btn-export-json, .btn-export-csv { flex: 1;}
 }
 
 /* =========================================
