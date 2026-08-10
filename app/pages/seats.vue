@@ -25,31 +25,37 @@
 
     <div v-else class="workspace screen-only">
       <header class="workspace-header">
-        <h2>🪑 座位排版系統</h2>
         
-        <div class="style-controls-wrapper">
-          <div class="style-group">
-            <span class="group-label">座號：</span>
-            <input type="number" v-model="seatSettings.numberSize" min="10" max="40" class="num-input"> px
-            <input type="color" v-model="seatSettings.numberColor" class="color-input">
-          </div>
-          <div class="style-group">
-            <span class="group-label">姓名：</span>
-            <input type="number" v-model="seatSettings.nameSize" min="10" max="40" class="num-input"> px
-            <input type="color" v-model="seatSettings.nameColor" class="color-input">
-          </div>
-          <div class="style-group">
-            <span class="group-label">其他：</span>
-            <input type="number" v-model="seatSettings.otherSize" min="10" max="40" class="num-input"> px
-            <input type="color" v-model="seatSettings.otherColor" class="color-input">
+        <!-- 上半部：標題與字體設定 -->
+        <div class="header-top-row">
+          <h2>🪑 座位排版系統</h2>
+          
+          <div class="style-controls-wrapper">
+            <div class="style-group">
+              <span class="group-label">座號：</span>
+              <input type="number" v-model="seatSettings.numberSize" min="10" max="40" class="num-input"> px
+              <input type="color" v-model="seatSettings.numberColor" class="color-input">
+            </div>
+            <div class="style-group">
+              <span class="group-label">姓名：</span>
+              <input type="number" v-model="seatSettings.nameSize" min="10" max="40" class="num-input"> px
+              <input type="color" v-model="seatSettings.nameColor" class="color-input">
+            </div>
+            <div class="style-group">
+              <span class="group-label">其他：</span>
+              <input type="number" v-model="seatSettings.otherSize" min="10" max="40" class="num-input"> px
+              <input type="color" v-model="seatSettings.otherColor" class="color-input">
+            </div>
           </div>
         </div>
 
+        <!-- 下半部：操作按鈕 (靠左對齊) -->
         <div class="header-actions">
-          <!-- 💡 新增：手動同步學生資料庫按鈕 -->
+          <!-- 💡 明確放置在最左邊的同步按鈕 -->
           <button @click="syncFromStudents(true)" class="btn-sync">
             📥 同步學生名單
           </button>
+          
           <button @click="toggleRotation" class="btn-rotate">
             🔄 旋轉版面 (目前: {{ isRotated ? '反向' : '正向' }})
           </button>
@@ -61,6 +67,7 @@
           </button>
           <button @click="logout" class="btn-logout">登出</button>
         </div>
+
       </header>
 
       <div class="tips">
@@ -291,7 +298,7 @@ const handleLogin = async () => {
 
 const logout = () => { sessionStorage.removeItem('seats_admin_logged_in'); isLoggedIn.value = false; navigateTo('/') }
 
-// 💡 新增：自動同步學生資料庫的邏輯
+// 💡 執行同步的邏輯
 const syncFromStudents = async (showPrompt = false) => {
   if (showPrompt && !confirm('將從資料庫載入最新學生名單（依座號自動更新姓名），這不會改變您目前的排版位置。確定要執行嗎？')) return;
   try {
@@ -434,12 +441,15 @@ const triggerPrint = () => {
 .back-link { margin-top: 15px; }
 
 .workspace { padding: 20px; max-width: 1200px; margin: 0 auto; }
+
+/* 💡 更新的 Header 排版：強制將 title 與 controls 放在第一列，actions 放在第二列 */
 .workspace-header { 
-  display: flex; justify-content: space-between; align-items: center; 
+  display: flex; flex-direction: column; gap: 15px;
   background: white; padding: 15px 25px; border-radius: 8px; margin-bottom: 15px; 
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 15px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
-.workspace-header h2 { margin: 0; color: #0f766e; }
+.header-top-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; width: 100%; }
+.header-top-row h2 { margin: 0; color: #0f766e; }
 
 .style-controls-wrapper { display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; background: #f8fafc; padding: 10px 15px; border-radius: 6px; border: 1px solid #e2e8f0;}
 .style-group { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; font-weight: bold; color: #475569; border-right: 2px solid #e2e8f0; padding-right: 15px; }
@@ -447,13 +457,14 @@ const triggerPrint = () => {
 .num-input { width: 55px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px; text-align: center;}
 .color-input { width: 35px; height: 30px; padding: 0; border: none; cursor: pointer; border-radius: 4px;}
 
-.header-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
-/* 💡 新增同步按鈕的樣式 */
+/* 💡 將按鈕列改為強制靠左對齊，符合您的圖片習慣 */
+.header-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-start; width: 100%; }
 .btn-sync { background: #8b5cf6; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 .btn-rotate { background: #e2e8f0; color: #334155; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 .btn-print { background: #3b82f6; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 .btn-save { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 .btn-logout { background: #ef4444; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+
 .tips { background: #fffbeb; color: #b45309; padding: 10px 15px; border-radius: 6px; border: 1px dashed #fcd34d; margin-bottom: 20px; font-size: 0.95rem; line-height: 1.5; }
 
 .classroom-wrapper { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -506,10 +517,10 @@ textarea.form-control { resize: vertical; line-height: 1.5; font-family: inherit
 .btn-print-confirm { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer;}
 
 @media (max-width: 900px) {
-  .workspace-header { flex-direction: column; align-items: stretch; text-align: center;}
+  .header-top-row { flex-direction: column; align-items: stretch; text-align: center;}
   .style-controls-wrapper { flex-direction: column; gap: 10px; }
   .style-group { border-right: none; padding-right: 0; justify-content: center; }
-  .header-actions { flex-direction: column; }
+  .header-actions { justify-content: center; }
 }
 
 /* =========================================
