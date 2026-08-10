@@ -6,7 +6,8 @@
       <div class="board-content">
         <div v-if="parentNotices.length === 0" class="empty-text-italic">目前無特別須知事項</div>
         <ul v-else class="item-list">
-          <li v-for="(notice, index) in parentNotices" :key="'n-'+index"><span class="bullet">📌</span> {{ notice }}</li>
+          <!-- 💡 套用全域隱私過濾器 -->
+          <li v-for="(notice, index) in parentNotices" :key="'n-'+index"><span class="bullet">📌</span> {{ privacyFilter(notice) }}</li>
         </ul>
       </div>
     </div>
@@ -17,7 +18,6 @@
           <div class="clock-display">🕒 {{ currentTime }}</div>
           
           <div class="button-group">
-            <!-- 💡 新增：全面套用 v-if 根據後台設定判斷是否顯示按鈕 -->
             <NuxtLink v-if="indexButtonSettings.parentBind" to="/parent-bind" class="btn btn-orange">👨‍👩‍👧 綁定</NuxtLink>
             <NuxtLink v-if="indexButtonSettings.parentMsg" to="/parent-message" class="btn btn-green">💬 家長私訊</NuxtLink>
             <NuxtLink v-if="indexButtonSettings.studentMsg" to="/student-message" class="btn btn-blue">💬 學生私訊</NuxtLink>
@@ -63,7 +63,8 @@
         <div class="student-grid">
           <div v-for="student in absentStudentsList" :key="student.id" class="student-card absent-card">
             <div class="student-seat">{{ student.seat_number }}</div>
-            <div class="student-name">{{ student.real_name }}</div>
+            <!-- 💡 根據白名單狀態，動態顯示真名或隱藏名 -->
+            <div class="student-name">{{ privacyFilter(student.real_name) }}</div>
             <div class="student-status">未到</div>
           </div>
         </div>
@@ -83,7 +84,8 @@
             <div v-if="!isEditingContact">
               <div v-if="contactBookItems.length === 0" class="empty-text-italic">目前尚無聯絡簿事項...</div>
               <ul v-else class="item-list contact-list">
-                <li v-for="(item, index) in contactBookItems" :key="'c-'+index">{{ index + 1 }}. {{ item }}</li>
+                <!-- 💡 套用全域隱私過濾器 -->
+                <li v-for="(item, index) in contactBookItems" :key="'c-'+index">{{ index + 1 }}. {{ privacyFilter(item) }}</li>
               </ul>
             </div>
             <div v-else class="edit-mode">
@@ -118,8 +120,10 @@
               <div class="seat-id-readonly">{{ seat.id }}</div>
               <div class="seat-text-container">
                 <div :style="{ fontSize: (seatingChart.settings?.numberSize || 16) + 'px', color: seatingChart.settings?.numberColor || '#64748b' }">{{ seat.seatNum }}</div>
-                <div :style="{ fontSize: (seatingChart.settings?.nameSize || 20) + 'px', color: seatingChart.settings?.nameColor || '#e11d48' }">{{ seat.name }}</div>
-                <div v-if="seat.other" :style="{ fontSize: (seatingChart.settings?.otherSize || 14) + 'px', color: seatingChart.settings?.otherColor || '#94a3b8' }">{{ seat.other }}</div>
+                <!-- 💡 座位表姓名套用過濾器 -->
+                <div :style="{ fontSize: (seatingChart.settings?.nameSize || 20) + 'px', color: seatingChart.settings?.nameColor || '#e11d48' }">{{ privacyFilter(seat.name) }}</div>
+                <!-- 💡 小老師或幹部也可能有名字，一併套用過濾 -->
+                <div v-if="seat.other" :style="{ fontSize: (seatingChart.settings?.otherSize || 14) + 'px', color: seatingChart.settings?.otherColor || '#94a3b8' }">{{ privacyFilter(seat.other) }}</div>
               </div>
             </div>
           </div>
@@ -252,6 +256,7 @@
       </div>
     </div>
 
+    <!-- 歷史查詢視窗 -->
     <div v-if="showContactHistoryModal" class="modal-overlay" @click.self="showContactHistoryModal = false">
       <div class="modal-content">
         <div class="modal-header">
@@ -265,7 +270,8 @@
             <div v-for="hist in contactHistoryList" :key="hist.record_date" class="history-card">
               <div class="history-date">{{ formatHistDate(hist.record_date) }}</div>
               <ul class="item-list contact-list-dark">
-                <li v-for="(item, idx) in hist.contact_items" :key="idx">{{ idx + 1 }}. {{ item }}</li>
+                <!-- 💡 歷史紀錄同樣套用隱私過濾器 -->
+                <li v-for="(item, idx) in hist.contact_items" :key="idx">{{ idx + 1 }}. {{ privacyFilter(item) }}</li>
               </ul>
             </div>
           </div>
@@ -291,7 +297,9 @@ const showContactHistoryModal = ref(false)
 const isLoadingHistory = ref(false)
 const contactHistoryList = ref([])
 
-// 💡 新增：首頁按鈕顯示設定，預設全部開啟
+// 💡 儲存當前訪客 IP 是否在白名單內
+const isIpWhitelisted = ref(false)
+
 const indexButtonSettings = ref({
   parentBind: true,
   parentMsg: true,
@@ -351,7 +359,43 @@ const defaultHygieneData = {
 
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
-const formatNL = (txt) => String(txt || '').replace(/\n/g, '<br>')
+// 💡 檢查當前使用者的 IP 是否在白名單中
+const checkIpWhitelist = async () => {
+  try {
+    const ipRes = await fetch('https://api.ipify.org?format=json')
+    const { ip } = await ipRes.json()
+    
+    const { data: rules } = await supabase.from('ip_rules').select('ip_range').eq('rule_type', '白名單')
+    
+    if (rules && rules.length > 0) {
+      // 只要訪客 IP 的前綴吻合白名單設定 (例: 163.26.) 就通過
+      isIpWhitelisted.value = rules.some(r => ip.startsWith(r.ip_range))
+    }
+  } catch (e) {
+    console.error('IP check failed', e)
+    isIpWhitelisted.value = false
+  }
+}
+
+// 💡 全域隱私過濾器：將所有真實姓名動態轉換為隱藏名
+const privacyFilter = (txt) => {
+  let result = String(txt || '')
+  if (!isIpWhitelisted.value && allStudents.value.length > 0) {
+    // 依名字長度排序，避免「林佑」與「林佑倫」等長短名稱的取代衝突
+    const sortedStudents = [...allStudents.value].sort((a, b) => (b.real_name || '').length - (a.real_name || '').length)
+    
+    sortedStudents.forEach(stu => {
+      if (stu.real_name && stu.hidden_name && stu.real_name.trim() !== '') {
+        // 利用 split 與 join 來達成全域取代 (取代所有的真實姓名)
+        result = result.split(stu.real_name).join(stu.hidden_name)
+      }
+    })
+  }
+  return result
+}
+
+// 💡 衛生版面的文字處理，現在也套用了隱私過濾器
+const formatNL = (txt) => privacyFilter(txt).replace(/\n/g, '<br>')
 
 const openEmergencyModal = () => {
   const pwd = window.prompt("🔒 進入緊急通知系統，請輸入「導師」密碼：")
@@ -405,7 +449,6 @@ const fetchData = async () => {
   parentNotices.value = boardData?.notices || []
   contactBookItems.value = boardData?.contact_items || []
 
-  // 💡 更新：一併抓取 index_button_settings
   const { data: sysData } = await supabase.from('system_settings').select('*')
     .in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings'])
   
@@ -455,7 +498,13 @@ const fetchData = async () => {
   if (attData) todayAttendances.value = attData
 }
 
-onMounted(() => { updateTime(); timer = setInterval(updateTime, 1000); fetchData() })
+onMounted(() => { 
+  updateTime(); 
+  timer = setInterval(updateTime, 1000); 
+  // 💡 先驗證 IP，再讀取資料，確保隱私過濾器在畫面渲染前備妥
+  checkIpWhitelist().then(() => fetchData()) 
+})
+
 onUnmounted(() => { if (timer) clearInterval(timer) })
 
 const unlockContactEdit = () => {
