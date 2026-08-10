@@ -27,10 +27,13 @@
           <button @click="currentTab = 'security'" :class="{ active: currentTab === 'security' }">🛡️ 安全與 IP</button>
           <button @click="currentTab = 'audit'" :class="{ active: currentTab === 'audit' }">🕵️ 系統稽核</button>
           <button @click="currentTab = 'communication'" :class="{ active: currentTab === 'communication' }">📨 通知紀錄</button>
-          <!-- 💡 這裡完美整合了剛做好的密碼管理元件 -->
           <button @click="currentTab = 'officers'" :class="{ active: currentTab === 'officers' }">🔐 職位密碼管理</button>
+          
+          <!-- 💡 新增：首頁按鈕控制分頁 -->
+          <button @click="currentTab = 'indexButtons'" :class="{ active: currentTab === 'indexButtons' }">🎛️ 首頁按鈕控制</button>
+          
           <button @click="currentTab = 'settings'" :class="{ active: currentTab === 'settings' }">⚙️ 系統設定</button>
-          <button @click="currentTab = 'backup'" :class="{ active: currentTab === 'backup' }">  📦 系統備份</button>
+          <button @click="currentTab = 'backup'" :class="{ active: currentTab === 'backup' }">📦 系統備份</button>
           <NuxtLink to="/" class="back-btn">⬅️ 返回前台</NuxtLink>
         </div>
       </header>
@@ -45,8 +48,11 @@
         <AdminSecurity v-if="currentTab === 'security'" />
         <AdminAudit v-if="currentTab === 'audit'" />
         <AdminCommunication v-if="currentTab === 'communication'" />
-        <!-- 💡 渲染密碼管理元件 -->
         <AdminOfficers v-if="currentTab === 'officers'" />
+        
+        <!-- 💡 渲染剛剛建立的首頁按鈕控制元件 -->
+        <AdminIndexButtons v-if="currentTab === 'indexButtons'" />
+        
         <AdminSettings v-if="currentTab === 'settings'" />
         <AdminBackup v-if="currentTab === 'backup'" />
       </main>
@@ -173,6 +179,10 @@ const verifyPassword = async () => {
   color: #475569; 
   margin-right: 5px;
   margin-bottom: 5px; 
+  transition: 0.2s;
+}
+.header-buttons button:hover {
+  background: #cbd5e1;
 }
 .header-buttons button.active { 
   background: #3b82f6; 
@@ -186,6 +196,10 @@ const verifyPassword = async () => {
   background: #ef4444; 
   color: white; 
   display: inline-block; 
+  transition: 0.2s;
+}
+.back-btn:hover {
+  background: #dc2626;
 }
 
 /* 內容區塊樣式 */
