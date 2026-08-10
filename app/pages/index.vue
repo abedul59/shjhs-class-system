@@ -6,7 +6,6 @@
       <div class="board-content">
         <div v-if="parentNotices.length === 0" class="empty-text-italic">目前無特別須知事項</div>
         <ul v-else class="item-list">
-          <!-- 💡 套用全域隱私過濾器 -->
           <li v-for="(notice, index) in parentNotices" :key="'n-'+index"><span class="bullet">📌</span> {{ privacyFilter(notice) }}</li>
         </ul>
       </div>
@@ -60,12 +59,15 @@
           <div class="stat-box stat-absent">未到: <strong>{{ absentCount }}</strong></div>
         </div>
 
+        <!-- 💡 點名互動區塊：改為顯示全班，並加上點擊切換與動態樣式 -->
         <div class="student-grid">
-          <div v-for="student in absentStudentsList" :key="student.id" class="student-card absent-card">
+          <div v-for="student in allStudents" :key="student.id" 
+               class="student-card"
+               :class="getAttendanceClass(student.id)"
+               @click="toggleAttendance(student)">
             <div class="student-seat">{{ student.seat_number }}</div>
-            <!-- 💡 根據白名單狀態，動態顯示真名或隱藏名 -->
             <div class="student-name">{{ privacyFilter(student.real_name) }}</div>
-            <div class="student-status">未到</div>
+            <div class="student-status">{{ getAttendanceStatus(student.id) }}</div>
           </div>
         </div>
       </div>
@@ -84,7 +86,6 @@
             <div v-if="!isEditingContact">
               <div v-if="contactBookItems.length === 0" class="empty-text-italic">目前尚無聯絡簿事項...</div>
               <ul v-else class="item-list contact-list">
-                <!-- 💡 套用全域隱私過濾器 -->
                 <li v-for="(item, index) in contactBookItems" :key="'c-'+index">{{ index + 1 }}. {{ privacyFilter(item) }}</li>
               </ul>
             </div>
@@ -120,9 +121,7 @@
               <div class="seat-id-readonly">{{ seat.id }}</div>
               <div class="seat-text-container">
                 <div :style="{ fontSize: (seatingChart.settings?.numberSize || 16) + 'px', color: seatingChart.settings?.numberColor || '#64748b' }">{{ seat.seatNum }}</div>
-                <!-- 💡 座位表姓名套用過濾器 -->
                 <div :style="{ fontSize: (seatingChart.settings?.nameSize || 20) + 'px', color: seatingChart.settings?.nameColor || '#e11d48' }">{{ privacyFilter(seat.name) }}</div>
-                <!-- 💡 小老師或幹部也可能有名字，一併套用過濾 -->
                 <div v-if="seat.other" :style="{ fontSize: (seatingChart.settings?.otherSize || 14) + 'px', color: seatingChart.settings?.otherColor || '#94a3b8' }">{{ privacyFilter(seat.other) }}</div>
               </div>
             </div>
@@ -270,7 +269,6 @@
             <div v-for="hist in contactHistoryList" :key="hist.record_date" class="history-card">
               <div class="history-date">{{ formatHistDate(hist.record_date) }}</div>
               <ul class="item-list contact-list-dark">
-                <!-- 💡 歷史紀錄同樣套用隱私過濾器 -->
                 <li v-for="(item, idx) in hist.contact_items" :key="idx">{{ idx + 1 }}. {{ privacyFilter(item) }}</li>
               </ul>
             </div>
@@ -297,19 +295,10 @@ const showContactHistoryModal = ref(false)
 const isLoadingHistory = ref(false)
 const contactHistoryList = ref([])
 
-// 💡 儲存當前訪客 IP 是否在白名單內
 const isIpWhitelisted = ref(false)
 
 const indexButtonSettings = ref({
-  parentBind: true,
-  parentMsg: true,
-  studentMsg: true,
-  assignments: true,
-  discipline: true,
-  hygiene: true,
-  seats: true,
-  emergency: true,
-  admin: true
+  parentBind: true, parentMsg: true, studentMsg: true, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: true
 })
 
 const defaultHygieneData = {
@@ -359,16 +348,12 @@ const defaultHygieneData = {
 
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
-// 💡 檢查當前使用者的 IP 是否在白名單中
 const checkIpWhitelist = async () => {
   try {
     const ipRes = await fetch('https://api.ipify.org?format=json')
     const { ip } = await ipRes.json()
-    
     const { data: rules } = await supabase.from('ip_rules').select('ip_range').eq('rule_type', '白名單')
-    
     if (rules && rules.length > 0) {
-      // 只要訪客 IP 的前綴吻合白名單設定 (例: 163.26.) 就通過
       isIpWhitelisted.value = rules.some(r => ip.startsWith(r.ip_range))
     }
   } catch (e) {
@@ -377,16 +362,12 @@ const checkIpWhitelist = async () => {
   }
 }
 
-// 💡 全域隱私過濾器：將所有真實姓名動態轉換為隱藏名
 const privacyFilter = (txt) => {
   let result = String(txt || '')
   if (!isIpWhitelisted.value && allStudents.value.length > 0) {
-    // 依名字長度排序，避免「林佑」與「林佑倫」等長短名稱的取代衝突
     const sortedStudents = [...allStudents.value].sort((a, b) => (b.real_name || '').length - (a.real_name || '').length)
-    
     sortedStudents.forEach(stu => {
       if (stu.real_name && stu.hidden_name && stu.real_name.trim() !== '') {
-        // 利用 split 與 join 來達成全域取代 (取代所有的真實姓名)
         result = result.split(stu.real_name).join(stu.hidden_name)
       }
     })
@@ -394,7 +375,6 @@ const privacyFilter = (txt) => {
   return result
 }
 
-// 💡 衛生版面的文字處理，現在也套用了隱私過濾器
 const formatNL = (txt) => privacyFilter(txt).replace(/\n/g, '<br>')
 
 const openEmergencyModal = () => {
@@ -434,15 +414,57 @@ const currentEditorRole = ref('')
 const allStudents = ref([])
 const todayAttendances = ref([])
 
+// 💡 更新點名與狀態相關邏輯
 const expectedCount = computed(() => allStudents.value.length)
-const presentCount = computed(() => todayAttendances.value.filter(a => a.status === '已到').length)
-const absentStudentsList = computed(() => {
-  return allStudents.value.filter(s => {
-    const record = todayAttendances.value.find(a => a.student_id === s.id)
-    return !record || record.status === '未到' || record.status === '請假'
-  })
-})
-const absentCount = computed(() => absentStudentsList.value.length)
+const presentCount = computed(() => todayAttendances.value.filter(a => a.status === '已到' || a.status === '遲到').length)
+const absentCount = computed(() => expectedCount.value - presentCount.value)
+
+const getAttendanceRecord = (studentId) => {
+  return todayAttendances.value.find(a => a.student_id === studentId)
+}
+
+const getAttendanceStatus = (studentId) => {
+  const record = getAttendanceRecord(studentId)
+  return record ? record.status : '未到'
+}
+
+const getAttendanceClass = (studentId) => {
+  const status = getAttendanceStatus(studentId)
+  if (status === '已到') return 'present-card'
+  if (status === '請假') return 'leave-card'
+  if (status === '遲到') return 'late-card'
+  return 'absent-card'
+}
+
+const toggleAttendance = async (student) => {
+  const currentStatus = getAttendanceStatus(student.id)
+  let nextStatus = '已到'
+  if (currentStatus === '未到') nextStatus = '已到'
+  else if (currentStatus === '已到') nextStatus = '請假'
+  else if (currentStatus === '請假') nextStatus = '遲到'
+  else if (currentStatus === '遲到') nextStatus = '未到'
+
+  // 先在本地做樂觀更新 (Optimistic Update)，讓畫面秒變不卡頓
+  let record = todayAttendances.value.find(a => a.student_id === student.id)
+  if (record) {
+    record.status = nextStatus
+  } else {
+    todayAttendances.value.push({ student_id: student.id, record_date: todayISO, status: nextStatus })
+  }
+
+  try {
+    const { data: existing } = await supabase.from('attendances')
+      .select('id').eq('student_id', student.id).eq('record_date', todayISO).maybeSingle()
+    
+    if (existing) {
+       await supabase.from('attendances').update({ status: nextStatus }).eq('id', existing.id)
+    } else {
+       await supabase.from('attendances').insert({ student_id: student.id, record_date: todayISO, status: nextStatus })
+    }
+  } catch (err) {
+    console.error('Update attendance error', err)
+  }
+}
 
 const fetchData = async () => {
   const { data: boardData } = await supabase.from('contact_books').select('notices, contact_items').eq('record_date', todayISO).maybeSingle()
@@ -501,7 +523,6 @@ const fetchData = async () => {
 onMounted(() => { 
   updateTime(); 
   timer = setInterval(updateTime, 1000); 
-  // 💡 先驗證 IP，再讀取資料，確保隱私過濾器在畫面渲染前備妥
   checkIpWhitelist().then(() => fetchData()) 
 })
 
@@ -515,7 +536,7 @@ const unlockContactEdit = () => {
     currentEditorRole.value = '股長'; isEditingContact.value = true; editingContactItems.value = [...contactBookItems.value] 
   } else if (pwd === teacherPwd) {
     currentEditorRole.value = '導師'; isEditingContact.value = true; editingContactItems.value = [...contactBookItems.value] 
-  } else { alert("❌ 密碼錯誤！請確認密碼是否正確。") }
+  } else { alert("❌ 密密碼錯誤！請確認密碼是否正確。") }
 }
 
 const addContactItem = () => editingContactItems.value.push('')
@@ -601,11 +622,30 @@ const formatHistDate = (dateStr) => {
 .stat-present { background: #dcfce7; color: #166534; }
 .stat-absent { background: #ffe4e6; color: #be123c; }
 
+/* 💡 更新點名方塊樣式：加入互動與顏色區分 */
 .student-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
-.student-card { background: #ffe4e6; border-radius: 6px; padding: 15px 10px; text-align: center; color: #e11d48; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.student-card { 
+  border-radius: 6px; padding: 15px 10px; text-align: center; font-weight: bold; 
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05); cursor: pointer; user-select: none; 
+  transition: 0.1s transform, 0.3s background-color; 
+}
+.student-card:active { transform: scale(0.95); }
 .student-seat { font-size: 1.2rem; margin-bottom: 5px; }
-.student-name { font-size: 1.1rem; margin-bottom: 5px; color: #be123c; }
+.student-name { font-size: 1.1rem; margin-bottom: 5px; }
 .student-status { font-size: 0.9rem; opacity: 0.9; }
+
+/* 各狀態專屬顏色 */
+.absent-card { background: #ffe4e6; color: #e11d48; border: 2px solid transparent; }
+.absent-card .student-name { color: #be123c; }
+
+.present-card { background: #dcfce7; color: #166534; border: 2px solid transparent; }
+.present-card .student-name { color: #14532d; }
+
+.leave-card { background: #fef3c7; color: #92400e; border: 2px solid transparent; }
+.leave-card .student-name { color: #78350f; }
+
+.late-card { background: #e0e7ff; color: #3730a3; border: 2px solid transparent; }
+.late-card .student-name { color: #312e81; }
 
 .right-panel { flex: 1; min-width: 0; }
 .board-header { display: flex; justify-content: space-between; align-items: flex-start; }
@@ -642,7 +682,6 @@ const formatHistDate = (dateStr) => {
 .seating-area { width: 100%; min-width: 900px; margin: 0 auto; transition: transform 0.5s ease; }
 .seating-area.is-rotated { transform: rotate(180deg); }
 .seating-area.is-rotated .seat-card-readonly, .seating-area.is-rotated .row-label-readonly, .seating-area.is-rotated .teacher-desk-readonly { transform: rotate(-180deg); }
-
 .labels-grid-readonly { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 15px; }
 .row-label-readonly { text-align: center; font-weight: bold; color: #0f766e; font-size: 1.1rem; transition: transform 0.5s ease; }
 .seats-grid-readonly { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 35px; }
