@@ -2,7 +2,6 @@
   <div>
     <div class="table-header">
       <h3>⏰ 每日出缺席與通知發送</h3>
-      <!-- 💡 新增：匯出所有歷史紀錄按鈕 -->
       <div class="export-btn-group">
         <button @click="exportHistory('json')" class="btn-export-json">📥 匯出所有紀錄 (JSON)</button>
         <button @click="exportHistory('csv')" class="btn-export-csv">📤 匯出所有紀錄 (CSV)</button>
@@ -10,7 +9,16 @@
     </div>
     
     <div class="attendance-control-panel">
-      <!-- 上半部：今日未到與遲到通知 -->
+      <!-- 💡 新增：五格出缺席統計區塊 (對應前台顏色) -->
+      <div class="stats-row">
+        <div class="stat-box stat-expected">應到: <strong>{{ expectedCount }}</strong></div>
+        <div class="stat-box stat-present">已到: <strong>{{ presentCount }}</strong></div>
+        <div class="stat-box stat-leave">請假: <strong>{{ leaveCount }}</strong></div>
+        <div class="stat-box stat-late">遲到: <strong>{{ lateCount }}</strong></div>
+        <div class="stat-box stat-absent">未到: <strong>{{ absentCount }}</strong></div>
+      </div>
+
+      <!-- 待處理名單區域 -->
       <div class="absent-list-section">
         <h4>🚨 今日未打卡或遲到名單 (共 {{ targetStudentsList.length }} 人)</h4>
         <div class="tags-container">
@@ -50,7 +58,7 @@
       </div>
     </div>
 
-    <!-- 💡 下半部：新增的月曆型歷史紀錄查詢與編輯區 -->
+    <!-- 月曆型歷史紀錄查詢與編輯區 -->
     <div class="history-calendar-container" style="margin-top: 30px;">
       <h4 class="section-title">📅 歷史出缺席紀錄查詢與補登</h4>
       <div class="calendar-layout">
@@ -128,7 +136,6 @@ const emailSubjectTemplate = ref('⚠️ 學校出缺席通知 - {{學生姓名}
 const emailContentTemplate = ref(`親愛的家長您好：\n\n系統偵測到您的孩子 【{{學生姓名}}】 於今日 ({{今日日期}}) {{當下時間}} 尚未完成到校打卡，特此通知。\n\n班級導師 敬上`)
 const isSavingTemplate = ref(false); const isSendingLateEmails = ref(false)
 
-// 💡 歷史紀錄專用變數
 const calYear = ref(dDate.getFullYear())
 const calMonth = ref(dDate.getMonth())
 const monthAttendanceDates = ref(new Set())
@@ -154,7 +161,13 @@ const fetchData = async () => {
 }
 onMounted(() => fetchData())
 
-// --- 今日通知寄送邏輯 ---
+// 💡 計算五格統計人數
+const expectedCount = computed(() => adminStudents.value.length)
+const presentCount = computed(() => todayAttendances.value.filter(a => a.status === '已到').length)
+const leaveCount = computed(() => todayAttendances.value.filter(a => a.status === '請假').length)
+const lateCount = computed(() => todayAttendances.value.filter(a => a.status === '遲到').length)
+const absentCount = computed(() => expectedCount.value - presentCount.value - leaveCount.value - lateCount.value)
+
 const getStatusLabel = (studentId) => {
   const record = todayAttendances.value.find(a => a.student_id === studentId)
   return record ? record.status : '未到'
@@ -170,6 +183,8 @@ const targetStudentsList = computed(() => {
 const getTagClass = (studentId) => {
   const status = getStatusLabel(studentId)
   if (status === '遲到') return 'late-tag'
+  if (status === '請假') return 'leave-tag'
+  if (status === '已到') return 'present-tag'
   return 'absent-tag'
 }
 
@@ -271,7 +286,7 @@ const viewHistory = async (day) => {
   const { data } = await supabase.from('attendances').select('*').eq('record_date', day.dateStr)
   
   const newHistory = {}
-  adminStudents.value.forEach(s => newHistory[s.id] = '未到') // 預設全部未到
+  adminStudents.value.forEach(s => newHistory[s.id] = '未到') 
   if (data) {
     data.forEach(a => newHistory[a.student_id] = a.status)
   }
@@ -290,16 +305,13 @@ const saveHistory = async () => {
   try {
     const { data: existing } = await supabase.from('attendances').select('id, student_id').eq('record_date', selectedHistoryDate.value)
     
-    // 將畫面上的狀態逐一更新或寫入資料庫
     for (const student of adminStudents.value) {
       const status = historyAttendances.value[student.id]
       const existRecord = existing ? existing.find(e => e.student_id === student.id) : null
       
       if (existRecord) {
-        // 如果存在就更新
         await supabase.from('attendances').update({ status }).eq('id', existRecord.id)
       } else {
-        // 不存在且不是預設未到的才特別寫入 (節省空間)
         if (status !== '未到') {
            await supabase.from('attendances').insert({ student_id: student.id, record_date: selectedHistoryDate.value, status })
         }
@@ -307,9 +319,8 @@ const saveHistory = async () => {
     }
 
     alert('✅ 歷史紀錄已成功更新！')
-    await fetchMonthRecords() // 更新月曆小圓點
+    await fetchMonthRecords() 
     if (selectedHistoryDate.value === todayISO) {
-      // 若剛好編輯的是今天，連動更新上方面板
       await fetchData()
     }
   } catch (error) {
@@ -319,7 +330,6 @@ const saveHistory = async () => {
   }
 }
 
-// --- 匯出功能 (附帶打卡時間) ---
 const exportHistory = async (type) => {
   const { data, error } = await supabase.from('attendances').select('*').order('record_date', { ascending: false }).order('created_at', { ascending: false })
   if (error || !data || data.length === 0) return alert('⚠️ 獲取歷史紀錄失敗或尚無任何紀錄')
@@ -331,7 +341,6 @@ const exportHistory = async (type) => {
       座號: student ? student.seat_number : '未知',
       姓名: student ? student.real_name : '未知',
       狀態: record.status,
-      // 💡 取出資料庫實際紀錄的時間戳記
       操作打卡時間: new Date(record.created_at).toLocaleString('zh-TW', { hour12: false })
     }
   })
@@ -345,7 +354,7 @@ const exportHistory = async (type) => {
     link.click()
     URL.revokeObjectURL(url)
   } else if (type === 'csv') {
-    let csvContent = '\uFEFF' // BOM 解決 Excel 中文亂碼
+    let csvContent = '\uFEFF'
     csvContent += '紀錄日期,座號,姓名,狀態,操作打卡時間\n'
     
     enhancedData.forEach(row => {
@@ -371,13 +380,26 @@ const exportHistory = async (type) => {
 .btn-export-csv { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
 
 .attendance-control-panel { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 20px; }
+
+/* 💡 新增：五格統計區塊樣式 (同步首頁設計) */
+.stats-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+.stat-box { flex: 1; padding: 12px; border-radius: 6px; text-align: center; font-size: 1.05rem; font-weight: bold; min-width: 80px; }
+.stat-expected { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+.stat-present { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+.stat-leave { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.stat-late { background: #e0e7ff; color: #3730a3; border: 1px solid #a5b4fc; }
+.stat-absent { background: #ffe4e6; color: #e11d48; border: 1px solid #fca5a5; }
+
 .absent-list-section { background: white; border-radius: 8px; padding: 15px; margin-bottom: 20px; border: 1px dashed #f59e0b; }
 .absent-list-section h4 { margin: 0 0 15px 0; color: #b45309; }
 .tags-container { display: flex; flex-wrap: wrap; gap: 10px; }
 
+/* 💡 更新：標籤的基礎與各種狀態樣式 (同步首頁卡片顏色) */
 .status-tag { padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 0.95rem; border: 1px solid transparent; }
 .absent-tag { background: #ffe4e6; color: #e11d48; border-color: #fca5a5; }
-.late-tag { background: #e0e7ff; color: #4f46e5; border-color: #a5b4fc; }
+.late-tag { background: #e0e7ff; color: #3730a3; border-color: #a5b4fc; }
+.leave-tag { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+.present-tag { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
 
 .all-present-msg { color: #16a34a; font-weight: bold; font-size: 1.1rem; padding: 5px; }
 .email-editor-section { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
@@ -395,7 +417,7 @@ const exportHistory = async (type) => {
 .preview-body { font-size: 1rem; color: #334155; line-height: 1.6; white-space: pre-wrap; }
 .late-btn { background-color: #ef4444; width: 100%; font-size: 1.2rem; padding: 15px; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
 
-/* 💡 新增：月曆與歷史紀錄樣式 */
+/* 月曆與歷史紀錄樣式 */
 .history-calendar-container { background: white; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0; }
 .section-title { margin: 0 0 20px 0; color: #1e293b; font-size: 1.3rem; border-bottom: 2px solid #f1f5f9; padding-bottom: 15px;}
 .calendar-layout { display: flex; gap: 20px; flex-wrap: wrap; }
@@ -422,11 +444,12 @@ const exportHistory = async (type) => {
 .save-history-btn:disabled { background: #94a3b8; cursor: not-allowed;}
 
 .history-student-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
-.history-card { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 8px; border: 2px solid transparent; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.history-card { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 8px; border: 2px solid transparent; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: 0.2s background-color;}
 .stu-info { display: flex; justify-content: space-between; align-items: center; font-weight: bold;}
 .stu-seat { color: #64748b; font-size: 0.9rem;}
-.status-select { padding: 4px; border-radius: 4px; border: 1px solid #cbd5e1; font-weight: bold; text-align: center; outline: none; background: white;}
+.status-select { padding: 4px; border-radius: 4px; border: 1px solid #cbd5e1; font-weight: bold; text-align: center; outline: none; background: white; transition: 0.2s color;}
 
+/* 💡 歷史編輯區的卡片顏色同步設定 */
 .card-absent { background: #ffe4e6; border-color: #fca5a5; }
 .card-absent .stu-name { color: #e11d48; }
 .card-absent .status-select { color: #e11d48; }
