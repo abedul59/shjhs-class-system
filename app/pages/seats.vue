@@ -46,6 +46,10 @@
         </div>
 
         <div class="header-actions">
+          <!-- 💡 新增：手動同步學生資料庫按鈕 -->
+          <button @click="syncFromStudents(true)" class="btn-sync">
+            📥 同步學生名單
+          </button>
           <button @click="toggleRotation" class="btn-rotate">
             🔄 旋轉版面 (目前: {{ isRotated ? '反向' : '正向' }})
           </button>
@@ -60,7 +64,7 @@
       </header>
 
       <div class="tips">
-        💡 提示：手機上可左右滑動查看完整座位。拖曳座位可交換位置，點擊左上角「取消」即可隱藏不需要的空位。
+        💡 提示：系統會自動依據「座號」對應資料庫載入「姓名」。拖曳座位可交換位置，點選左上角「取消」可隱藏不需要的空位。
       </div>
 
       <!-- 教室版面區 -->
@@ -102,7 +106,7 @@
                   type="text" 
                   v-model="seat.name" 
                   class="field-input" 
-                  placeholder="姓名"
+                  placeholder="姓名(自動載入)"
                   :style="{ fontSize: seatSettings.nameSize + 'px', color: seatSettings.nameColor }"
                 />
                 <input 
@@ -161,7 +165,6 @@
           </div>
         </div>
         
-        <!-- 💡 更新：加入記憶設定的按鈕 -->
         <div class="modal-actions">
           <div class="action-left">
             <button @click="savePrintTemplate" class="btn-save-template" :disabled="isSavingPrint">
@@ -234,7 +237,7 @@ const seatSettings = ref({
 })
 
 const showPrintModal = ref(false)
-const isSavingPrint = ref(false) // 💡 記憶設定的狀態
+const isSavingPrint = ref(false)
 
 const printData = ref({
   title: '7年 4 班 座位表',
@@ -248,7 +251,7 @@ const initSeats = () => {
   return Array.from({ length: 30 }, (_, i) => ({
     id: i + 1,
     seatNum: `${i + 1}號`,
-    name: '姓名',
+    name: '', 
     other: '',
     isHidden: false
   }))
@@ -288,6 +291,37 @@ const handleLogin = async () => {
 
 const logout = () => { sessionStorage.removeItem('seats_admin_logged_in'); isLoggedIn.value = false; navigateTo('/') }
 
+// 💡 新增：自動同步學生資料庫的邏輯
+const syncFromStudents = async (showPrompt = false) => {
+  if (showPrompt && !confirm('將從資料庫載入最新學生名單（依座號自動更新姓名），這不會改變您目前的排版位置。確定要執行嗎？')) return;
+  try {
+    const { data, error } = await supabase.from('students').select('seat_number, real_name')
+    if (error) throw error
+    
+    // 建立座號與姓名的對應表
+    const studentMap = {}
+    data.forEach(s => { studentMap[s.seat_number] = s.real_name })
+
+    // 更新現有的座位清單
+    seatsList.value.forEach(seat => {
+      // 解析 "1號" 裡的數字 "1"
+      const numMatch = String(seat.seatNum).match(/\d+/)
+      if (numMatch) {
+        const num = parseInt(numMatch[0], 10)
+        if (studentMap[num]) {
+          seat.name = studentMap[num] // 套用資料庫的正確姓名
+        } else {
+          seat.name = '' // 若資料庫沒有該座號，清空姓名
+        }
+      }
+    })
+    
+    if (showPrompt) alert('✅ 學生名單已成功同步更新！請記得點擊右上角的「儲存並發布」。')
+  } catch (err) {
+    if (showPrompt) alert('❌ 同步失敗：' + err.message)
+  }
+}
+
 const fetchLayout = async () => {
   const { data } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'seating_chart_data').maybeSingle()
 
@@ -322,26 +356,26 @@ const fetchLayout = async () => {
       }
     }
     
-    // 💡 讀取暫存的列印設定
     if (data.setting_value.printData) {
       printData.value = { ...printData.value, ...data.setting_value.printData }
     }
   } else {
     seatsList.value = initSeats()
   }
+
+  // 💡 讀取完版面後，自動執行一次靜默同步，確保顯示的都是最新學生資料
+  await syncFromStudents(false)
 }
 
 const saveLayout = async () => {
   isSaving.value = true
   try {
-    // 💡 主儲存也順便包含列印資料
     const payload = { seats: seatsList.value, isRotated: isRotated.value, isVisible: isVisibleOnIndex.value, settings: seatSettings.value, printData: printData.value }
     await supabase.from('system_settings').upsert({ setting_key: 'seating_chart_data', setting_value: payload }, { onConflict: 'setting_key' })
     alert('✅ 座位表設定已成功儲存並發布！')
   } catch (error) { alert('❌ 儲存失敗') } finally { isSaving.value = false }
 }
 
-// 💡 專屬儲存列印文字的按鈕行為
 const savePrintTemplate = async () => {
   isSavingPrint.value = true
   try {
@@ -414,6 +448,8 @@ const triggerPrint = () => {
 .color-input { width: 35px; height: 30px; padding: 0; border: none; cursor: pointer; border-radius: 4px;}
 
 .header-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+/* 💡 新增同步按鈕的樣式 */
+.btn-sync { background: #8b5cf6; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 .btn-rotate { background: #e2e8f0; color: #334155; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 .btn-print { background: #3b82f6; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 .btn-save { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
@@ -462,8 +498,6 @@ const triggerPrint = () => {
 .form-row { display: flex; gap: 15px; }
 .flex-1 { flex: 1; }
 textarea.form-control { resize: vertical; line-height: 1.5; font-family: inherit;}
-
-/* 💡 更新：分開排版的按鈕列 */
 .modal-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
 .action-right { display: flex; gap: 10px; }
 .btn-save-template { background: #10b981; color: white; border: none; padding: 10px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
