@@ -3,7 +3,6 @@
     <div class="table-header">
       <h3>👩‍🎓 學生名單與資料維護</h3>
       
-      <!-- 💡 新增：排序切換與操作按鈕區 -->
       <div class="header-controls">
         <div class="sort-control">
           <label>排序方式：</label>
@@ -20,7 +19,6 @@
           </button>
           <button @click="exportStudents('json')" class="export-btn json-btn">📥 匯出 JSON</button>
           <button @click="exportStudents('csv')" class="export-btn">📤 匯出 CSV</button>
-          <!-- 💡 新增：危險的全部刪除按鈕 -->
           <button @click="deleteAllStudents" class="export-btn danger-btn">🗑️ 清空所有學生資料</button>
         </div>
       </div>
@@ -96,11 +94,9 @@ const fileInput = ref(null)
 const isImporting = ref(false)
 const isSavingAll = ref(false)
 
-// 💡 排序變數
 const sortBy = ref('seat_number') 
 
 const fetchData = async () => {
-  // 💡 依據選定的排序方式向資料庫請求資料
   const { data: sData } = await supabase.from('students').select('*').order(sortBy.value)
   const { data: pData } = await supabase.from('parents').select('*')
   
@@ -116,7 +112,6 @@ const fetchData = async () => {
 }
 onMounted(() => fetchData())
 
-// 💡 當使用者切換選單時觸發重新排序
 const applySort = () => {
   fetchData()
 }
@@ -203,20 +198,18 @@ const deleteStudent = async (id, name) => {
   } 
 }
 
-// 💡 新增：危險的清空全班資料功能 (加入嚴格的防呆機制)
 const deleteAllStudents = async () => {
   const confirmText = window.prompt('⚠️ 警告：這將會清空「所有學生」包含其「家長綁定」與「聯絡紀錄」！\n\n此動作無法復原。如果確定要執行，請在下方輸入「確認刪除」四個字：')
   
   if (confirmText === '確認刪除') {
     try {
-      // 由於外鍵關聯，必須從最末端的資料表開始刪除
-      await supabase.from('communication_logs').delete().neq('id', '0'); // 刪除所有聯絡紀錄 (neq 0 是一種刪除全表的安全寫法)
-      await supabase.from('parents').delete().neq('id', '0');            // 刪除所有家長綁定
-      await supabase.from('assignment_submissions').delete().neq('id', '0'); // 刪除所有作業繳交紀錄
-      await supabase.from('attendances').delete().neq('id', '0');        // 刪除所有出缺席紀錄
-      await supabase.from('discipline_records').delete().neq('id', '0'); // 刪除所有秩序違規紀錄
+      await supabase.from('communication_logs').delete().neq('id', '0'); 
+      await supabase.from('parents').delete().neq('id', '0');            
+      await supabase.from('assignment_submissions').delete().neq('id', '0'); 
+      await supabase.from('attendances').delete().neq('id', '0');        
+      await supabase.from('discipline_records').delete().neq('id', '0'); 
       
-      const { error } = await supabase.from('students').delete().neq('id', '0'); // 最後清空學生表
+      const { error } = await supabase.from('students').delete().neq('id', '0'); 
       if (error) throw error
 
       alert('✅ 所有學生資料已徹底清空。')
@@ -229,7 +222,49 @@ const deleteAllStudents = async () => {
   }
 }
 
-const exportStudents = (type) => { alert(`📂 準備匯出 ${type.toUpperCase()} 格式名單... (待實作)`) }
+// 💡 實作：匯出功能 (JSON & CSV)
+const exportStudents = (type) => {
+  if (adminStudents.value.length === 0) {
+    alert('⚠️ 目前沒有學生資料可供匯出。')
+    return
+  }
+
+  if (type === 'json') {
+    const dataStr = JSON.stringify(adminStudents.value, null, 2)
+    const blob = new Blob([dataStr], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'students_export.json'
+    link.click()
+    URL.revokeObjectURL(url)
+  } else if (type === 'csv') {
+    // 取得所有物件的第一個鍵值陣列作為標題列
+    const headers = Object.keys(adminStudents.value[0])
+    
+    // 加入 BOM 標記，解決 Excel 開啟 CSV 時中文變亂碼的問題
+    let csvContent = '\uFEFF' + headers.join(',') + '\n'
+    
+    adminStudents.value.forEach(student => {
+      const row = headers.map(header => {
+        let val = student[header]
+        if (val === null || val === undefined) val = ''
+        // 若內容包含雙引號，則轉義；且將所有內容用雙引號包覆，確保包含逗號或換行字元的字串不會破壞格式
+        val = String(val).replace(/"/g, '""')
+        return `"${val}"`
+      })
+      csvContent += row.join(',') + '\n'
+    })
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'students_export.csv'
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+}
 
 const handleFileUpload = (e) => { 
   const file = e.target.files[0]; 
@@ -308,7 +343,6 @@ const processImport = async () => {
 </script>
 
 <style scoped>
-/* 💡 新增：整理 header 排版的樣式 */
 .table-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;}
 .table-header h3 { margin: 0; color: #334155; }
 .header-controls { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
@@ -326,7 +360,6 @@ const processImport = async () => {
 .save-all-btn:hover:not(:disabled) { background-color: #1d4ed8; }
 .save-all-btn:disabled { background-color: #94a3b8; cursor: not-allowed; }
 
-/* 💡 新增：危險按鈕樣式 */
 .danger-btn { background-color: #ef4444; }
 .danger-btn:hover { background-color: #dc2626; }
 
