@@ -53,13 +53,15 @@
           </div>
         </div>
 
+        <!-- 💡 更新：擴充統計區塊並與卡片顏色對應 -->
         <div class="stats-row">
           <div class="stat-box stat-expected">應到: <strong>{{ expectedCount }}</strong></div>
           <div class="stat-box stat-present">已到: <strong>{{ presentCount }}</strong></div>
+          <div class="stat-box stat-leave">請假: <strong>{{ leaveCount }}</strong></div>
+          <div class="stat-box stat-late">遲到: <strong>{{ lateCount }}</strong></div>
           <div class="stat-box stat-absent">未到: <strong>{{ absentCount }}</strong></div>
         </div>
 
-        <!-- 💡 點名互動區塊：改為顯示全班，並加上點擊切換與動態樣式 -->
         <div class="student-grid">
           <div v-for="student in allStudents" :key="student.id" 
                class="student-card"
@@ -298,7 +300,15 @@ const contactHistoryList = ref([])
 const isIpWhitelisted = ref(false)
 
 const indexButtonSettings = ref({
-  parentBind: true, parentMsg: true, studentMsg: true, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: true
+  parentBind: true,
+  parentMsg: true,
+  studentMsg: true,
+  assignments: true,
+  discipline: true,
+  hygiene: true,
+  seats: true,
+  emergency: true,
+  admin: true
 })
 
 const defaultHygieneData = {
@@ -328,7 +338,7 @@ const defaultHygieneData = {
     move_n1: '鄭人閤、王\n聰文', move_n2: '劉子涵、楊\n佩綺', move_n3: '王翊潔、周\n宥芸', move_n4: '楊元豪', move_n5: '王麟賢、\n劉沅翰', move_n6: '林科甫',
     serve_header: '配膳組 (先打菜，\n全部同學分配\n完，再用餐)', serve_h1: '飯盒\n1-1', serve_h2: '大菜盒 A\n1-2', serve_h3: '大菜盒 B\n1-3', serve_h4: '小菜盒\n1-4', serve_h5: '湯桶\n1-5', serve_h6: '清潔消毒餐\n桌且移動桌\n子並歸位\n1-6',
     serve_n1: '黃鈺淳', serve_n2: '林毓庭', serve_n3: '黃芊樺', serve_n4: '許珮萱', serve_n5: '副衛生股長', serve_n6: '衛生股長',
-    note1: '1. 1200-1215 為用餐時間，用餐時請勿聊天，活動範圍為教室、陽台和走廊，要上廁所或外出請詢問導師。\n2. 最晚 1215 用餐結束（老師會看用餐狀況調整），每個人請將廚餘丟至「一般垃圾桶」，並用衛生紙將餐盘整理收好，整理抽屜和書櫃，最後自己搬上椅子，沒有工作者請退到掃地區域以外等候，<span style="color:blue">拖地完、地板吹乾後</span>，方可進入。整理組搬椅子的同學請在 1225 前按照導師指示搬下，勿亂跑。\n3. <span style="background:black; color:white; font-weight:bold;">副衛生股長</span>監督「飯菜的搬送」；<span style="background:black; color:white; font-weight:bold;">正衛生股長</span>監督「中午掃地情況」，一遇有缺人則請詢問導師。\n4. <span style="font-weight:bold; text-decoration:underline;">正副衛生股長</span>負責午休鐘響之後<span style="text-decoration:underline;">檢查室內外地板垃圾</span>。(每天輪流)\n5. <span style="font-weight:bold; text-decoration:underline;">禁止私下更換搬運之飯菜，違者下個階段續搬</span>。除非第四節上課老師延後下課，全班之飯菜需於<span style="font-weight:bold; text-decoration:underline;">每天 1200 前</span>搬至教室。\n6. 導師未到教室前不得私自打菜。<span style="font-weight:bold;">若導師在 1205 尚未到教室，由班長宣佈開始打菜。</span>\n7. <span style="text-decoration:underline;">每週不定期</span>有水果或點心，同學記得去廚房搬運<span style="font-weight:bold; text-decoration:underline;">全部搬運回來</span>。(或由老師指派)\n若餐盒配置不太相同時，整組 8 人必須負責全部搬回來，先到者先選擇搬運東西。',
+    note1: '1. 1200-1215 為用餐時間，用餐時請勿聊天，活動範圍為教室、陽台和走廊，要上廁所或外出請詢問導師。\n2. 最晚 1215 用餐結束（老師會看用餐狀況調整），每個人請將廚餘丟至「一般垃圾桶」，並用衛生紙將餐盘整理收好，整理抽屜和書櫃，最後自己搬上椅子，沒有工作者請退到掃地區域以外等候，<span style="color:blue">拖地完、地板吹乾後</span>，方可進入。整理組搬椅子的同學請在 1225 前按照導師指示搬下，勿亂跑。\n3. <span style="background:black; color:white; font-weight:bold;">副衛生股長</span>監督「飯菜的搬送」；<span style="background:black; color:white; font-weight:bold;">正衛生股長</span>監督「中午掃地情況」，一遇有缺人則請詢問導師。\n4. <span style="font-weight:bold; text-decoration:underline;">正副衛生股長</span>負責午休鐘響之後<span style="text-decoration:underline;">檢查室內外地板垃圾</span>。(每天輪流)\n5. <span style="font-weight:bold; text-decoration:underline;">禁止私下更換搬運之飯菜，違者下個階段續搬</span>。除非第四節上課老師延後下課，全班之飯菜需於<span style="font-weight:bold; text-decoration:underline;">每天 1200 前</span>搬至教室。\n6. 導師未到教室前不得私自打菜。<span style="font-weight:bold;">若導師在 1205 尚未到教室，由班長宣佈開始打菜。</span>\n7. <span style="text-decoration:underline;">每週不定期</span>有水果或點心，同學記得去廚房搬運<span style="font-weight:bold; text-decoration:underline;">全部搬運回來</span>。(或由老師指派)\n若餐盒配置不太相同時，整組 8 必須負責全部搬回來，先到者先選擇搬運東西。',
     note2: '----------------------------清潔組（中午打掃）工作守則----------------------------\n1. 清潔組負責「講台桌黑板、餐桌」者，請用抹布擦餐桌，處理廚餘（第一優先），然後擦粉筆槽，請勿在午休時間教室內板擦，然後擦黑板，將粉筆排好，<span style="color:blue">然後掃和拖</span>講台，講桌也要擦，上面的東西請擺好。請將垃圾桶周圍垃圾清理乾淨，將必要垃圾分類。\n2. 清潔組負責「教室掃地」和「座位拖地」者，請於大部分的同學吃完飯後，開始打掃。先掃，後拖。「座位拖地」代表只拖桌子和椅子下方地板。\n3. 清潔組負責「走廊掃拖」者，請「最慢」在 12:20 開始掃地。<span style="font-weight:bold;">唯有拖地的人，必須在 12:25 打鐘後，才開始拖，一共兩次。<span style="text-decoration:underline;">正副衛生股長請在教室內最後進行善後補強工作。</span></span>\n4. 清潔組負責「整理垃圾、用具、洗手臺」者，請將洗手臺廚餘清理乾淨，抹布擺好。然後將垃圾桶旁垃圾整理，垃圾壓好。'
   },
   squad: {
@@ -414,10 +424,13 @@ const currentEditorRole = ref('')
 const allStudents = ref([])
 const todayAttendances = ref([])
 
-// 💡 更新點名與狀態相關邏輯
+// 💡 更新：獨立計算各狀態的人數
 const expectedCount = computed(() => allStudents.value.length)
-const presentCount = computed(() => todayAttendances.value.filter(a => a.status === '已到' || a.status === '遲到').length)
-const absentCount = computed(() => expectedCount.value - presentCount.value)
+const presentCount = computed(() => todayAttendances.value.filter(a => a.status === '已到').length)
+const leaveCount = computed(() => todayAttendances.value.filter(a => a.status === '請假').length)
+const lateCount = computed(() => todayAttendances.value.filter(a => a.status === '遲到').length)
+// 未到人數 = 應到 - 已到 - 請假 - 遲到
+const absentCount = computed(() => expectedCount.value - presentCount.value - leaveCount.value - lateCount.value)
 
 const getAttendanceRecord = (studentId) => {
   return todayAttendances.value.find(a => a.student_id === studentId)
@@ -444,7 +457,6 @@ const toggleAttendance = async (student) => {
   else if (currentStatus === '請假') nextStatus = '遲到'
   else if (currentStatus === '遲到') nextStatus = '未到'
 
-  // 先在本地做樂觀更新 (Optimistic Update)，讓畫面秒變不卡頓
   let record = todayAttendances.value.find(a => a.student_id === student.id)
   if (record) {
     record.status = nextStatus
@@ -536,7 +548,7 @@ const unlockContactEdit = () => {
     currentEditorRole.value = '股長'; isEditingContact.value = true; editingContactItems.value = [...contactBookItems.value] 
   } else if (pwd === teacherPwd) {
     currentEditorRole.value = '導師'; isEditingContact.value = true; editingContactItems.value = [...contactBookItems.value] 
-  } else { alert("❌ 密密碼錯誤！請確認密碼是否正確。") }
+  } else { alert("❌ 密碼錯誤！請確認密碼是否正確。") }
 }
 
 const addContactItem = () => editingContactItems.value.push('')
@@ -616,13 +628,15 @@ const formatHistDate = (dateStr) => {
 .btn-sky { background: #0ea5e9; }
 .btn-pink { background: #ec4899; } 
 
-.stats-row { display: flex; gap: 15px; }
-.stat-box { flex: 1; padding: 12px; border-radius: 6px; text-align: center; font-size: 1.05rem; font-weight: bold; }
-.stat-expected { background: #fef3c7; color: #92400e; }
+/* 💡 更新：五格統計區塊樣式設定，完美對應卡片顏色 */
+.stats-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.stat-box { flex: 1; padding: 12px; border-radius: 6px; text-align: center; font-size: 1.05rem; font-weight: bold; min-width: 80px; }
+.stat-expected { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
 .stat-present { background: #dcfce7; color: #166534; }
-.stat-absent { background: #ffe4e6; color: #be123c; }
+.stat-leave { background: #fef3c7; color: #92400e; }
+.stat-late { background: #e0e7ff; color: #3730a3; }
+.stat-absent { background: #ffe4e6; color: #e11d48; }
 
-/* 💡 更新點名方塊樣式：加入互動與顏色區分 */
 .student-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
 .student-card { 
   border-radius: 6px; padding: 15px 10px; text-align: center; font-weight: bold; 
@@ -634,7 +648,7 @@ const formatHistDate = (dateStr) => {
 .student-name { font-size: 1.1rem; margin-bottom: 5px; }
 .student-status { font-size: 0.9rem; opacity: 0.9; }
 
-/* 各狀態專屬顏色 */
+/* 💡 各狀態專屬卡片顏色 */
 .absent-card { background: #ffe4e6; color: #e11d48; border: 2px solid transparent; }
 .absent-card .student-name { color: #be123c; }
 
