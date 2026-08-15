@@ -1,19 +1,17 @@
 <template>
   <div class="page-container">
     
-    <!-- 💡 更新：軟木塞公佈欄增加「不在黑名單」才顯示的條件 -->
-    <div v-if="announcements.length > 0 && !isIpBlacklisted" class="corkboard announcement-board">
+    <!-- 💡 更新：軟木塞公佈欄改為「不在褐名單」才顯示 -->
+    <div v-if="announcements.length > 0 && !isIpBrownlisted" class="corkboard announcement-board">
       <h2 class="board-title cork-title">📌 班級公佈欄</h2>
       <div class="cork-divider"></div>
       <div class="cork-cards-container">
         <div v-for="ann in announcements" :key="ann.id" class="cork-card">
           <div class="pin">📍</div>
           <div class="cork-card-header">
-            <!-- 套用隱私過濾器 -->
             <h3 class="cork-card-title">{{ privacyFilter(ann.title) }}</h3>
             <span class="cork-card-date">{{ formatDateTime(ann.date) }}</span>
           </div>
-          <!-- 套用換行與隱私過濾器 -->
           <div class="cork-card-content" v-html="formatNL(ann.content)"></div>
           <div v-if="ann.links && ann.links.length > 0" class="cork-card-links">
              <a v-for="(link, i) in ann.links" :key="i" :href="link.url" target="_blank" class="cork-link">
@@ -322,8 +320,8 @@ const isLoadingHistory = ref(false)
 const contactHistoryList = ref([])
 
 const isIpWhitelisted = ref(false)
-// 💡 新增：儲存黑名單狀態的變數
-const isIpBlacklisted = ref(false)
+// 💡 變更：改為褐名單變數
+const isIpBrownlisted = ref(false)
 
 const announcements = ref([])
 
@@ -378,7 +376,7 @@ const defaultHygieneData = {
 
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
-// 💡 更新：一併檢查白名單與黑名單規則
+// 💡 變更：改為檢查褐名單與白名單
 const checkIpRules = async () => {
   try {
     const ipRes = await fetch('https://api.ipify.org?format=json')
@@ -387,15 +385,15 @@ const checkIpRules = async () => {
     
     if (rules && rules.length > 0) {
       const whiteRules = rules.filter(r => r.rule_type === '白名單')
-      const blackRules = rules.filter(r => r.rule_type === '黑名單')
+      const brownRules = rules.filter(r => r.rule_type === '褐名單')
       
       isIpWhitelisted.value = whiteRules.some(r => ip.startsWith(r.ip_range))
-      isIpBlacklisted.value = blackRules.some(r => ip.startsWith(r.ip_range))
+      isIpBrownlisted.value = brownRules.some(r => ip.startsWith(r.ip_range))
     }
   } catch (e) {
     console.error('IP check failed', e)
     isIpWhitelisted.value = false
-    isIpBlacklisted.value = false
+    isIpBrownlisted.value = false
   }
 }
 
@@ -571,7 +569,7 @@ const fetchData = async () => {
 onMounted(() => { 
   updateTime(); 
   timer = setInterval(updateTime, 1000); 
-  // 💡 使用更新後的 checkIpRules
+  // 💡 呼叫更新後的 checkIpRules
   checkIpRules().then(() => fetchData()) 
 })
 
