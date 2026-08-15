@@ -40,6 +40,39 @@
         💡 提示：請設定每節課的開始與結束時間 (24小時制，如 08:15)。首頁會自動根據當下時間顯示目前與下一節課。留空表示該時段沒有特定課程。
       </div>
 
+      <!-- 💡 預覽首頁課表動態 -->
+      <div class="preview-section">
+        <h3>👀 預覽首頁顯示</h3>
+        <div class="mock-controls">
+          <label>假設今天是：</label>
+          <select v-model="mockDay" class="mock-input">
+            <option :value="1">星期一</option>
+            <option :value="2">星期二</option>
+            <option :value="3">星期三</option>
+            <option :value="4">星期四</option>
+            <option :value="5">星期五</option>
+          </select>
+          <label>假設時間：</label>
+          <input type="time" v-model="mockTime" class="mock-input" />
+        </div>
+        
+        <div v-if="previewDisplay" class="schedule-ticker">
+          <div class="current-class">
+            <span class="pulse-dot" v-if="previewDisplay.current.status === '上課中'"></span>
+            <strong>{{ previewDisplay.current.label }}：</strong>
+            <span class="subject-text">{{ previewDisplay.current.subject }}</span>
+            <span class="teacher-text" v-if="previewDisplay.current.teacher">({{ previewDisplay.current.teacher }})</span>
+          </div>
+          <div class="next-class" v-if="previewDisplay.next">
+            <strong>下節課：</strong>
+            <span>{{ previewDisplay.next.subject }}</span>
+          </div>
+        </div>
+        <div v-else class="schedule-ticker empty-ticker">
+          （非上課日或設定無效，首頁將不會顯示課表提示）
+        </div>
+      </div>
+
       <div class="schedule-container">
         <table class="schedule-table">
           <thead>
@@ -76,7 +109,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 const supabase = useSupabaseClient()
 
 const isLoggedIn = ref(false)
@@ -84,7 +117,10 @@ const isLoggingIn = ref(false)
 const passwordInput = ref('')
 const isSaving = ref(false)
 
-// 預設課表資料結構
+// 💡 預覽用的假想時間狀態
+const mockDay = ref(1) // 1=星期一
+const mockTime = ref('08:30')
+
 const defaultSchedule = {
   periods: [
     { name: '早修', startTime: '07:30', endTime: '08:15', days: Array(5).fill().map(() => ({ subject: '', teacher: '' })) },
@@ -101,6 +137,54 @@ const defaultSchedule = {
 }
 
 const scheduleData = ref(JSON.parse(JSON.stringify(defaultSchedule)))
+
+// 💡 根據假想時間動態計算首頁顯示的結果
+const previewDisplay = computed(() => {
+  if (!scheduleData.value || !scheduleData.value.periods) return null
+  
+  const currentDayIndex = mockDay.value - 1 
+  if (currentDayIndex < 0 || currentDayIndex > 4) return null 
+  
+  if (!mockTime.value) return null
+  const [nowH, nowM] = mockTime.value.split(':').map(Number)
+  const nowMins = nowH * 60 + nowM
+  
+  let currentClass = { status: '下課中', label: '目前', subject: '休息時間', teacher: '' }
+  let nextClass = null
+  
+  for (let i = 0; i < scheduleData.value.periods.length; i++) {
+    const p = scheduleData.value.periods[i]
+    if (!p.startTime || !p.endTime) continue
+    
+    const [sh, sm] = p.startTime.split(':').map(Number)
+    const [eh, em] = p.endTime.split(':').map(Number)
+    const startMins = sh * 60 + sm
+    const endMins = eh * 60 + em
+    
+    const dayData = p.days[currentDayIndex]
+    if (!dayData || !dayData.subject) continue
+    
+    if (nowMins >= startMins && nowMins <= endMins) {
+      currentClass = { status: '上課中', label: p.name, subject: dayData.subject, teacher: dayData.teacher }
+      
+      for (let j = i + 1; j < scheduleData.value.periods.length; j++) {
+        const nextP = scheduleData.value.periods[j]
+        const nextDayData = nextP.days[currentDayIndex]
+        if (nextDayData && nextDayData.subject) {
+          nextClass = { subject: nextDayData.subject }
+          break
+        }
+      }
+      break
+    }
+    
+    if (nowMins < startMins && !nextClass) {
+      nextClass = { subject: dayData.subject }
+    }
+  }
+  
+  return { current: currentClass, next: nextClass }
+})
 
 onMounted(async () => {
   if (sessionStorage.getItem('schedule_admin_logged_in') === 'true') {
@@ -185,6 +269,24 @@ const saveSchedule = async () => {
 .btn-save { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 .btn-logout { background: #ef4444; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 .tips { background: #fffbeb; color: #b45309; padding: 10px 15px; border-radius: 6px; border: 1px dashed #fcd34d; margin-bottom: 20px; font-size: 0.95rem; line-height: 1.5; }
+
+/* 💡 預覽區塊樣式 */
+.preview-section { background: white; padding: 15px 20px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
+.preview-section h3 { margin: 0 0 10px 0; font-size: 1.1rem; color: #475569; }
+.mock-controls { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+.mock-input { padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-weight: bold; color: #1e293b; }
+
+.schedule-ticker { 
+  background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 10px 15px;
+  display: flex; justify-content: center; gap: 20px; align-items: center; flex-wrap: wrap;
+}
+.empty-ticker { color: #94a3b8; font-style: italic; }
+.current-class { color: #0f766e; font-size: 1.1rem; display: flex; align-items: center; gap: 6px;}
+.pulse-dot { width: 10px; height: 10px; background-color: #10b981; border-radius: 50%; animation: pulse 2s infinite; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
+.subject-text { font-weight: bold; color: #047857;}
+.teacher-text { font-size: 0.95rem; color: #475569; }
+.next-class { color: #64748b; font-size: 1rem; border-left: 2px solid #cbd5e1; padding-left: 20px; }
 
 .schedule-container { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow-x: auto; }
 .schedule-table { width: 100%; min-width: 1000px; border-collapse: collapse; text-align: center; }
