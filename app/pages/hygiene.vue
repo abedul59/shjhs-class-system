@@ -1,4 +1,4 @@
-<template>
+<template><template>
   <div class="hygiene-page">
     <!-- ================= 登入介面 ================= -->
     <div v-if="!isLoggedIn" class="login-container">
@@ -306,6 +306,21 @@ const EditText = defineComponent({
   }
 })
 
+// 💡 登入成功寫入日誌的共用函式
+const logRoleVisit = async (roleName) => {
+  try {
+    const ipRes = await fetch('https://api.ipify.org?format=json')
+    const { ip } = await ipRes.json()
+    await supabase.from('visitor_logs').insert([{ 
+      ip_address: ip, 
+      device_info: navigator.userAgent, 
+      role: roleName 
+    }])
+  } catch (e) { 
+    console.error("日誌寫入失敗", e) 
+  }
+}
+
 const isLoggedIn = ref(false)
 const isLoggingIn = ref(false)
 const passwordInput = ref('')
@@ -392,11 +407,23 @@ const handleLogin = async () => {
         expectedPwd = `${yy}${mm}${dd}59`
       } else if (config.type === 'custom' && config.custom_pwd) { expectedPwd = config.custom_pwd }
     }
+    
     if (passwordInput.value === expectedPwd || passwordInput.value === '168168168') {
-      isLoggedIn.value = true; sessionStorage.setItem('hygiene_admin_logged_in', 'true'); await fetchLayout()
+      isLoggedIn.value = true; 
+      sessionStorage.setItem('hygiene_admin_logged_in', 'true'); 
+      
+      // 💡 登入成功寫入日誌
+      await logRoleVisit('導師');
+      
+      await fetchLayout()
     } else alert('❌ 密碼錯誤！')
   } catch (e) {
-    if (passwordInput.value === '168168168') { isLoggedIn.value = true; sessionStorage.setItem('hygiene_admin_logged_in', 'true'); await fetchLayout() }
+    if (passwordInput.value === '168168168') { 
+      isLoggedIn.value = true; 
+      sessionStorage.setItem('hygiene_admin_logged_in', 'true'); 
+      await logRoleVisit('導師(降級登入)');
+      await fetchLayout() 
+    }
   } finally { isLoggingIn.value = false; passwordInput.value = '' }
 }
 
