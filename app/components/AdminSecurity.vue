@@ -3,7 +3,12 @@
     <div class="table-header"><h3>🛡️ 安全與 IP 存取限制</h3></div>
     <div class="security-section">
       <div class="add-rule-box">
-        <select v-model="newR.rule_type" class="edit-input"><option>黑名單</option><option>白名單</option></select>
+        <!-- 💡 增加褐名單選項 -->
+        <select v-model="newR.rule_type" class="edit-input">
+          <option>黑名單</option>
+          <option>白名單</option>
+          <option>褐名單</option>
+        </select>
         <input v-model="newR.ip_range" placeholder="輸入 IP (例 163.26.)" class="edit-input" />
         <input v-model="newR.description" placeholder="備註" class="edit-input" />
         <button @click="add" class="add-btn">➕ 新增</button>
