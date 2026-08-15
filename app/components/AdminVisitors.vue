@@ -8,7 +8,7 @@
     <div class="stats-cards">
       <div class="stat-card">總瀏覽人次: <strong>{{ logs.length }}</strong></div>
       <div class="stat-card">今日訪客: <strong>{{ todayCount }}</strong></div>
-      <div class="stat-card">管理員/股長登入: <strong>{{ adminCount }}</strong></div>
+      <div class="stat-card">管理員/幹部登入: <strong>{{ adminCount }}</strong></div>
     </div>
 
     <div class="table-responsive">
@@ -67,7 +67,7 @@ const fetchLogs = async () => {
     .from('visitor_logs')
     .select('*')
     .order('created_at', { ascending: false })
-    .limit(500) // 預設撈取最新500筆避免效能問題
+    .limit(500) // 預設撈取最新 500 筆避免效能問題
   
   if (data) logs.value = data
   isLoading.value = false
@@ -79,7 +79,7 @@ onMounted(() => {
 
 const todayCount = computed(() => {
   const today = new Date().toISOString().split('T')[0]
-  return logs.value.filter(log => log.created_at.startsWith(today)).length
+  return logs.value.filter(log => log.created_at && log.created_at.startsWith(today)).length
 })
 
 const adminCount = computed(() => {
@@ -114,9 +114,12 @@ const parseDeviceType = (ua) => {
   return '💻 其他設備'
 }
 
+// 💡 更新：支援多種角色字串判定，包含科目名稱前綴 (例：國文科任老師、數學小老師)
 const getRoleClass = (role) => {
-  if (role === '導師') return 'role-teacher'
-  if (role === '股長') return 'role-officer'
+  if (!role) return 'role-anonymous'
+  if (role.includes('導師')) return 'role-teacher'
+  if (role.includes('小老師') || role.includes('股長')) return 'role-officer'
+  if (role.includes('科任老師')) return 'role-subject-teacher'
   return 'role-anonymous'
 }
 </script>
@@ -141,10 +144,12 @@ const getRoleClass = (role) => {
 .ip-col { font-family: monospace; color: #3b82f6; font-weight: bold; }
 .font-mono { font-family: monospace; }
 
-.role-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; }
+.role-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; white-space: nowrap; display: inline-block;}
 .role-anonymous { background: #e2e8f0; color: #475569; }
 .role-teacher { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
 .role-officer { background: #fef3c7; color: #d97706; border: 1px solid #fde68a; }
+/* 💡 新增：科任老師專屬藍色標籤 */
+.role-subject-teacher { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
 
 .device-col { max-width: 300px; }
 .device-type { font-weight: bold; color: #334155; margin-bottom: 4px; }
