@@ -46,7 +46,6 @@
               <div class="status-label">✏️ 目前進行</div>
               <div class="status-subject">{{ examStatus.current.subject }}</div>
               
-              <!-- 💡 根據 isExam 決定顯示倒數計時器或溫書文字 -->
               <div v-if="examStatus.current.isExam" class="countdown-wrapper">
                 <div class="countdown-label">距離本節結束還有</div>
                 <div class="exam-countdown" :class="{ 'text-danger': countdownMinutes < 5 }">
@@ -138,7 +137,6 @@
               </div>
             </div>
 
-            <!-- 大考模式切換按鈕 (由後台 isExamModeEnabled 控制且僅褐名單可見) -->
             <button v-if="isIpBrownlisted && examData.isExamModeEnabled && examData.periods && examData.periods.length > 0" @click="isExamModeView = true" class="btn-enter-exam">
               🎓 切換至大考看板模式
             </button>
@@ -416,6 +414,9 @@ const contactHistoryList = ref([])
 const isIpWhitelisted = ref(false)
 const isIpBrownlisted = ref(false)
 
+// 💡 新增：紀錄當前來訪的 IP 字串
+const currentIpStr = ref('')
+
 const announcements = ref([])
 const scheduleData = ref(null)
 
@@ -426,7 +427,6 @@ const indexButtonSettings = ref({
   parentBind: true, parentMsg: true, studentMsg: true, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: true, schedule: true, exams: true
 })
 
-// 💡 10 種大考主題色彩定義 (必須與 exams.vue 同步)
 const examThemes = {
   midnight: { name: '午夜藍 (Midnight)', bg: '#0f172a', border: '#334155', title: '#f8fafc', clock: '#fbbf24', text: '#cbd5e1', accent: '#3b82f6', success: '#10b981', danger: '#ef4444', panelBg: '#1e293b' },
   blackboard: { name: '經典黑板 (Blackboard)', bg: '#1a3627', border: '#5b3a1a', title: '#ffffff', clock: '#fbbf24', text: '#e2e8f0', accent: '#fca5a5', success: '#a7f3d0', danger: '#f87171', panelBg: '#234a36' },
@@ -487,7 +487,6 @@ const defaultHygieneData = {
 
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
-// 💡 動態載入主題變數
 const currentThemeStyles = computed(() => {
   const t = examThemes[examData.value.theme] || examThemes.midnight
   return {
@@ -507,6 +506,8 @@ const checkIpRules = async () => {
   try {
     const ipRes = await fetch('https://api.ipify.org?format=json')
     const { ip } = await ipRes.json()
+    currentIpStr.value = ip // 💡 儲存 IP 供日後紀錄使用
+    
     const { data: rules } = await supabase.from('ip_rules').select('ip_range, rule_type')
     
     if (rules && rules.length > 0) {
@@ -520,6 +521,31 @@ const checkIpRules = async () => {
     console.error('IP check failed', e)
     isIpWhitelisted.value = false
     isIpBrownlisted.value = false
+  }
+}
+
+// 💡 新增：自動將訪客紀錄寫入資料庫
+const logVisit = async () => {
+  if (sessionStorage.getItem('visit_logged')) return
+  try {
+    const ua = navigator.userAgent
+    let role = '匿名來訪者'
+    
+    // 如果之前有登入過其他後台，嘗試將身分帶入紀錄
+    if (sessionStorage.getItem('schedule_admin_logged_in') === 'true' || 
+        sessionStorage.getItem('exams_admin_logged_in') === 'true') {
+      role = '導師'
+    }
+
+    await supabase.from('visitor_logs').insert([{ 
+      ip_address: currentIpStr.value || '未知IP', 
+      device_info: ua, 
+      role: role 
+    }])
+    
+    sessionStorage.setItem('visit_logged', 'true')
+  } catch (e) { 
+    console.error('Log visit failed', e) 
   }
 }
 
@@ -544,11 +570,13 @@ const formatDateTime = (dtStr) => {
   return dt.toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
-const openEmergencyModal = () => {
+const openEmergencyModal = async () => {
   const pwd = window.prompt("🔒 進入緊急通知系統，請輸入「導師」密碼：")
   const teacherPwd = officerPasswords.value.teacher || '168168168'
   if (pwd === teacherPwd) {
     showEmergencyModal.value = true
+    // 💡 登入成功時寫入日誌
+    await supabase.from('visitor_logs').insert([{ ip_address: currentIpStr.value, device_info: navigator.userAgent, role: '導師' }])
   } else if (pwd !== null) { 
     alert("❌ 密碼錯誤！無法使用此功能。")
   }
@@ -828,19 +856,27 @@ const fetchData = async () => {
 onMounted(() => { 
   updateTime(); 
   timer = setInterval(updateTime, 1000); 
-  checkIpRules().then(() => fetchData()) 
+  // 💡 檢查 IP 後直接發送紀錄
+  checkIpRules().then(() => {
+    logVisit()
+    fetchData()
+  }) 
 })
 
 onUnmounted(() => { if (timer) clearInterval(timer) })
 
-const unlockContactEdit = () => {
+const unlockContactEdit = async () => {
   const pwd = window.prompt("🔒 進入編輯模式，請輸入「學藝股長」或「輔導股長」密碼：")
   if (!pwd) return
   const teacherPwd = officerPasswords.value.teacher || '168168168'
   if ((officerPasswords.value.academic && pwd === officerPasswords.value.academic) || (officerPasswords.value.counseling && pwd === officerPasswords.value.counseling)) {
     currentEditorRole.value = '股長'; isEditingContact.value = true; editingContactItems.value = [...contactBookItems.value] 
+    // 💡 登入成功寫入日誌
+    await supabase.from('visitor_logs').insert([{ ip_address: currentIpStr.value, device_info: navigator.userAgent, role: '股長' }])
   } else if (pwd === teacherPwd) {
     currentEditorRole.value = '導師'; isEditingContact.value = true; editingContactItems.value = [...contactBookItems.value] 
+    // 💡 登入成功寫入日誌
+    await supabase.from('visitor_logs').insert([{ ip_address: currentIpStr.value, device_info: navigator.userAgent, role: '導師' }])
   } else { alert("❌ 密碼錯誤！請確認密碼是否正確。") }
 }
 
@@ -1053,7 +1089,7 @@ const formatHistDate = (dateStr) => {
 
 .right-panel { flex: 1; min-width: 0; }
 .board-header { display: flex; justify-content: space-between; align-items: flex-start; }
-.edit-btn { background: #f59e0b; color: #1e293b; border: none; padding: 6px 16px; border-radius: 6px; font-weight: bold; font-size: 0.95rem; cursor: pointer; }
+.edit-btn { background-color: #f59e0b; color: #1e293b; border: none; padding: 6px 16px; border-radius: 6px; font-weight: bold; font-size: 0.95rem; cursor: pointer; }
 
 .edit-mode { background: rgba(0, 0, 0, 0.2); padding: 15px; border-radius: 8px; }
 .edit-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
