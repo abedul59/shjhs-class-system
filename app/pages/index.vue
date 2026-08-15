@@ -1,8 +1,8 @@
 <template>
   <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
     
-    <!-- 🎓 進入大考模式後的全螢幕投影畫面 (雙欄設計) -->
-    <div v-if="isExamModeView && isIpBrownlisted" class="exam-dashboard">
+    <!-- 🎓 進入大考模式後的全螢幕投影畫面 (雙欄設計 + 動態主題配色) -->
+    <div v-if="isExamModeView && isIpBrownlisted" class="exam-dashboard" :style="currentThemeStyles">
       <button @click="isExamModeView = false" class="exit-exam-btn">✖ 結束大考模式</button>
       
       <h1 class="exam-main-title">{{ examData.title }}</h1>
@@ -134,7 +134,8 @@
               </div>
             </div>
 
-            <button v-if="isIpBrownlisted && examData.periods && examData.periods.length > 0" @click="isExamModeView = true" class="btn-enter-exam">
+            <!-- 💡 大考模式切換按鈕 (由後台 isExamModeEnabled 控制且僅褐名單可見) -->
+            <button v-if="isIpBrownlisted && examData.isExamModeEnabled && examData.periods && examData.periods.length > 0" @click="isExamModeView = true" class="btn-enter-exam">
               🎓 切換至大考看板模式
             </button>
 
@@ -415,11 +416,25 @@ const announcements = ref([])
 const scheduleData = ref(null)
 
 const isExamModeView = ref(false)
-const examData = ref({ title: '', periods: [] })
+const examData = ref({ isExamModeEnabled: true, theme: 'midnight', title: '', periods: [] })
 
 const indexButtonSettings = ref({
   parentBind: true, parentMsg: true, studentMsg: true, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: true, schedule: true, exams: true
 })
+
+// 💡 10 種大考主題色彩定義 (與 exams.vue 保持同步)
+const examThemes = {
+  midnight: { name: '午夜藍 (Midnight)', bg: '#0f172a', border: '#334155', title: '#f8fafc', clock: '#fbbf24', text: '#cbd5e1', accent: '#3b82f6', success: '#10b981', danger: '#ef4444', panelBg: '#1e293b' },
+  blackboard: { name: '經典黑板 (Blackboard)', bg: '#1a3627', border: '#5b3a1a', title: '#ffffff', clock: '#fbbf24', text: '#e2e8f0', accent: '#fca5a5', success: '#a7f3d0', danger: '#f87171', panelBg: '#234a36' },
+  slate: { name: '沉穩灰 (Slate)', bg: '#334155', border: '#64748b', title: '#f8fafc', clock: '#38bdf8', text: '#f1f5f9', accent: '#818cf8', success: '#34d399', danger: '#f87171', panelBg: '#475569' },
+  matcha: { name: '抹茶綠 (Matcha)', bg: '#2f3e36', border: '#5b6a5a', title: '#ecfdf5', clock: '#a7f3d0', text: '#d1fae5', accent: '#6ee7b7', success: '#10b981', danger: '#fca5a5', panelBg: '#3b4d45' },
+  burgundy: { name: '勃根地紅 (Burgundy)', bg: '#450a0a', border: '#7f1d1d', title: '#fee2e2', clock: '#fca5a5', text: '#fecaca', accent: '#f87171', success: '#a7f3d0', danger: '#fbbf24', panelBg: '#591111' },
+  ocean: { name: '深海湛藍 (Ocean)', bg: '#083344', border: '#164e63', title: '#cffafe', clock: '#67e8f9', text: '#a5f3fc', accent: '#22d3ee', success: '#34d399', danger: '#fca5a5', panelBg: '#114358' },
+  mocha: { name: '摩卡棕 (Mocha)', bg: '#3e2723', border: '#784315', title: '#fef3c7', clock: '#fde047', text: '#fde68a', accent: '#fbbf24', success: '#6ee7b7', danger: '#fca5a5', panelBg: '#5c3a21' },
+  purple: { name: '星空紫 (Purple)', bg: '#2e1065', border: '#4c1d95', title: '#ede9fe', clock: '#c4b5fd', text: '#ddd6fe', accent: '#a78bfa', success: '#6ee7b7', danger: '#fca5a5', panelBg: '#3b187d' },
+  retro: { name: '復古紙質 (Retro)', bg: '#e7e5e4', border: '#94a3b8', title: '#1c1917', clock: '#b45309', text: '#44403c', accent: '#78350f', success: '#15803d', danger: '#b91c1c', panelBg: '#f5f5f4' },
+  minimal: { name: '極簡白 (Minimal)', bg: '#ffffff', border: '#cbd5e1', title: '#0f172a', clock: '#0284c7', text: '#334155', accent: '#3b82f6', success: '#16a34a', danger: '#dc2626', panelBg: '#f8fafc' }
+}
 
 const defaultHygieneData = {
   isVisibleOnIndex: false,
@@ -467,6 +482,22 @@ const defaultHygieneData = {
 }
 
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
+
+// 💡 取得目前選定的主題 CSS 變數，套用於全螢幕大考看板
+const currentThemeStyles = computed(() => {
+  const t = examThemes[examData.value.theme] || examThemes.midnight
+  return {
+    '--ex-bg': t.bg,
+    '--ex-border': t.border,
+    '--ex-title': t.title,
+    '--ex-clock': t.clock,
+    '--ex-text': t.text,
+    '--ex-accent': t.accent,
+    '--ex-success': t.success,
+    '--ex-danger': t.danger,
+    '--ex-panel-bg': t.panelBg
+  }
+})
 
 const checkIpRules = async () => {
   try {
@@ -527,7 +558,7 @@ const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '
 const todayDisplay = `${dDate.getFullYear()}年${dDate.getMonth()+1}月${dDate.getDate()}日${days[dDate.getDay()]}`
 
 const currentTime = ref('')
-const nowTick = ref(Date.now()) // 💡 用於即時更新倒數計時
+const nowTick = ref(Date.now())
 let timer = null
 
 const updateTime = () => {
@@ -629,7 +660,7 @@ const examStatus = computed(() => {
   return { state, current, next, periods }
 })
 
-// 💡 動態倒數計時計算
+// 💡 大考動態倒數計時計算
 const countdownText = computed(() => {
   if (examStatus.value.state !== 'TESTING' || !examStatus.value.current) return '';
   const currentTick = nowTick.value;
@@ -751,7 +782,7 @@ const fetchData = async () => {
 
     const exSetting = sysData.find(s => s.setting_key === 'exam_schedule_data')
     if (exSetting && exSetting.setting_value) {
-      examData.value = exSetting.setting_value
+      examData.value = { ...examData.value, ...exSetting.setting_value }
     }
 
     const seatSetting = sysData.find(s => s.setting_key === 'seating_chart_data')
@@ -853,48 +884,48 @@ const formatHistDate = (dateStr) => {
 
 <style scoped>
 .page-container { min-height: 100vh; background-color: #f3f4f6; padding: 20px; font-family: sans-serif; display: flex; flex-direction: column; gap: 20px; transition: 0.3s; }
-.is-exam-mode { padding: 0; background: #0f172a; overflow: hidden; }
+.is-exam-mode { padding: 0; background: var(--ex-bg); overflow: hidden; }
 
-/* 🎓 大考看板模式專屬樣式 (雙欄) */
-.exam-dashboard { background: #0f172a; color: white; min-height: 100vh; padding: 40px 60px; display: flex; flex-direction: column; position: relative; align-items: stretch;}
-.exit-exam-btn { position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #cbd5e1; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 1.1rem; transition: 0.2s; z-index: 10;}
-.exit-exam-btn:hover { background: rgba(255,255,255,0.2); color: white; }
+/* 🎓 大考看板模式專屬樣式 (動態主題版) */
+.exam-dashboard { background-color: var(--ex-bg); color: var(--ex-text); min-height: 100vh; padding: 40px 60px; display: flex; flex-direction: column; position: relative; align-items: stretch; transition: background-color 0.5s ease;}
+.exit-exam-btn { position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: var(--ex-text); padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 1.1rem; transition: 0.2s; z-index: 10;}
+.exit-exam-btn:hover { background: rgba(255,255,255,0.2); color: var(--ex-title); }
 
-.exam-main-title { font-size: 3rem; margin: 0 0 40px 0; color: #f8fafc; letter-spacing: 2px; text-align: center; border-bottom: 2px solid #334155; padding-bottom: 20px;}
+.exam-main-title { font-size: 3.5rem; margin: 0 0 40px 0; color: var(--ex-title); letter-spacing: 2px; text-align: center; border-bottom: 2px solid var(--ex-border); padding-bottom: 20px;}
 
 .exam-split-layout { display: flex; gap: 60px; flex: 1; align-items: flex-start; justify-content: center; }
 
 /* 左半邊：課表 */
 .exam-left-panel { flex: 1; max-width: 900px; }
-.exam-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 1.6rem; background: #1e293b; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.2);}
-.exam-table th, .exam-table td { padding: 22px; text-align: center; border-bottom: 1px solid #334155; }
-.exam-table th { background: #334155; color: #94a3b8; font-weight: normal; font-size: 1.4rem; }
+.exam-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 1.8rem; background: var(--ex-panel-bg); border-radius: 16px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.2);}
+.exam-table th, .exam-table td { padding: 22px; text-align: center; border-bottom: 1px solid var(--ex-border); }
+.exam-table th { background: var(--ex-border); color: var(--ex-title); font-weight: normal; font-size: 1.4rem; }
 .exam-table tr:last-child td { border-bottom: none; }
-.active-row { background: rgba(59, 130, 246, 0.15); border-left: 5px solid #3b82f6;}
-.active-row td { color: #60a5fa; font-weight: bold; border-bottom-color: rgba(59, 130, 246, 0.3);}
+.active-row { background: rgba(255,255,255,0.1); border-left: 5px solid var(--ex-accent);}
+.active-row td { color: var(--ex-accent); font-weight: bold; border-bottom-color: transparent;}
 .font-mono { font-family: monospace; }
 .font-bold { font-weight: bold; letter-spacing: 1px; }
 
 /* 右半邊：時鐘與狀態 */
-.exam-right-panel { flex: 1; max-width: 800px; background: #1e293b; border-radius: 20px; padding: 50px; text-align: center; border: 1px solid #334155; box-shadow: 0 10px 30px rgba(0,0,0,0.3); display: flex; flex-direction: column; justify-content: center; align-items: center;}
-.clock-label { font-size: 1.5rem; color: #94a3b8; margin-bottom: 10px; }
-.exam-clock { font-size: 7rem; font-weight: bold; font-family: monospace; color: #fbbf24; text-shadow: 0 0 20px rgba(251, 191, 36, 0.4); margin-bottom: 40px; line-height: 1; }
+.exam-right-panel { flex: 1; max-width: 800px; background: var(--ex-panel-bg); border-radius: 20px; padding: 50px; text-align: center; border: 1px solid var(--ex-border); box-shadow: 0 10px 30px rgba(0,0,0,0.3); display: flex; flex-direction: column; justify-content: center; align-items: center;}
+.clock-label { font-size: 1.5rem; color: var(--ex-text); margin-bottom: 10px; opacity: 0.8;}
+.exam-clock { font-size: 7.5rem; font-weight: bold; font-family: monospace; color: var(--ex-clock); margin-bottom: 40px; line-height: 1; text-shadow: 0 0 15px rgba(0,0,0,0.3);}
 
-.exam-status-display { width: 100%; border-top: 1px solid #334155; padding-top: 40px;}
+.exam-status-display { width: 100%; border-top: 1px solid var(--ex-border); padding-top: 40px;}
 .status-text { font-size: 2.5rem; font-weight: bold; }
-.status-text.waiting { color: #94a3b8; }
-.status-text.finished { color: #10b981; }
-.status-label { font-size: 1.5rem; color: #94a3b8; margin-bottom: 10px; }
-.status-subject { font-size: 5rem; color: #3b82f6; letter-spacing: 5px; text-shadow: 0 0 15px rgba(59, 130, 246, 0.3); line-height: 1.2; margin: 10px 0 40px 0;}
-.countdown-wrapper { background: rgba(0,0,0,0.2); padding: 30px; border-radius: 16px; border: 1px solid #334155;}
-.countdown-label { font-size: 1.5rem; color: #cbd5e1; margin-bottom: 10px; }
-.exam-countdown { font-size: 6.5rem; color: #10b981; font-family: monospace; line-height: 1; text-shadow: 0 0 15px rgba(16, 185, 129, 0.3);}
-.text-danger { color: #ef4444 !important; text-shadow: 0 0 15px rgba(239, 68, 68, 0.4) !important; animation: blink 1s infinite; }
+.status-text.waiting { color: var(--ex-text); opacity: 0.7;}
+.status-text.finished { color: var(--ex-success); }
+.status-label { font-size: 1.5rem; color: var(--ex-text); margin-bottom: 10px; opacity: 0.8;}
+.status-subject { font-size: 5.5rem; color: var(--ex-accent); letter-spacing: 5px; line-height: 1.2; margin: 10px 0 40px 0; text-shadow: 0 0 15px rgba(0,0,0,0.3);}
+.countdown-wrapper { background: rgba(0,0,0,0.2); padding: 30px; border-radius: 16px; border: 1px solid var(--ex-border);}
+.countdown-label { font-size: 1.5rem; color: var(--ex-text); margin-bottom: 10px; }
+.exam-countdown { font-size: 6.5rem; color: var(--ex-success); font-family: monospace; line-height: 1; text-shadow: 0 0 15px rgba(0,0,0,0.3);}
+.text-danger { color: var(--ex-danger) !important; animation: blink 1s infinite; }
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
 
-.status-text.break .status-next { margin-top: 20px; font-size: 2rem; color: #cbd5e1; }
-.status-text.break .highlight { color: #10b981; font-size: 3.5rem; margin: 15px 0; display: block;}
-.next-time { font-size: 1.8rem; color: #94a3b8; font-family: monospace;}
+.status-text.break .status-next { margin-top: 20px; font-size: 2rem; color: var(--ex-text); }
+.status-text.break .highlight { color: var(--ex-success); font-size: 3.5rem; margin: 15px 0; display: block;}
+.next-time { font-size: 1.8rem; color: var(--ex-text); font-family: monospace; opacity: 0.8;}
 
 
 /* 常規首頁樣式 */
