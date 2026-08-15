@@ -1,5 +1,29 @@
 <template>
   <div class="page-container">
+    
+    <!-- 💡 新增：軟木塞公佈欄 -->
+    <div v-if="announcements.length > 0" class="corkboard announcement-board">
+      <h2 class="board-title cork-title">📌 班級公佈欄</h2>
+      <div class="cork-divider"></div>
+      <div class="cork-cards-container">
+        <div v-for="ann in announcements" :key="ann.id" class="cork-card">
+          <div class="pin">📍</div>
+          <div class="cork-card-header">
+            <!-- 套用隱私過濾器 -->
+            <h3 class="cork-card-title">{{ privacyFilter(ann.title) }}</h3>
+            <span class="cork-card-date">{{ formatDateTime(ann.date) }}</span>
+          </div>
+          <!-- 套用換行與隱私過濾器 -->
+          <div class="cork-card-content" v-html="formatNL(ann.content)"></div>
+          <div v-if="ann.links && ann.links.length > 0" class="cork-card-links">
+             <a v-for="(link, i) in ann.links" :key="i" :href="link.url" target="_blank" class="cork-link">
+               🔗 {{ privacyFilter(link.name) }}
+             </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="blackboard top-board">
       <h2 class="board-title notice-title">📢 家長須知事項</h2>
       <div class="dashed-divider"></div>
@@ -53,7 +77,6 @@
           </div>
         </div>
 
-        <!-- 💡 更新：擴充統計區塊並與卡片顏色對應 -->
         <div class="stats-row">
           <div class="stat-box stat-expected">應到: <strong>{{ expectedCount }}</strong></div>
           <div class="stat-box stat-present">已到: <strong>{{ presentCount }}</strong></div>
@@ -299,6 +322,8 @@ const contactHistoryList = ref([])
 
 const isIpWhitelisted = ref(false)
 
+const announcements = ref([])
+
 const indexButtonSettings = ref({
   parentBind: true,
   parentMsg: true,
@@ -338,7 +363,7 @@ const defaultHygieneData = {
     move_n1: '鄭人閤、王\n聰文', move_n2: '劉子涵、楊\n佩綺', move_n3: '王翊潔、周\n宥芸', move_n4: '楊元豪', move_n5: '王麟賢、\n劉沅翰', move_n6: '林科甫',
     serve_header: '配膳組 (先打菜，\n全部同學分配\n完，再用餐)', serve_h1: '飯盒\n1-1', serve_h2: '大菜盒 A\n1-2', serve_h3: '大菜盒 B\n1-3', serve_h4: '小菜盒\n1-4', serve_h5: '湯桶\n1-5', serve_h6: '清潔消毒餐\n桌且移動桌\n子並歸位\n1-6',
     serve_n1: '黃鈺淳', serve_n2: '林毓庭', serve_n3: '黃芊樺', serve_n4: '許珮萱', serve_n5: '副衛生股長', serve_n6: '衛生股長',
-    note1: '1. 1200-1215 為用餐時間，用餐時請勿聊天，活動範圍為教室、陽台和走廊，要上廁所或外出請詢問導師。\n2. 最晚 1215 用餐結束（老師會看用餐狀況調整），每個人請將廚餘丟至「一般垃圾桶」，並用衛生紙將餐盘整理收好，整理抽屜和書櫃，最後自己搬上椅子，沒有工作者請退到掃地區域以外等候，<span style="color:blue">拖地完、地板吹乾後</span>，方可進入。整理組搬椅子的同學請在 1225 前按照導師指示搬下，勿亂跑。\n3. <span style="background:black; color:white; font-weight:bold;">副衛生股長</span>監督「飯菜的搬送」；<span style="background:black; color:white; font-weight:bold;">正衛生股長</span>監督「中午掃地情況」，一遇有缺人則請詢問導師。\n4. <span style="font-weight:bold; text-decoration:underline;">正副衛生股長</span>負責午休鐘響之後<span style="text-decoration:underline;">檢查室內外地板垃圾</span>。(每天輪流)\n5. <span style="font-weight:bold; text-decoration:underline;">禁止私下更換搬運之飯菜，違者下個階段續搬</span>。除非第四節上課老師延後下課，全班之飯菜需於<span style="font-weight:bold; text-decoration:underline;">每天 1200 前</span>搬至教室。\n6. 導師未到教室前不得私自打菜。<span style="font-weight:bold;">若導師在 1205 尚未到教室，由班長宣佈開始打菜。</span>\n7. <span style="text-decoration:underline;">每週不定期</span>有水果或點心，同學記得去廚房搬運<span style="font-weight:bold; text-decoration:underline;">全部搬運回來</span>。(或由老師指派)\n若餐盒配置不太相同時，整組 8 必須負責全部搬回來，先到者先選擇搬運東西。',
+    note1: '1. 1200-1215 為用餐時間，用餐時請勿聊天，活動範圍為教室、陽台和走廊，要上廁所或外出請詢問導師。\n2. 最晚 1215 用餐結束（老師會看用餐狀況調整），每個人請將廚餘丟至「一般垃圾桶」，並用衛生紙將餐盘整理收好，整理抽屜和書櫃，最後自己搬上椅子，沒有工作者請退到掃地區域以外等候，<span style="color:blue">拖地完、地板吹乾後</span>，方可進入。整理組搬椅子的同學請在 1225 前按照導師指示搬下，勿亂跑。\n3. <span style="background:black; color:white; font-weight:bold;">副衛生股長</span>監督「飯菜的搬送」；<span style="background:black; color:white; font-weight:bold;">正衛生股長</span>監督「中午掃地情況」，一遇有缺人則請詢問導師。\n4. <span style="font-weight:bold; text-decoration:underline;">正副衛生股長</span>負責午休鐘響之後<span style="text-decoration:underline;">檢查室內外地板垃圾</span>。(每天輪流)\n5. <span style="font-weight:bold; text-decoration:underline;">禁止私下更換搬運之飯菜，違者下個階段續搬</span>。除非第四節上課老師延後下課，全班之飯菜需於<span style="font-weight:bold; text-decoration:underline;">每天 1200 前</span>搬至教室。\n6. 導師未到教室前不得私自打菜。<span style="font-weight:bold;">若導師在 1205 尚未到教室，由班長宣佈開始打菜。</span>\n7. <span style="text-decoration:underline;">每週不定期</span>有水果或點心，同學記得去廚房搬運<span style="font-weight:bold; text-decoration:underline;">全部搬運回來</span>。(或由老師指派)\n若餐盒配置不太相同時，整組 8 人必須負責全部搬回來，先到者先選擇搬運東西。',
     note2: '----------------------------清潔組（中午打掃）工作守則----------------------------\n1. 清潔組負責「講台桌黑板、餐桌」者，請用抹布擦餐桌，處理廚餘（第一優先），然後擦粉筆槽，請勿在午休時間教室內板擦，然後擦黑板，將粉筆排好，<span style="color:blue">然後掃和拖</span>講台，講桌也要擦，上面的東西請擺好。請將垃圾桶周圍垃圾清理乾淨，將必要垃圾分類。\n2. 清潔組負責「教室掃地」和「座位拖地」者，請於大部分的同學吃完飯後，開始打掃。先掃，後拖。「座位拖地」代表只拖桌子和椅子下方地板。\n3. 清潔組負責「走廊掃拖」者，請「最慢」在 12:20 開始掃地。<span style="font-weight:bold;">唯有拖地的人，必須在 12:25 打鐘後，才開始拖，一共兩次。<span style="text-decoration:underline;">正副衛生股長請在教室內最後進行善後補強工作。</span></span>\n4. 清潔組負責「整理垃圾、用具、洗手臺」者，請將洗手臺廚餘清理乾淨，抹布擺好。然後將垃圾桶旁垃圾整理，垃圾壓好。'
   },
   squad: {
@@ -387,6 +412,12 @@ const privacyFilter = (txt) => {
 
 const formatNL = (txt) => privacyFilter(txt).replace(/\n/g, '<br>')
 
+const formatDateTime = (dtStr) => {
+  if (!dtStr) return ''
+  const dt = new Date(dtStr)
+  return dt.toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
 const openEmergencyModal = () => {
   const pwd = window.prompt("🔒 進入緊急通知系統，請輸入「導師」密碼：")
   const teacherPwd = officerPasswords.value.teacher || '168168168'
@@ -424,12 +455,10 @@ const currentEditorRole = ref('')
 const allStudents = ref([])
 const todayAttendances = ref([])
 
-// 💡 更新：獨立計算各狀態的人數
 const expectedCount = computed(() => allStudents.value.length)
 const presentCount = computed(() => todayAttendances.value.filter(a => a.status === '已到').length)
 const leaveCount = computed(() => todayAttendances.value.filter(a => a.status === '請假').length)
 const lateCount = computed(() => todayAttendances.value.filter(a => a.status === '遲到').length)
-// 未到人數 = 應到 - 已到 - 請假 - 遲到
 const absentCount = computed(() => expectedCount.value - presentCount.value - leaveCount.value - lateCount.value)
 
 const getAttendanceRecord = (studentId) => {
@@ -484,7 +513,7 @@ const fetchData = async () => {
   contactBookItems.value = boardData?.contact_items || []
 
   const { data: sysData } = await supabase.from('system_settings').select('*')
-    .in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings'])
+    .in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings', 'announcements_data'])
   
   if (sysData) {
     const pwdSetting = sysData.find(s => s.setting_key === 'board_officer_passwords')
@@ -496,6 +525,11 @@ const fetchData = async () => {
     const btnSetting = sysData.find(s => s.setting_key === 'index_button_settings')
     if (btnSetting && btnSetting.setting_value) {
       indexButtonSettings.value = { ...indexButtonSettings.value, ...btnSetting.setting_value }
+    }
+
+    const annSetting = sysData.find(s => s.setting_key === 'announcements_data')
+    if (annSetting && annSetting.setting_value) {
+      announcements.value = (annSetting.setting_value || []).sort((a, b) => new Date(b.date) - new Date(a.date))
     }
 
     const seatSetting = sysData.find(s => s.setting_key === 'seating_chart_data')
@@ -597,6 +631,35 @@ const formatHistDate = (dateStr) => {
 
 <style scoped>
 .page-container { min-height: 100vh; background-color: #f3f4f6; padding: 20px; font-family: sans-serif; display: flex; flex-direction: column; gap: 20px; }
+
+.corkboard {
+  background-color: #d1a36a;
+  background-image: url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.15"/></svg>');
+  border: 12px solid #8b5a2b;
+  border-radius: 8px;
+  padding: 20px 25px;
+  box-shadow: 0 6px 12px rgba(0,0,0,0.15), inset 0 0 15px rgba(0,0,0,0.3);
+  margin-bottom: 5px;
+}
+.cork-title { color: #fef3c7; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); font-size: 1.6rem; }
+.cork-divider { border-bottom: 2px dashed #8b5a2b; margin: 15px 0; opacity: 0.6; }
+.cork-cards-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+.cork-card {
+  background: #fef9c3;
+  border-radius: 2px 2px 10px 2px;
+  padding: 20px;
+  box-shadow: 3px 4px 8px rgba(0,0,0,0.2);
+  position: relative;
+}
+.pin { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); font-size: 1.8rem; z-index: 2; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+.cork-card-header { border-bottom: 1px solid #fcd34d; padding-bottom: 10px; margin-bottom: 10px; }
+.cork-card-title { margin: 0 0 5px 0; color: #92400e; font-size: 1.2rem; }
+.cork-card-date { color: #b45309; font-size: 0.85rem; font-weight: bold; }
+.cork-card-content { color: #451a03; line-height: 1.5; font-size: 1rem; margin-bottom: 15px; word-wrap: break-word;}
+.cork-card-links { display: flex; flex-direction: column; gap: 8px; }
+.cork-link { display: inline-block; background: #fbbf24; color: #92400e; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 0.95rem; border: 1px dashed #d97706; transition: 0.2s; text-align: center;}
+.cork-link:hover { background: #f59e0b; color: white; }
+
 .blackboard { background-color: #315243; border: 10px solid #754d29; border-radius: 8px; padding: 20px 25px; box-shadow: 0 6px 12px rgba(0,0,0,0.15), inset 0 0 10px rgba(0,0,0,0.3); }
 .board-title { margin: 0; font-size: 1.4rem; font-weight: bold; }
 .notice-title { color: #fca5a5; }
@@ -628,14 +691,13 @@ const formatHistDate = (dateStr) => {
 .btn-sky { background: #0ea5e9; }
 .btn-pink { background: #ec4899; } 
 
-/* 💡 更新：五格統計區塊樣式設定，完美對應卡片顏色 */
 .stats-row { display: flex; gap: 10px; flex-wrap: wrap; }
 .stat-box { flex: 1; padding: 12px; border-radius: 6px; text-align: center; font-size: 1.05rem; font-weight: bold; min-width: 80px; }
 .stat-expected { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
-.stat-present { background: #dcfce7; color: #166534; }
-.stat-leave { background: #fef3c7; color: #92400e; }
-.stat-late { background: #e0e7ff; color: #3730a3; }
-.stat-absent { background: #ffe4e6; color: #e11d48; }
+.stat-present { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+.stat-leave { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.stat-late { background: #e0e7ff; color: #3730a3; border: 1px solid #a5b4fc; }
+.stat-absent { background: #ffe4e6; color: #e11d48; border: 1px solid #fca5a5; }
 
 .student-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
 .student-card { 
@@ -648,7 +710,6 @@ const formatHistDate = (dateStr) => {
 .student-name { font-size: 1.1rem; margin-bottom: 5px; }
 .student-status { font-size: 0.9rem; opacity: 0.9; }
 
-/* 💡 各狀態專屬卡片顏色 */
 .absent-card { background: #ffe4e6; color: #e11d48; border: 2px solid transparent; }
 .absent-card .student-name { color: #be123c; }
 
