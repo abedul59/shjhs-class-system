@@ -1,69 +1,42 @@
 <template>
   <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
     
-    <!-- 🎓 進入大考模式後的全螢幕投影畫面 (雙欄設計 + 動態主題配色) -->
+    <!-- 🎓 大考模式看板 -->
     <div v-if="isExamModeView && isIpBrownlisted" class="exam-dashboard" :style="currentThemeStyles">
       <button @click="isExamModeView = false" class="exit-exam-btn">✖ 結束大考模式</button>
-      
       <h1 class="exam-main-title">{{ examData.title }}</h1>
-      
       <div class="exam-split-layout">
-        <!-- 左半邊：考試時間表 -->
         <div class="exam-left-panel">
           <table class="exam-table">
             <thead>
-              <tr>
-                <th width="120">節次</th>
-                <th>考科</th>
-                <th>開始時間</th>
-                <th>結束時間</th>
-              </tr>
+              <tr><th width="120">節次</th><th>考科</th><th>開始時間</th><th>結束時間</th></tr>
             </thead>
             <tbody>
               <tr v-for="(p, i) in examStatus.periods" :key="i" :class="{ 'active-row': p.isActive }">
-                <td>第 {{ i + 1 }} 節</td>
-                <td class="font-bold">{{ p.subject }}</td>
-                <td class="font-mono">{{ p.startTime }}</td>
-                <td class="font-mono">{{ p.endTime }}</td>
+                <td>第 {{ i + 1 }} 節</td><td class="font-bold">{{ p.subject }}</td><td class="font-mono">{{ p.startTime }}</td><td class="font-mono">{{ p.endTime }}</td>
               </tr>
             </tbody>
           </table>
         </div>
-
-        <!-- 右半邊：時鐘與狀態 -->
         <div class="exam-right-panel">
           <div class="clock-label">目前時間</div>
           <div class="exam-clock">{{ currentTime }}</div>
-
           <div class="exam-status-display">
-            <!-- 準備中 -->
             <div v-if="examStatus.state === 'WAITING'" class="status-text waiting">⏳ 準備中...</div>
-            <!-- 已結束 -->
             <div v-else-if="examStatus.state === 'FINISHED'" class="status-text finished">🎉 今日全數結束</div>
-            
-            <!-- 進行中 -->
             <div v-else-if="examStatus.state === 'TESTING'" class="status-text testing">
               <div class="status-label">✏️ 目前進行</div>
               <div class="status-subject">{{ examStatus.current.subject }}</div>
-              
               <div v-if="examStatus.current.isExam" class="countdown-wrapper">
                 <div class="countdown-label">距離本節結束還有</div>
-                <div class="exam-countdown" :class="{ 'text-danger': countdownMinutes < 5 }">
-                  {{ countdownText }}
-                </div>
+                <div class="exam-countdown" :class="{ 'text-danger': countdownMinutes < 5 }">{{ countdownText }}</div>
               </div>
-              <div v-else class="study-mode-text">
-                📖 溫書自習中
-              </div>
+              <div v-else class="study-mode-text">📖 溫書自習中</div>
             </div>
-            
-            <!-- 休息中 -->
             <div v-else-if="examStatus.state === 'BREAK'" class="status-text break">
               <div class="status-label">☕ 休息時間</div>
               <div class="status-next" v-if="examStatus.next">
-                下一節：<span class="highlight">{{ examStatus.next.subject }}</span> 
-                <br>
-                <span class="next-time">({{ examStatus.next.startTime }} 開始)</span>
+                下一節：<span class="highlight">{{ examStatus.next.subject }}</span><br><span class="next-time">({{ examStatus.next.startTime }} 開始)</span>
               </div>
             </div>
           </div>
@@ -71,9 +44,8 @@
       </div>
     </div>
 
-    <!-- 原本的常規首頁內容 (大考模式開啟時隱藏) -->
+    <!-- 常規首頁內容 -->
     <div v-if="!isExamModeView" class="normal-home-content">
-      <!-- 軟木塞公佈欄 -->
       <div v-if="announcements.length > 0 && !isIpBrownlisted" class="corkboard announcement-board">
         <h2 class="board-title cork-title">📌 班級公佈欄</h2>
         <div class="cork-divider"></div>
@@ -86,32 +58,26 @@
             </div>
             <div class="cork-card-content" v-html="formatNL(ann.content)"></div>
             <div v-if="ann.links && ann.links.length > 0" class="cork-card-links">
-               <a v-for="(link, i) in ann.links" :key="i" :href="link.url" target="_blank" class="cork-link">
-                 🔗 {{ privacyFilter(link.name) }}
-               </a>
+               <a v-for="(link, i) in ann.links" :key="i" :href="link.url" target="_blank" class="cork-link">🔗 {{ privacyFilter(link.name) }}</a>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- 家長須知 -->
       <div class="blackboard top-board">
         <h2 class="board-title notice-title">📢 家長須知事項</h2>
         <div class="dashed-divider"></div>
-        
         <div class="board-content-wrapper" :class="{ 'is-collapsed': !isNoticeExpanded }">
           <div class="board-content">
             <div v-if="parentNotices.length === 0" class="empty-text-italic">目前無特別須知事項</div>
             <ul v-else class="item-list">
               <li v-for="(notice, index) in parentNotices" :key="'n-'+index" class="rich-notice-item">
-                <span class="bullet">📌</span>
-                <div class="rich-notice-content" v-html="privacyFilter(notice)"></div>
+                <span class="bullet">📌</span><div class="rich-notice-content" v-html="privacyFilter(notice)"></div>
               </li>
             </ul>
           </div>
           <div v-if="!isNoticeExpanded" class="fade-mask"></div>
         </div>
-        
         <div class="expand-action desktop-only" v-if="parentNotices.length > 0">
           <button @click="isNoticeExpanded = !isNoticeExpanded" class="btn-expand">
             {{ isNoticeExpanded ? '▲ 收起內容' : '▼ 展開完整須知' }}
@@ -132,8 +98,7 @@
                 <span class="teacher-text" v-if="scheduleDisplay.current.teacher">({{ scheduleDisplay.current.teacher }})</span>
               </div>
               <div class="next-class" v-if="scheduleDisplay.next">
-                <strong>下節課：</strong>
-                <span>{{ scheduleDisplay.next.subject }}</span>
+                <strong>下節課：</strong><span>{{ scheduleDisplay.next.subject }}</span>
               </div>
             </div>
 
@@ -151,7 +116,7 @@
               <NuxtLink v-if="indexButtonSettings.seats" to="/seats" class="btn btn-teal">🪑 座位管理</NuxtLink>
               <NuxtLink v-if="indexButtonSettings.schedule" to="/schedule" class="btn btn-amber">🗓️ 課表管理</NuxtLink>
               <NuxtLink v-if="indexButtonSettings.exams" to="/exams" class="btn btn-rose">📝 大考管理</NuxtLink>
-              <button v-if="indexButtonSettings.emergency" @click="openEmergencyModal" class="btn btn-red">🚨 緊急通知</button>
+              <button v-if="indexButtonSettings.emergency" @click="openPwdModal('emergency')" class="btn btn-red">🚨 緊急通知</button>
               <NuxtLink v-if="indexButtonSettings.admin" to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
               
               <button v-if="seatingChart.isVisible && indexButtonSettings.seats" @click="showSeatingChartLocal = !showSeatingChartLocal" class="btn btn-indigo">
@@ -160,9 +125,7 @@
               <button v-if="hygieneData.isVisibleOnIndex && indexButtonSettings.hygiene" @click="showHygieneLocal = !showHygieneLocal" class="btn btn-sky">
                 {{ showHygieneLocal ? '🙈 隱藏衛生工作' : '🧹 顯示衛生工作' }}
               </button>
-              <button v-if="isHistoryVisibleOnIndex" @click="openContactHistory" class="btn btn-pink">
-                📅 查詢近期聯絡簿
-              </button>
+              <button v-if="isHistoryVisibleOnIndex" @click="openContactHistory" class="btn btn-pink">📅 查詢近期聯絡簿</button>
             </div>
           </div>
 
@@ -175,10 +138,7 @@
           </div>
 
           <div class="student-grid">
-            <div v-for="student in allStudents" :key="student.id" 
-                 class="student-card"
-                 :class="getAttendanceClass(student.id)"
-                 @click="toggleAttendance(student)">
+            <div v-for="student in allStudents" :key="student.id" class="student-card" :class="getAttendanceClass(student.id)" @click="toggleAttendance(student)">
               <div class="student-seat">{{ student.seat_number }}</div>
               <div class="student-name">{{ privacyFilter(student.real_name) }}</div>
               <div class="student-status">{{ getAttendanceStatus(student.id) }}</div>
@@ -189,11 +149,8 @@
         <div class="right-panel">
           <div class="blackboard contact-board">
             <div class="board-header">
-              <div>
-                <h2 class="board-title contact-title">⭐ 今日聯絡簿</h2>
-                <p class="board-date">{{ todayDisplay }}</p>
-              </div>
-              <button v-if="!isEditingContact" @click="unlockContactEdit" class="edit-btn">✏️ 編輯</button>
+              <div><h2 class="board-title contact-title">⭐ 今日聯絡簿</h2><p class="board-date">{{ todayDisplay }}</p></div>
+              <button v-if="!isEditingContact" @click="openPwdModal('contact')" class="edit-btn">✏️ 編輯</button>
             </div>
             <div class="dashed-divider"></div>
             <div class="board-content">
@@ -221,8 +178,8 @@
           </div>
         </div>
       </div>
-
-      <!-- 班級座位表顯示區 -->
+      
+      <!-- 座位表顯示區 -->
       <div v-if="seatingChart.isVisible && showSeatingChartLocal && indexButtonSettings.seats" class="seating-display-board">
         <h3 class="seating-title">🪑 班級座位表</h3>
         <div class="seating-wrapper">
@@ -248,43 +205,27 @@
       <!-- 班級衛生工作顯示區 -->
       <div v-if="hygieneData.isVisibleOnIndex && showHygieneLocal && indexButtonSettings.hygiene" class="hygiene-display-board">
         <h3 class="hygiene-main-title">🧹 班級衛生工作管理</h3>
-        
         <div class="tabs-container-readonly">
           <button class="tab-btn" :class="{ active: activeHygieneTab === 'morning' }" @click="activeHygieneTab = 'morning'">🌅 早上掃地</button>
           <button class="tab-btn" :class="{ active: activeHygieneTab === 'lunch' }" @click="activeHygieneTab = 'lunch'">🍱 中午搬餐</button>
           <button class="tab-btn" :class="{ active: activeHygieneTab === 'squad' }" @click="activeHygieneTab = 'squad'">🛡️ 小隊工作</button>
         </div>
-
         <div class="hygiene-wrapper">
           <div v-show="activeHygieneTab === 'morning'" class="hygiene-content">
             <h3 class="hygiene-content-title" v-html="formatNL(hygieneData.morning.title)"></h3>
             <table class="custom-table morning-table">
-              <thead>
-                <tr>
-                  <th colspan="2" width="20%">教室</th><th width="30%">成員名單（14人）</th><th width="50%">工作內容</th>
-                </tr>
-              </thead>
+              <thead><tr><th colspan="2" width="20%">教室</th><th width="30%">成員名單</th><th width="50%">工作內容</th></tr></thead>
               <tbody>
                 <tr><td colspan="2" v-html="formatNL(hygieneData.morning.in_hygiene)"></td><td v-html="formatNL(hygieneData.morning.in_hygiene_names)"></td><td v-html="formatNL(hygieneData.morning.in_hygiene_work)"></td></tr>
                 <tr><td colspan="2" v-html="formatNL(hygieneData.morning.board)"></td><td v-html="formatNL(hygieneData.morning.board_names)"></td><td v-html="formatNL(hygieneData.morning.board_work)"></td></tr>
-                <tr>
-                  <td colspan="2" v-html="formatNL(hygieneData.morning.sweep)"></td><td v-html="formatNL(hygieneData.morning.sweep_names)"></td>
-                  <td rowspan="2" v-html="formatNL(hygieneData.morning.sweep_mop_work)"></td>
-                </tr>
+                <tr><td colspan="2" v-html="formatNL(hygieneData.morning.sweep)"></td><td v-html="formatNL(hygieneData.morning.sweep_names)"></td><td rowspan="2" v-html="formatNL(hygieneData.morning.sweep_mop_work)"></td></tr>
                 <tr><td colspan="2" v-html="formatNL(hygieneData.morning.mop)"></td><td v-html="formatNL(hygieneData.morning.mop_names)"></td></tr>
                 <tr><td colspan="2" v-html="formatNL(hygieneData.morning.window)"></td><td v-html="formatNL(hygieneData.morning.window_names)"></td><td v-html="formatNL(hygieneData.morning.window_work)"></td></tr>
                 <tr><td colspan="2" v-html="formatNL(hygieneData.morning.hallway)"></td><td v-html="formatNL(hygieneData.morning.hallway_names)"></td><td v-html="formatNL(hygieneData.morning.hallway_work)"></td></tr>
                 <tr><td colspan="2" v-html="formatNL(hygieneData.morning.trash)"></td><td v-html="formatNL(hygieneData.morning.trash_names)"></td><td v-html="formatNL(hygieneData.morning.trash_work)"></td></tr>
-                
-                <tr class="header-row"><th>外掃區</th><th>打掃區域</th><th>成員名單（12人）</th><th>工作內容</th></tr>
-                <tr>
-                  <td rowspan="4" v-html="formatNL(hygieneData.morning.out_area)"></td><td v-html="formatNL(hygieneData.morning.out_hygiene)"></td>
-                  <td v-html="formatNL(hygieneData.morning.out_hygiene_names)"></td><td v-html="formatNL(hygieneData.morning.out_hygiene_work)"></td>
-                </tr>
-                <tr>
-                  <td rowspan="3" v-html="formatNL(hygieneData.morning.out_sweep1)"></td><td v-html="formatNL(hygieneData.morning.out_sweep1_names)"></td>
-                  <td rowspan="3" v-html="formatNL(hygieneData.morning.out_sweep_work)"></td>
-                </tr>
+                <tr class="header-row"><th>外掃區</th><th>打掃區域</th><th>成員名單</th><th>工作內容</th></tr>
+                <tr><td rowspan="4" v-html="formatNL(hygieneData.morning.out_area)"></td><td v-html="formatNL(hygieneData.morning.out_hygiene)"></td><td v-html="formatNL(hygieneData.morning.out_hygiene_names)"></td><td v-html="formatNL(hygieneData.morning.out_hygiene_work)"></td></tr>
+                <tr><td rowspan="3" v-html="formatNL(hygieneData.morning.out_sweep1)"></td><td v-html="formatNL(hygieneData.morning.out_sweep1_names)"></td><td rowspan="3" v-html="formatNL(hygieneData.morning.out_sweep_work)"></td></tr>
                 <tr><td v-html="formatNL(hygieneData.morning.out_sweep2_names)"></td></tr>
                 <tr><td v-html="formatNL(hygieneData.morning.out_sweep3_names)"></td></tr>
               </tbody>
@@ -368,7 +309,7 @@
           </div>
         </div>
       </div>
-    </div> <!-- /normal-home-content -->
+    </div> 
 
     <!-- 歷史查詢視窗 -->
     <div v-if="showContactHistoryModal" class="modal-overlay" @click.self="showContactHistoryModal = false">
@@ -388,6 +329,26 @@
               </ul>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 客製化密碼輸入彈窗 -->
+    <div v-if="showPwdModal" class="modal-overlay" @click.self="closePwdModal">
+      <div class="pwd-modal-content">
+        <h3>{{ pwdModalTitle }}</h3>
+        <p class="pwd-desc">{{ pwdModalDesc }}</p>
+        <input 
+          type="password" 
+          v-model="pwdInput" 
+          @keyup.enter="submitPwd" 
+          class="pwd-input" 
+          placeholder="請輸入密碼..." 
+          autofocus 
+        />
+        <div class="pwd-actions">
+          <button @click="closePwdModal" class="cancel-btn">取消</button>
+          <button @click="submitPwd" class="confirm-btn">解鎖</button>
         </div>
       </div>
     </div>
@@ -413,8 +374,6 @@ const contactHistoryList = ref([])
 
 const isIpWhitelisted = ref(false)
 const isIpBrownlisted = ref(false)
-
-// 💡 新增：紀錄當前來訪的 IP 字串
 const currentIpStr = ref('')
 
 const announcements = ref([])
@@ -489,64 +448,42 @@ const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
 const currentThemeStyles = computed(() => {
   const t = examThemes[examData.value.theme] || examThemes.midnight
-  return {
-    '--ex-bg': t.bg,
-    '--ex-border': t.border,
-    '--ex-title': t.title,
-    '--ex-clock': t.clock,
-    '--ex-text': t.text,
-    '--ex-accent': t.accent,
-    '--ex-success': t.success,
-    '--ex-danger': t.danger,
-    '--ex-panel-bg': t.panelBg
-  }
+  return { '--ex-bg': t.bg, '--ex-border': t.border, '--ex-title': t.title, '--ex-clock': t.clock, '--ex-text': t.text, '--ex-accent': t.accent, '--ex-success': t.success, '--ex-danger': t.danger, '--ex-panel-bg': t.panelBg }
 })
 
 const checkIpRules = async () => {
   try {
     const ipRes = await fetch('https://api.ipify.org?format=json')
     const { ip } = await ipRes.json()
-    currentIpStr.value = ip // 💡 儲存 IP 供日後紀錄使用
+    currentIpStr.value = ip 
     
     const { data: rules } = await supabase.from('ip_rules').select('ip_range, rule_type')
-    
     if (rules && rules.length > 0) {
-      const whiteRules = rules.filter(r => r.rule_type === '白名單')
-      const brownRules = rules.filter(r => r.rule_type === '褐名單')
-      
-      isIpWhitelisted.value = whiteRules.some(r => ip.startsWith(r.ip_range))
-      isIpBrownlisted.value = brownRules.some(r => ip.startsWith(r.ip_range))
+      isIpWhitelisted.value = rules.filter(r => r.rule_type === '白名單').some(r => ip.startsWith(r.ip_range))
+      isIpBrownlisted.value = rules.filter(r => r.rule_type === '褐名單').some(r => ip.startsWith(r.ip_range))
     }
   } catch (e) {
     console.error('IP check failed', e)
-    isIpWhitelisted.value = false
-    isIpBrownlisted.value = false
   }
 }
 
-// 💡 新增：自動將訪客紀錄寫入資料庫
 const logVisit = async () => {
   if (sessionStorage.getItem('visit_logged')) return
   try {
     const ua = navigator.userAgent
     let role = '匿名來訪者'
-    
-    // 如果之前有登入過其他後台，嘗試將身分帶入紀錄
-    if (sessionStorage.getItem('schedule_admin_logged_in') === 'true' || 
-        sessionStorage.getItem('exams_admin_logged_in') === 'true') {
+    if (sessionStorage.getItem('schedule_admin_logged_in') === 'true' || sessionStorage.getItem('exams_admin_logged_in') === 'true') {
       role = '導師'
     }
-
-    await supabase.from('visitor_logs').insert([{ 
-      ip_address: currentIpStr.value || '未知IP', 
-      device_info: ua, 
-      role: role 
-    }])
-    
+    await supabase.from('visitor_logs').insert([{ ip_address: currentIpStr.value || '未知IP', device_info: ua, role: role }])
     sessionStorage.setItem('visit_logged', 'true')
-  } catch (e) { 
-    console.error('Log visit failed', e) 
-  }
+  } catch (e) {}
+}
+
+const logRoleVisit = async (roleName) => {
+  try {
+    await supabase.from('visitor_logs').insert([{ ip_address: currentIpStr.value || '未知IP', device_info: navigator.userAgent, role: roleName }])
+  } catch (e) { console.error(e) }
 }
 
 const privacyFilter = (txt) => {
@@ -554,35 +491,17 @@ const privacyFilter = (txt) => {
   if (!isIpWhitelisted.value && allStudents.value.length > 0) {
     const sortedStudents = [...allStudents.value].sort((a, b) => (b.real_name || '').length - (a.real_name || '').length)
     sortedStudents.forEach(stu => {
-      if (stu.real_name && stu.hidden_name && stu.real_name.trim() !== '') {
-        result = result.split(stu.real_name).join(stu.hidden_name)
-      }
+      if (stu.real_name && stu.hidden_name && stu.real_name.trim() !== '') { result = result.split(stu.real_name).join(stu.hidden_name) }
     })
   }
   return result
 }
 
 const formatNL = (txt) => privacyFilter(txt).replace(/\n/g, '<br>')
-
 const formatDateTime = (dtStr) => {
   if (!dtStr) return ''
-  const dt = new Date(dtStr)
-  return dt.toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+  return new Date(dtStr).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
 }
-
-const openEmergencyModal = async () => {
-  const pwd = window.prompt("🔒 進入緊急通知系統，請輸入「導師」密碼：")
-  const teacherPwd = officerPasswords.value.teacher || '168168168'
-  if (pwd === teacherPwd) {
-    showEmergencyModal.value = true
-    // 💡 登入成功時寫入日誌
-    await supabase.from('visitor_logs').insert([{ ip_address: currentIpStr.value, device_info: navigator.userAgent, role: '導師' }])
-  } else if (pwd !== null) { 
-    alert("❌ 密碼錯誤！無法使用此功能。")
-  }
-}
-
-const openDiscipline = () => { navigateTo('/discipline') }
 
 const dDate = new Date()
 const todayISO = `${dDate.getFullYear()}-${String(dDate.getMonth()+1).padStart(2,'0')}-${String(dDate.getDate()).padStart(2,'0')}`
@@ -601,20 +520,17 @@ const updateTime = () => {
 
 const scheduleDisplay = computed(() => {
   if (!scheduleData.value || !scheduleData.value.periods) return null
-  
   const currentDayIndex = new Date(nowTick.value).getDay() - 1 
   if (currentDayIndex < 0 || currentDayIndex > 4) return null 
   
   const now = new Date(nowTick.value)
   const nowMins = now.getHours() * 60 + now.getMinutes()
-  
   let currentClass = { status: '下課中', label: '目前', subject: '休息時間', teacher: '' }
   let nextClass = null
   
   for (let i = 0; i < scheduleData.value.periods.length; i++) {
     const p = scheduleData.value.periods[i]
     if (!p.startTime || !p.endTime) continue
-    
     const [sh, sm] = p.startTime.split(':').map(Number)
     const [eh, em] = p.endTime.split(':').map(Number)
     const startMins = sh * 60 + sm
@@ -625,36 +541,24 @@ const scheduleDisplay = computed(() => {
     
     if (nowMins >= startMins && nowMins <= endMins) {
       currentClass = { status: '上課中', label: p.name, subject: dayData.subject, teacher: dayData.teacher }
-      
       for (let j = i + 1; j < scheduleData.value.periods.length; j++) {
         const nextP = scheduleData.value.periods[j]
         const nextDayData = nextP.days[currentDayIndex]
-        if (nextDayData && nextDayData.subject) {
-          nextClass = { subject: nextDayData.subject }
-          break
-        }
+        if (nextDayData && nextDayData.subject) { nextClass = { subject: nextDayData.subject }; break }
       }
       break
     }
-    
-    if (nowMins < startMins && !nextClass) {
-      nextClass = { subject: dayData.subject }
-    }
+    if (nowMins < startMins && !nextClass) { nextClass = { subject: dayData.subject } }
   }
-  
   return { current: currentClass, next: nextClass }
 })
 
 const examStatus = computed(() => {
   if (!examData.value || !examData.value.periods || examData.value.periods.length === 0) return { state: 'WAITING', periods: [] }
-
   const now = new Date(nowTick.value)
   const nowMins = now.getHours() * 60 + now.getMinutes()
 
-  let current = null
-  let next = null
-  let state = 'WAITING'
-
+  let current = null; let next = null; let state = 'WAITING'
   const periods = JSON.parse(JSON.stringify(examData.value.periods))
 
   for (let i = 0; i < periods.length; i++) {
@@ -662,24 +566,16 @@ const examStatus = computed(() => {
     if (!p.startTime || !p.endTime) continue
     const [sh, sm] = p.startTime.split(':').map(Number)
     const [eh, em] = p.endTime.split(':').map(Number)
-    const startMins = sh * 60 + sm
-    const endMins = eh * 60 + em
-
+    const startMins = sh * 60 + sm; const endMins = eh * 60 + em
     p.isActive = false
 
     if (nowMins >= startMins && nowMins <= endMins) {
-      state = 'TESTING'
-      current = p
-      p.isActive = true
+      state = 'TESTING'; current = p; p.isActive = true
       if (i + 1 < periods.length) next = periods[i + 1]
       break
     }
-
     if (nowMins < startMins) {
-      if (state !== 'TESTING') {
-        state = i === 0 ? 'WAITING' : 'BREAK'
-        next = p
-      }
+      if (state !== 'TESTING') { state = i === 0 ? 'WAITING' : 'BREAK'; next = p }
       break
     }
   }
@@ -687,18 +583,14 @@ const examStatus = computed(() => {
   const lastP = periods[periods.length - 1]
   if (lastP && lastP.endTime) {
     const [lsh, lsm] = lastP.endTime.split(':').map(Number)
-    if (!current && !next && nowMins >= (lsh * 60 + lsm)) {
-       state = 'FINISHED'
-    }
+    if (!current && !next && nowMins >= (lsh * 60 + lsm)) { state = 'FINISHED' }
   }
-
   return { state, current, next, periods }
 })
 
 const countdownMinutes = computed(() => {
   if (examStatus.value.state !== 'TESTING' || !examStatus.value.current) return 999;
-  const currentTick = nowTick.value;
-  const now = new Date(currentTick);
+  const currentTick = nowTick.value; const now = new Date(currentTick);
   const [eh, em] = examStatus.value.current.endTime.split(':').map(Number);
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em, 0);
   return Math.floor((end.getTime() - currentTick) / 60000);
@@ -706,16 +598,13 @@ const countdownMinutes = computed(() => {
 
 const countdownText = computed(() => {
   if (examStatus.value.state !== 'TESTING' || !examStatus.value.current) return '';
-  const currentTick = nowTick.value;
-  const now = new Date(currentTick);
+  const currentTick = nowTick.value; const now = new Date(currentTick);
   const [eh, em] = examStatus.value.current.endTime.split(':').map(Number);
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em, 0);
   
   const diffMs = end.getTime() - currentTick;
   if (diffMs <= 0) return '00:00';
-  
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffSecs = Math.floor((diffMs % 60000) / 1000);
+  const diffMins = Math.floor(diffMs / 60000); const diffSecs = Math.floor((diffMs % 60000) / 1000);
   return `${String(diffMins).padStart(2, '0')}:${String(diffSecs).padStart(2, '0')}`;
 })
 
@@ -729,6 +618,61 @@ const isEditingContact = ref(false)
 const editingContactItems = ref([])
 const currentEditorRole = ref('') 
 
+const showPwdModal = ref(false)
+const pwdTarget = ref('')
+const pwdModalTitle = ref('')
+const pwdModalDesc = ref('')
+const pwdInput = ref('')
+
+const openPwdModal = (target) => {
+  pwdTarget.value = target
+  pwdInput.value = ''
+  if (target === 'emergency') {
+    pwdModalTitle.value = '🚨 緊急通知系統解鎖'
+    pwdModalDesc.value = '請輸入「導師」密碼：'
+  } else if (target === 'contact') {
+    pwdModalTitle.value = '✏️ 編輯聯絡簿解鎖'
+    pwdModalDesc.value = '請輸入「學藝股長」、「輔導股長」或「導師」密碼：'
+  }
+  showPwdModal.value = true
+}
+
+const closePwdModal = () => { showPwdModal.value = false }
+
+const submitPwd = async () => {
+  const pwd = pwdInput.value
+  const teacherPwd = officerPasswords.value.teacher || '168168168'
+
+  if (pwdTarget.value === 'emergency') {
+    if (pwd === teacherPwd) {
+      showPwdModal.value = false
+      showEmergencyModal.value = true
+      await logRoleVisit('導師')
+    } else { alert("❌ 密碼錯誤！") }
+  } 
+  else if (pwdTarget.value === 'contact') {
+    if (officerPasswords.value.academic && pwd === officerPasswords.value.academic) {
+      currentEditorRole.value = '學藝股長'
+      isEditingContact.value = true
+      editingContactItems.value = [...contactBookItems.value]
+      showPwdModal.value = false
+      await logRoleVisit('學藝股長')
+    } else if (officerPasswords.value.counseling && pwd === officerPasswords.value.counseling) {
+      currentEditorRole.value = '輔導股長'
+      isEditingContact.value = true
+      editingContactItems.value = [...contactBookItems.value]
+      showPwdModal.value = false
+      await logRoleVisit('輔導股長')
+    } else if (pwd === teacherPwd) {
+      currentEditorRole.value = '導師'
+      isEditingContact.value = true
+      editingContactItems.value = [...contactBookItems.value]
+      showPwdModal.value = false
+      await logRoleVisit('導師')
+    } else { alert("❌ 密碼錯誤！請確認密碼是否正確。") }
+  }
+}
+
 const allStudents = ref([])
 const todayAttendances = ref([])
 
@@ -738,15 +682,8 @@ const leaveCount = computed(() => todayAttendances.value.filter(a => a.status ==
 const lateCount = computed(() => todayAttendances.value.filter(a => a.status === '遲到').length)
 const absentCount = computed(() => expectedCount.value - presentCount.value - leaveCount.value - lateCount.value)
 
-const getAttendanceRecord = (studentId) => {
-  return todayAttendances.value.find(a => a.student_id === studentId)
-}
-
-const getAttendanceStatus = (studentId) => {
-  const record = getAttendanceRecord(studentId)
-  return record ? record.status : '未到'
-}
-
+const getAttendanceRecord = (studentId) => todayAttendances.value.find(a => a.student_id === studentId)
+const getAttendanceStatus = (studentId) => getAttendanceRecord(studentId)?.status || '未到'
 const getAttendanceClass = (studentId) => {
   const status = getAttendanceStatus(studentId)
   if (status === '已到') return 'present-card'
@@ -764,24 +701,13 @@ const toggleAttendance = async (student) => {
   else if (currentStatus === '遲到') nextStatus = '未到'
 
   let record = todayAttendances.value.find(a => a.student_id === student.id)
-  if (record) {
-    record.status = nextStatus
-  } else {
-    todayAttendances.value.push({ student_id: student.id, record_date: todayISO, status: nextStatus })
-  }
+  if (record) { record.status = nextStatus } else { todayAttendances.value.push({ student_id: student.id, record_date: todayISO, status: nextStatus }) }
 
   try {
-    const { data: existing } = await supabase.from('attendances')
-      .select('id').eq('student_id', student.id).eq('record_date', todayISO).maybeSingle()
-    
-    if (existing) {
-       await supabase.from('attendances').update({ status: nextStatus }).eq('id', existing.id)
-    } else {
-       await supabase.from('attendances').insert({ student_id: student.id, record_date: todayISO, status: nextStatus })
-    }
-  } catch (err) {
-    console.error('Update attendance error', err)
-  }
+    const { data: existing } = await supabase.from('attendances').select('id').eq('student_id', student.id).eq('record_date', todayISO).maybeSingle()
+    if (existing) { await supabase.from('attendances').update({ status: nextStatus }).eq('id', existing.id) } 
+    else { await supabase.from('attendances').insert({ student_id: student.id, record_date: todayISO, status: nextStatus }) }
+  } catch (err) { console.error(err) }
 }
 
 const fetchData = async () => {
@@ -800,49 +726,28 @@ const fetchData = async () => {
     if (histSetting) isHistoryVisibleOnIndex.value = histSetting.setting_value
 
     const btnSetting = sysData.find(s => s.setting_key === 'index_button_settings')
-    if (btnSetting && btnSetting.setting_value) {
-      indexButtonSettings.value = { ...indexButtonSettings.value, ...btnSetting.setting_value }
-    }
+    if (btnSetting && btnSetting.setting_value) { indexButtonSettings.value = { ...indexButtonSettings.value, ...btnSetting.setting_value } }
 
     const annSetting = sysData.find(s => s.setting_key === 'announcements_data')
-    if (annSetting && annSetting.setting_value) {
-      announcements.value = (annSetting.setting_value || []).sort((a, b) => new Date(b.date) - new Date(a.date))
-    }
+    if (annSetting && annSetting.setting_value) { announcements.value = (annSetting.setting_value || []).sort((a, b) => new Date(b.date) - new Date(a.date)) }
 
     const schSetting = sysData.find(s => s.setting_key === 'class_schedule_data')
-    if (schSetting && schSetting.setting_value) {
-      scheduleData.value = schSetting.setting_value
-    }
+    if (schSetting && schSetting.setting_value) { scheduleData.value = schSetting.setting_value }
 
     const exSetting = sysData.find(s => s.setting_key === 'exam_schedule_data')
-    if (exSetting && exSetting.setting_value) {
-      examData.value = { ...examData.value, ...exSetting.setting_value }
-    }
+    if (exSetting && exSetting.setting_value) { examData.value = { ...examData.value, ...exSetting.setting_value } }
 
     const seatSetting = sysData.find(s => s.setting_key === 'seating_chart_data')
     if (seatSetting) {
       const rawValue = seatSetting.setting_value || {}
       const normalizedSeats = (rawValue.seats || []).map(seat => {
         if (seat.content !== undefined) {
-          const contentStr = seat.content || ''
-          const lines = String(contentStr).split('\n')
+          const lines = String(seat.content || '').split('\n')
           return { id: seat.id, isHidden: seat.isHidden, seatNum: lines[0] || '', name: lines[1] || '', other: lines.slice(2).join(' ') || '' }
         }
         return seat
       })
-      let normalizedSettings = rawValue.settings || {}
-      if (normalizedSettings.fontSize) {
-        normalizedSettings = {
-          numberSize: normalizedSettings.fontSize, nameSize: normalizedSettings.fontSize + 4, otherSize: normalizedSettings.fontSize - 2,
-          numberColor: normalizedSettings.fontColor, nameColor: normalizedSettings.fontColor, otherColor: normalizedSettings.fontColor
-        }
-      }
-      seatingChart.value = { isVisible: rawValue.isVisible || false, isRotated: rawValue.isRotated || false, seats: normalizedSeats, settings: normalizedSettings }
-    }
-
-    const hygieneSetting = sysData.find(s => s.setting_key === 'hygiene_management_data')
-    if (hygieneSetting && hygieneSetting.setting_value) {
-      hygieneData.value = { ...JSON.parse(JSON.stringify(defaultHygieneData)), ...hygieneSetting.setting_value }
+      seatingChart.value = { isVisible: rawValue.isVisible || false, isRotated: rawValue.isRotated || false, seats: normalizedSeats, settings: rawValue.settings || {} }
     }
   }
 
@@ -854,39 +759,14 @@ const fetchData = async () => {
 }
 
 onMounted(() => { 
-  updateTime(); 
-  timer = setInterval(updateTime, 1000); 
-  // 💡 檢查 IP 後直接發送紀錄
-  checkIpRules().then(() => {
-    logVisit()
-    fetchData()
-  }) 
+  updateTime(); timer = setInterval(updateTime, 1000); 
+  checkIpRules().then(() => { logVisit(); fetchData() }) 
 })
-
 onUnmounted(() => { if (timer) clearInterval(timer) })
-
-const unlockContactEdit = async () => {
-  const pwd = window.prompt("🔒 進入編輯模式，請輸入「學藝股長」或「輔導股長」密碼：")
-  if (!pwd) return
-  const teacherPwd = officerPasswords.value.teacher || '168168168'
-  if ((officerPasswords.value.academic && pwd === officerPasswords.value.academic) || (officerPasswords.value.counseling && pwd === officerPasswords.value.counseling)) {
-    currentEditorRole.value = '股長'; isEditingContact.value = true; editingContactItems.value = [...contactBookItems.value] 
-    // 💡 登入成功寫入日誌
-    await supabase.from('visitor_logs').insert([{ ip_address: currentIpStr.value, device_info: navigator.userAgent, role: '股長' }])
-  } else if (pwd === teacherPwd) {
-    currentEditorRole.value = '導師'; isEditingContact.value = true; editingContactItems.value = [...contactBookItems.value] 
-    // 💡 登入成功寫入日誌
-    await supabase.from('visitor_logs').insert([{ ip_address: currentIpStr.value, device_info: navigator.userAgent, role: '導師' }])
-  } else { alert("❌ 密碼錯誤！請確認密碼是否正確。") }
-}
-
-const addContactItem = () => editingContactItems.value.push('')
-const removeContactItem = (i) => editingContactItems.value.splice(i, 1)
 
 const saveContactItems = async () => {
   try {
-    const { error: upsertError } = await supabase.from('contact_books').upsert({ record_date: todayISO, notices: parentNotices.value, contact_items: editingContactItems.value }, { onConflict: 'record_date' })
-    if (upsertError) throw upsertError
+    await supabase.from('contact_books').upsert({ record_date: todayISO, notices: parentNotices.value, contact_items: editingContactItems.value }, { onConflict: 'record_date' })
     alert("✅ 聯絡簿已成功更新發布！")
     contactBookItems.value = [...editingContactItems.value]; isEditingContact.value = false
   } catch (error) { alert("❌ 聯絡簿儲存失敗：" + error.message) }
@@ -895,32 +775,11 @@ const saveContactItems = async () => {
 const openContactHistory = async () => {
   showContactHistoryModal.value = true
   isLoadingHistory.value = true
-  
-  const dObj = new Date()
-  const endStr = `${dObj.getFullYear()}-${String(dObj.getMonth()+1).padStart(2,'0')}-${String(dObj.getDate()).padStart(2,'0')}`
-  
-  dObj.setDate(dObj.getDate() - 7)
-  const startStr = `${dObj.getFullYear()}-${String(dObj.getMonth()+1).padStart(2,'0')}-${String(dObj.getDate()).padStart(2,'0')}`
-
-  const { data } = await supabase.from('contact_books')
-    .select('record_date, contact_items')
-    .gte('record_date', startStr)
-    .lte('record_date', endStr)
-    .order('record_date', { ascending: false })
-
-  if (data) {
-    contactHistoryList.value = data.filter(r => r.contact_items && r.contact_items.length > 0)
-  } else {
-    contactHistoryList.value = []
-  }
+  const dObj = new Date(); const endStr = `${dObj.getFullYear()}-${String(dObj.getMonth()+1).padStart(2,'0')}-${String(dObj.getDate()).padStart(2,'0')}`
+  dObj.setDate(dObj.getDate() - 7); const startStr = `${dObj.getFullYear()}-${String(dObj.getMonth()+1).padStart(2,'0')}-${String(dObj.getDate()).padStart(2,'0')}`
+  const { data } = await supabase.from('contact_books').select('record_date, contact_items').gte('record_date', startStr).lte('record_date', endStr).order('record_date', { ascending: false })
+  contactHistoryList.value = data ? data.filter(r => r.contact_items && r.contact_items.length > 0) : []
   isLoadingHistory.value = false
-}
-
-const formatHistDate = (dateStr) => {
-  const [y, m, d] = dateStr.split('-')
-  const dt = new Date(y, m - 1, d)
-  const daysOfWeek = ['日', '一', '二', '三', '四', '五', '六']
-  return `${m}月${d}日 (星期${daysOfWeek[dt.getDay()]})`
 }
 </script>
 
@@ -928,16 +787,12 @@ const formatHistDate = (dateStr) => {
 .page-container { min-height: 100vh; background-color: #f3f4f6; padding: 20px; font-family: sans-serif; display: flex; flex-direction: column; gap: 20px; transition: 0.3s; }
 .is-exam-mode { padding: 0; background: var(--ex-bg); overflow: hidden; }
 
-/* 🎓 大考看板模式專屬樣式 (動態主題版) */
+/* 大考看板模式 */
 .exam-dashboard { background-color: var(--ex-bg); color: var(--ex-text); min-height: 100vh; padding: 40px 60px; display: flex; flex-direction: column; position: relative; align-items: stretch; transition: background-color 0.5s ease;}
 .exit-exam-btn { position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: var(--ex-text); padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 1.1rem; transition: 0.2s; z-index: 10;}
 .exit-exam-btn:hover { background: rgba(255,255,255,0.2); color: var(--ex-title); }
-
 .exam-main-title { font-size: 3.5rem; margin: 0 0 40px 0; color: var(--ex-title); letter-spacing: 2px; text-align: center; border-bottom: 2px solid var(--ex-border); padding-bottom: 20px;}
-
 .exam-split-layout { display: flex; gap: 60px; flex: 1; align-items: flex-start; justify-content: center; }
-
-/* 左半邊：課表 */
 .exam-left-panel { flex: 1; max-width: 900px; }
 .exam-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 1.8rem; background: var(--ex-panel-bg); border-radius: 16px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.2);}
 .exam-table th, .exam-table td { padding: 22px; text-align: center; border-bottom: 1px solid var(--ex-border); }
@@ -948,11 +803,9 @@ const formatHistDate = (dateStr) => {
 .font-mono { font-family: monospace; }
 .font-bold { font-weight: bold; letter-spacing: 1px; }
 
-/* 右半邊：時鐘與狀態 */
 .exam-right-panel { flex: 1; max-width: 800px; background: var(--ex-panel-bg); border-radius: 20px; padding: 50px; text-align: center; border: 1px solid var(--ex-border); box-shadow: 0 10px 30px rgba(0,0,0,0.3); display: flex; flex-direction: column; justify-content: center; align-items: center;}
 .clock-label { font-size: 1.5rem; color: var(--ex-text); margin-bottom: 10px; opacity: 0.8;}
 .exam-clock { font-size: 7.5rem; font-weight: bold; font-family: monospace; color: var(--ex-clock); margin-bottom: 40px; line-height: 1; text-shadow: 0 0 15px rgba(0,0,0,0.3);}
-
 .exam-status-display { width: 100%; border-top: 1px solid var(--ex-border); padding-top: 40px;}
 .status-text { font-size: 2.5rem; font-weight: bold; }
 .status-text.waiting { color: var(--ex-text); opacity: 0.7;}
@@ -964,37 +817,31 @@ const formatHistDate = (dateStr) => {
 .exam-countdown { font-size: 6.5rem; color: var(--ex-success); font-family: monospace; line-height: 1; text-shadow: 0 0 15px rgba(0,0,0,0.3);}
 .text-danger { color: var(--ex-danger) !important; animation: blink 1s infinite; }
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
-
-/* 💡 溫書自習中樣式 */
 .study-mode-text { font-size: 4rem; color: var(--ex-success); letter-spacing: 2px; margin-top: 20px; padding: 30px; border: 2px dashed var(--ex-success); border-radius: 16px; background: rgba(255,255,255, 0.05);}
-
 .status-text.break .status-next { margin-top: 20px; font-size: 2rem; color: var(--ex-text); }
 .status-text.break .highlight { color: var(--ex-success); font-size: 3.5rem; margin: 15px 0; display: block;}
 .next-time { font-size: 1.8rem; color: var(--ex-text); font-family: monospace; opacity: 0.8;}
 
+/* 💡 密碼彈窗樣式 */
+.pwd-modal-content { background: white; padding: 25px 30px; border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); text-align: center;}
+.pwd-modal-content h3 { margin: 0 0 15px 0; color: #1e293b; font-size: 1.4rem; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; }
+.pwd-desc { color: #64748b; font-size: 1.05rem; margin-bottom: 20px; }
+.pwd-input { width: 100%; padding: 12px 15px; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 25px; font-size: 1.2rem; text-align: center; box-sizing: border-box;}
+.pwd-input:focus { border-color: #3b82f6; outline: none; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+.pwd-actions { display: flex; justify-content: center; gap: 15px; }
+.pwd-actions button { padding: 10px 25px; border-radius: 8px; font-weight: bold; font-size: 1.05rem; cursor: pointer; border: none;}
+.confirm-btn { background: #3b82f6; color: white; }
+.cancel-btn { background: #e2e8f0; color: #475569; }
 
 /* 常規首頁樣式 */
 .btn-enter-exam { width: 100%; padding: 12px; background: #991b1b; color: white; border: none; border-radius: 6px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(153, 27, 27, 0.3); animation: subtle-pulse 2s infinite;}
 @keyframes subtle-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
 
-.corkboard {
-  background-color: #d1a36a;
-  background-image: url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.12"/></svg>');
-  border: 10px solid #754d29;
-  border-radius: 8px;
-  padding: 20px 25px;
-  box-shadow: 0 6px 12px rgba(0,0,0,0.15), inset 0 0 10px rgba(0,0,0,0.3);
-}
+.corkboard { background-color: #d1a36a; background-image: url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.12"/></svg>'); border: 10px solid #754d29; border-radius: 8px; padding: 20px 25px; box-shadow: 0 6px 12px rgba(0,0,0,0.15), inset 0 0 10px rgba(0,0,0,0.3); }
 .cork-title { color: #4a2b18; text-shadow: 1px 1px 0px rgba(255,255,255,0.3); font-size: 1.4rem; }
 .cork-divider { border-bottom: 2px dashed #92400e; margin: 15px 0; opacity: 0.5; }
 .cork-cards-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-.cork-card {
-  background: #fef9c3;
-  border-radius: 2px 2px 10px 2px;
-  padding: 15px 20px;
-  box-shadow: 2px 4px 6px rgba(0,0,0,0.15);
-  position: relative;
-}
+.cork-card { background: #fef9c3; border-radius: 2px 2px 10px 2px; padding: 15px 20px; box-shadow: 2px 4px 6px rgba(0,0,0,0.15); position: relative; }
 .pin { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); font-size: 1.8rem; z-index: 2; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
 .cork-card-header { border-bottom: 1px solid #fcd34d; padding-bottom: 10px; margin-bottom: 10px; }
 .cork-card-title { margin: 0 0 5px 0; color: #92400e; font-size: 1.2rem; }
@@ -1022,7 +869,6 @@ const formatHistDate = (dateStr) => {
 
 .empty-text-italic { color: #94a3b8; font-style: italic; font-size: 1.1rem; }
 .item-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
-
 .rich-notice-item { display: flex; align-items: flex-start; gap: 8px; width: 100%; font-size: 1.15rem; letter-spacing: 0.5px; }
 .rich-notice-content { flex: 1; word-wrap: break-word; overflow-wrap: break-word; line-height: 1.5; }
 .rich-notice-content :deep(p) { margin: 0 0 5px 0; }
@@ -1034,10 +880,7 @@ const formatHistDate = (dateStr) => {
 .control-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; text-align: center; }
 .clock-display { font-size: 2.2rem; font-weight: bold; color: #1e293b; margin-bottom: 10px; }
 
-.schedule-ticker { 
-  background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 10px 15px;
-  margin-bottom: 20px; display: flex; justify-content: center; gap: 20px; align-items: center; flex-wrap: wrap;
-}
+.schedule-ticker { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 10px 15px; margin-bottom: 20px; display: flex; justify-content: center; gap: 20px; align-items: center; flex-wrap: wrap; }
 .subject-text { font-weight: bold; color: #047857;}
 .teacher-text { font-size: 0.95rem; color: #475569; }
 .next-class { color: #64748b; font-size: 1rem; border-left: 2px solid #cbd5e1; padding-left: 20px; }
@@ -1068,11 +911,7 @@ const formatHistDate = (dateStr) => {
 .stat-absent { background: #ffe4e6; color: #e11d48; border: 1px solid #fca5a5; }
 
 .student-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
-.student-card { 
-  border-radius: 6px; padding: 15px 10px; text-align: center; font-weight: bold; 
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05); cursor: pointer; user-select: none; 
-  transition: 0.1s transform, 0.3s background-color; 
-}
+.student-card { border-radius: 6px; padding: 15px 10px; text-align: center; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.05); cursor: pointer; user-select: none; transition: 0.1s transform, 0.3s background-color; }
 .student-card:active { transform: scale(0.95); }
 .student-seat { font-size: 1.2rem; margin-bottom: 5px; }
 .student-name { font-size: 1.1rem; margin-bottom: 5px; }
@@ -1161,14 +1000,12 @@ const formatHistDate = (dateStr) => {
   .corkboard, .blackboard { padding: 15px 10px; border-width: 8px; }
   .cork-cards-container { grid-template-columns: 1fr; gap: 15px; }
   .cork-card { padding: 15px; }
-
   .student-grid { grid-template-columns: repeat(2, 1fr); }
   .seats-grid-readonly, .labels-grid-readonly { gap: 5px; }
   .seat-card-readonly { padding: 5px; min-height: 90px; }
   .tabs-container-readonly { justify-content: flex-start; padding-bottom: 10px; }
   .schedule-ticker { flex-direction: column; gap: 10px; text-align: center; }
   .next-class { border-left: none; padding-left: 0; border-top: 1px dashed #cbd5e1; padding-top: 10px; width: 100%;}
-  
   .is-collapsed { max-height: none; overflow: visible; }
   .fade-mask { display: none; }
   .desktop-only { display: none; }
