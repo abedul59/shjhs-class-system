@@ -1,47 +1,71 @@
 <template>
   <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
     
-    <!-- 🎓 進入大考模式後的全螢幕投影畫面 -->
+    <!-- 🎓 進入大考模式後的全螢幕投影畫面 (雙欄設計) -->
     <div v-if="isExamModeView && isIpBrownlisted" class="exam-dashboard">
       <button @click="isExamModeView = false" class="exit-exam-btn">✖ 結束大考模式</button>
       
-      <h1 class="exam-title">{{ examData.title }}</h1>
-      <div class="exam-clock">{{ currentTime }}</div>
-
-      <!-- 狀態顯示卡片 -->
-      <div class="exam-status-card">
-        <div v-if="examStatus.state === 'WAITING'" class="status-text waiting">⏳ 準備考試中...</div>
-        <div v-else-if="examStatus.state === 'FINISHED'" class="status-text finished">🎉 今日考試已全數結束</div>
-        <div v-else-if="examStatus.state === 'TESTING'" class="status-text testing">
-          <div class="status-label">✏️ 目前考科</div>
-          <div class="status-subject">{{ examStatus.current.subject }}</div>
-          <div class="status-time">{{ examStatus.current.startTime }} - {{ examStatus.current.endTime }}</div>
+      <h1 class="exam-main-title">{{ examData.title }}</h1>
+      
+      <div class="exam-split-layout">
+        <!-- 左半邊：考試時間表 -->
+        <div class="exam-left-panel">
+          <table class="exam-table">
+            <thead>
+              <tr>
+                <th width="120">節次</th>
+                <th>考科</th>
+                <th>開始時間</th>
+                <th>結束時間</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(p, i) in examStatus.periods" :key="i" :class="{ 'active-row': p.isActive }">
+                <td>第 {{ i + 1 }} 節</td>
+                <td class="font-bold">{{ p.subject }}</td>
+                <td class="font-mono">{{ p.startTime }}</td>
+                <td class="font-mono">{{ p.endTime }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-        <div v-else-if="examStatus.state === 'BREAK'" class="status-text break">
-          <div class="status-label">☕ 休息時間</div>
-          <div class="status-next" v-if="examStatus.next">下一節考科：<span class="highlight">{{ examStatus.next.subject }}</span> ({{ examStatus.next.startTime }} 開始)</div>
+
+        <!-- 右半邊：時鐘與狀態 -->
+        <div class="exam-right-panel">
+          <div class="clock-label">目前時間</div>
+          <div class="exam-clock">{{ currentTime }}</div>
+
+          <div class="exam-status-display">
+            <!-- 準備中 -->
+            <div v-if="examStatus.state === 'WAITING'" class="status-text waiting">⏳ 準備考試中...</div>
+            <!-- 已結束 -->
+            <div v-else-if="examStatus.state === 'FINISHED'" class="status-text finished">🎉 今日考試已全數結束</div>
+            
+            <!-- 考試中 (含倒數計時) -->
+            <div v-else-if="examStatus.state === 'TESTING'" class="status-text testing">
+              <div class="status-label">✏️ 目前考科</div>
+              <div class="status-subject">{{ examStatus.current.subject }}</div>
+              
+              <div class="countdown-wrapper">
+                <div class="countdown-label">距離本節結束還有</div>
+                <div class="exam-countdown" :class="{ 'text-danger': countdownMinutes < 5 }">
+                  {{ countdownText }}
+                </div>
+              </div>
+            </div>
+            
+            <!-- 休息中 -->
+            <div v-else-if="examStatus.state === 'BREAK'" class="status-text break">
+              <div class="status-label">☕ 休息時間</div>
+              <div class="status-next" v-if="examStatus.next">
+                下一節考科：<span class="highlight">{{ examStatus.next.subject }}</span> 
+                <br>
+                <span class="next-time">({{ examStatus.next.startTime }} 開始)</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-
-      <!-- 考試時刻表 -->
-      <table class="exam-table">
-        <thead>
-          <tr>
-            <th width="100">節次</th>
-            <th>考科</th>
-            <th>開始時間</th>
-            <th>結束時間</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(p, i) in examStatus.periods" :key="i" :class="{ 'active-row': p.isActive }">
-            <td>第 {{ i + 1 }} 節</td>
-            <td class="font-bold">{{ p.subject }}</td>
-            <td class="font-mono">{{ p.startTime }}</td>
-            <td class="font-mono">{{ p.endTime }}</td>
-          </tr>
-        </tbody>
-      </table>
     </div>
 
     <!-- 原本的常規首頁內容 (大考模式開啟時隱藏) -->
@@ -110,7 +134,6 @@
               </div>
             </div>
 
-            <!-- 大考模式切換按鈕 (僅褐名單可見) -->
             <button v-if="isIpBrownlisted && examData.periods && examData.periods.length > 0" @click="isExamModeView = true" class="btn-enter-exam">
               🎓 切換至大考看板模式
             </button>
@@ -504,15 +527,22 @@ const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '
 const todayDisplay = `${dDate.getFullYear()}年${dDate.getMonth()+1}月${dDate.getDate()}日${days[dDate.getDay()]}`
 
 const currentTime = ref('')
+const nowTick = ref(Date.now()) // 💡 用於即時更新倒數計時
 let timer = null
+
+const updateTime = () => {
+  const now = new Date()
+  nowTick.value = now.getTime()
+  currentTime.value = now.toLocaleTimeString('zh-TW', { hour12: false })
+}
 
 const scheduleDisplay = computed(() => {
   if (!scheduleData.value || !scheduleData.value.periods) return null
   
-  const now = new Date()
-  const currentDayIndex = now.getDay() - 1 
+  const currentDayIndex = new Date(nowTick.value).getDay() - 1 
   if (currentDayIndex < 0 || currentDayIndex > 4) return null 
   
+  const now = new Date(nowTick.value)
   const nowMins = now.getHours() * 60 + now.getMinutes()
   
   let currentClass = { status: '下課中', label: '目前', subject: '休息時間', teacher: '' }
@@ -555,7 +585,7 @@ const scheduleDisplay = computed(() => {
 const examStatus = computed(() => {
   if (!examData.value || !examData.value.periods || examData.value.periods.length === 0) return { state: 'WAITING', periods: [] }
 
-  const now = new Date()
+  const now = new Date(nowTick.value)
   const nowMins = now.getHours() * 60 + now.getMinutes()
 
   let current = null
@@ -592,18 +622,37 @@ const examStatus = computed(() => {
 
   const lastP = periods[periods.length - 1]
   const [lsh, lsm] = lastP.endTime.split(':').map(Number)
-  if (!current && !next && nowMins > (lsh * 60 + lsm)) {
+  if (!current && !next && nowMins >= (lsh * 60 + lsm)) {
      state = 'FINISHED'
   }
 
   return { state, current, next, periods }
 })
 
+// 💡 動態倒數計時計算
+const countdownText = computed(() => {
+  if (examStatus.value.state !== 'TESTING' || !examStatus.value.current) return '';
+  const currentTick = nowTick.value;
+  const now = new Date(currentTick);
+  const [eh, em] = examStatus.value.current.endTime.split(':').map(Number);
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em, 0);
+  
+  const diffMs = end.getTime() - currentTick;
+  if (diffMs <= 0) return '00:00';
+  
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffSecs = Math.floor((diffMs % 60000) / 1000);
+  return `${String(diffMins).padStart(2, '0')}:${String(diffSecs).padStart(2, '0')}`;
+})
 
-const updateTime = () => {
-  const now = new Date()
-  currentTime.value = now.toLocaleTimeString('zh-TW', { hour12: false })
-}
+const countdownMinutes = computed(() => {
+  if (examStatus.value.state !== 'TESTING' || !examStatus.value.current) return 999;
+  const currentTick = nowTick.value;
+  const now = new Date(currentTick);
+  const [eh, em] = examStatus.value.current.endTime.split(':').map(Number);
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em, 0);
+  return Math.floor((end.getTime() - currentTick) / 60000);
+})
 
 const parentNotices = ref([])
 const contactBookItems = ref([])
@@ -804,36 +853,54 @@ const formatHistDate = (dateStr) => {
 
 <style scoped>
 .page-container { min-height: 100vh; background-color: #f3f4f6; padding: 20px; font-family: sans-serif; display: flex; flex-direction: column; gap: 20px; transition: 0.3s; }
-.is-exam-mode { padding: 0; background: #0f172a; }
+.is-exam-mode { padding: 0; background: #0f172a; overflow: hidden; }
 
-.exam-dashboard { background: #0f172a; color: white; min-height: 100vh; padding: 40px; display: flex; flex-direction: column; align-items: center; position: relative;}
-.exit-exam-btn { position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #cbd5e1; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 1.1rem; transition: 0.2s;}
+/* 🎓 大考看板模式專屬樣式 (雙欄) */
+.exam-dashboard { background: #0f172a; color: white; min-height: 100vh; padding: 40px 60px; display: flex; flex-direction: column; position: relative; align-items: stretch;}
+.exit-exam-btn { position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #cbd5e1; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 1.1rem; transition: 0.2s; z-index: 10;}
 .exit-exam-btn:hover { background: rgba(255,255,255,0.2); color: white; }
-.exam-title { font-size: 3rem; margin: 20px 0; color: #f8fafc; letter-spacing: 2px;}
-.exam-clock { font-size: 8rem; font-weight: bold; font-family: monospace; color: #fbbf24; text-shadow: 0 0 20px rgba(251, 191, 36, 0.4); margin-bottom: 30px; line-height: 1; }
 
-.exam-status-card { background: #1e293b; border-radius: 16px; padding: 30px 50px; text-align: center; margin-bottom: 40px; width: 100%; max-width: 800px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border: 1px solid #334155;}
+.exam-main-title { font-size: 3rem; margin: 0 0 40px 0; color: #f8fafc; letter-spacing: 2px; text-align: center; border-bottom: 2px solid #334155; padding-bottom: 20px;}
+
+.exam-split-layout { display: flex; gap: 60px; flex: 1; align-items: flex-start; justify-content: center; }
+
+/* 左半邊：課表 */
+.exam-left-panel { flex: 1; max-width: 900px; }
+.exam-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 1.6rem; background: #1e293b; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.2);}
+.exam-table th, .exam-table td { padding: 22px; text-align: center; border-bottom: 1px solid #334155; }
+.exam-table th { background: #334155; color: #94a3b8; font-weight: normal; font-size: 1.4rem; }
+.exam-table tr:last-child td { border-bottom: none; }
+.active-row { background: rgba(59, 130, 246, 0.15); border-left: 5px solid #3b82f6;}
+.active-row td { color: #60a5fa; font-weight: bold; border-bottom-color: rgba(59, 130, 246, 0.3);}
+.font-mono { font-family: monospace; }
+.font-bold { font-weight: bold; letter-spacing: 1px; }
+
+/* 右半邊：時鐘與狀態 */
+.exam-right-panel { flex: 1; max-width: 800px; background: #1e293b; border-radius: 20px; padding: 50px; text-align: center; border: 1px solid #334155; box-shadow: 0 10px 30px rgba(0,0,0,0.3); display: flex; flex-direction: column; justify-content: center; align-items: center;}
+.clock-label { font-size: 1.5rem; color: #94a3b8; margin-bottom: 10px; }
+.exam-clock { font-size: 7rem; font-weight: bold; font-family: monospace; color: #fbbf24; text-shadow: 0 0 20px rgba(251, 191, 36, 0.4); margin-bottom: 40px; line-height: 1; }
+
+.exam-status-display { width: 100%; border-top: 1px solid #334155; padding-top: 40px;}
 .status-text { font-size: 2.5rem; font-weight: bold; }
 .status-text.waiting { color: #94a3b8; }
 .status-text.finished { color: #10b981; }
 .status-label { font-size: 1.5rem; color: #94a3b8; margin-bottom: 10px; }
-.status-subject { font-size: 4.5rem; color: #10b981; letter-spacing: 5px; text-shadow: 0 0 15px rgba(16, 185, 129, 0.3); line-height: 1.2; margin: 10px 0;}
-.status-time { font-size: 1.8rem; color: #cbd5e1; font-family: monospace; }
-.status-text.break .status-next { margin-top: 20px; font-size: 2rem; color: #cbd5e1; }
-.status-text.break .highlight { color: #3b82f6; font-size: 2.5rem; margin: 0 10px; }
+.status-subject { font-size: 5rem; color: #3b82f6; letter-spacing: 5px; text-shadow: 0 0 15px rgba(59, 130, 246, 0.3); line-height: 1.2; margin: 10px 0 40px 0;}
+.countdown-wrapper { background: rgba(0,0,0,0.2); padding: 30px; border-radius: 16px; border: 1px solid #334155;}
+.countdown-label { font-size: 1.5rem; color: #cbd5e1; margin-bottom: 10px; }
+.exam-countdown { font-size: 6.5rem; color: #10b981; font-family: monospace; line-height: 1; text-shadow: 0 0 15px rgba(16, 185, 129, 0.3);}
+.text-danger { color: #ef4444 !important; text-shadow: 0 0 15px rgba(239, 68, 68, 0.4) !important; animation: blink 1s infinite; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
 
-.exam-table { width: 100%; max-width: 1000px; border-collapse: separate; border-spacing: 0; font-size: 1.5rem; background: #1e293b; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.2);}
-.exam-table th, .exam-table td { padding: 18px; text-align: center; border-bottom: 1px solid #334155; }
-.exam-table th { background: #334155; color: #94a3b8; font-weight: normal; font-size: 1.2rem; }
-.exam-table tr:last-child td { border-bottom: none; }
-.active-row { background: rgba(16, 185, 129, 0.2); }
-.active-row td { color: #10b981; font-weight: bold; }
-.font-mono { font-family: monospace; }
-.font-bold { font-weight: bold; letter-spacing: 1px; }
+.status-text.break .status-next { margin-top: 20px; font-size: 2rem; color: #cbd5e1; }
+.status-text.break .highlight { color: #10b981; font-size: 3.5rem; margin: 15px 0; display: block;}
+.next-time { font-size: 1.8rem; color: #94a3b8; font-family: monospace;}
+
+
+/* 常規首頁樣式 */
 .btn-enter-exam { width: 100%; padding: 12px; background: #991b1b; color: white; border: none; border-radius: 6px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(153, 27, 27, 0.3); animation: subtle-pulse 2s infinite;}
 @keyframes subtle-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
 
-/* 💡 修正：軟木塞公佈欄縮小 padding 解決手機跑版 */
 .corkboard {
   background-color: #d1a36a;
   background-image: url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.12"/></svg>');
@@ -844,7 +911,6 @@ const formatHistDate = (dateStr) => {
 }
 .cork-title { color: #4a2b18; text-shadow: 1px 1px 0px rgba(255,255,255,0.3); font-size: 1.4rem; }
 .cork-divider { border-bottom: 2px dashed #92400e; margin: 15px 0; opacity: 0.5; }
-/* 💡 修正：使用 1fr 讓卡片在手機版可以自動縮放 */
 .cork-cards-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
 .cork-card {
   background: #fef9c3;
@@ -862,7 +928,6 @@ const formatHistDate = (dateStr) => {
 .cork-link { display: inline-block; background: #fbbf24; color: #92400e; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 0.95rem; border: 1px dashed #d97706; transition: 0.2s; text-align: center;}
 .cork-link:hover { background: #f59e0b; color: white; }
 
-/* 💡 修正：黑板縮小 padding 解決手機跑版 */
 .blackboard { background-color: #315243; border: 10px solid #754d29; border-radius: 8px; padding: 20px 25px; box-shadow: 0 6px 12px rgba(0,0,0,0.15), inset 0 0 10px rgba(0,0,0,0.3); margin-bottom: 20px;}
 .board-title { margin: 0; font-size: 1.4rem; font-weight: bold; }
 .notice-title { color: #fca5a5; }
@@ -1014,7 +1079,6 @@ const formatHistDate = (dateStr) => {
 .text-sm { font-size: 0.9rem; }
 .text-xs { font-size: 0.75rem; color: #64748b; font-weight: normal;}
 
-/* 💡 修正：手機版單欄自適應顯示 */
 @media (max-width: 1024px) { .main-split { flex-direction: column; } .student-grid { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 768px) {
   .page-container { padding: 10px; }
