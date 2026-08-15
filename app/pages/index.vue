@@ -1,8 +1,8 @@
 <template>
   <div class="page-container">
     
-    <!-- 💡 更新：軟木塞公佈欄 (顏色與外框完美對齊下方黑板) -->
-    <div v-if="announcements.length > 0" class="corkboard announcement-board">
+    <!-- 💡 更新：軟木塞公佈欄增加「不在黑名單」才顯示的條件 -->
+    <div v-if="announcements.length > 0 && !isIpBlacklisted" class="corkboard announcement-board">
       <h2 class="board-title cork-title">📌 班級公佈欄</h2>
       <div class="cork-divider"></div>
       <div class="cork-cards-container">
@@ -322,19 +322,13 @@ const isLoadingHistory = ref(false)
 const contactHistoryList = ref([])
 
 const isIpWhitelisted = ref(false)
+// 💡 新增：儲存黑名單狀態的變數
+const isIpBlacklisted = ref(false)
 
 const announcements = ref([])
 
 const indexButtonSettings = ref({
-  parentBind: true,
-  parentMsg: true,
-  studentMsg: true,
-  assignments: true,
-  discipline: true,
-  hygiene: true,
-  seats: true,
-  emergency: true,
-  admin: true
+  parentBind: true, parentMsg: true, studentMsg: true, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: true
 })
 
 const defaultHygieneData = {
@@ -384,17 +378,24 @@ const defaultHygieneData = {
 
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
-const checkIpWhitelist = async () => {
+// 💡 更新：一併檢查白名單與黑名單規則
+const checkIpRules = async () => {
   try {
     const ipRes = await fetch('https://api.ipify.org?format=json')
     const { ip } = await ipRes.json()
-    const { data: rules } = await supabase.from('ip_rules').select('ip_range').eq('rule_type', '白名單')
+    const { data: rules } = await supabase.from('ip_rules').select('ip_range, rule_type')
+    
     if (rules && rules.length > 0) {
-      isIpWhitelisted.value = rules.some(r => ip.startsWith(r.ip_range))
+      const whiteRules = rules.filter(r => r.rule_type === '白名單')
+      const blackRules = rules.filter(r => r.rule_type === '黑名單')
+      
+      isIpWhitelisted.value = whiteRules.some(r => ip.startsWith(r.ip_range))
+      isIpBlacklisted.value = blackRules.some(r => ip.startsWith(r.ip_range))
     }
   } catch (e) {
     console.error('IP check failed', e)
     isIpWhitelisted.value = false
+    isIpBlacklisted.value = false
   }
 }
 
@@ -570,7 +571,8 @@ const fetchData = async () => {
 onMounted(() => { 
   updateTime(); 
   timer = setInterval(updateTime, 1000); 
-  checkIpWhitelist().then(() => fetchData()) 
+  // 💡 使用更新後的 checkIpRules
+  checkIpRules().then(() => fetchData()) 
 })
 
 onUnmounted(() => { if (timer) clearInterval(timer) })
@@ -633,7 +635,6 @@ const formatHistDate = (dateStr) => {
 <style scoped>
 .page-container { min-height: 100vh; background-color: #f3f4f6; padding: 20px; font-family: sans-serif; display: flex; flex-direction: column; gap: 20px; }
 
-/* 💡 更新：軟木塞公佈欄外觀對齊黑板 */
 .corkboard {
   background-color: #d1a36a;
   background-image: url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.12"/></svg>');
@@ -783,8 +784,8 @@ const formatHistDate = (dateStr) => {
 
 .custom-table { width: 100%; border-collapse: collapse; text-align: center; font-size: 0.95rem; background: white;}
 .custom-table th, .custom-table td { border: 1px solid #94a3b8; padding: 8px; vertical-align: middle; line-height: 1.4; word-break: break-word;}
-.custom-table th { background-color: #f1f5f9; font-weight: bold; }
-.header-row th { background-color: #e2e8f0; }
+.custom-table th { background: #f1f5f9; font-weight: bold; }
+.header-row th { background: #e2e8f0; }
 .morning-table td:nth-child(1), .morning-table td:nth-child(2) { font-weight: bold; }
 .lunch-table th { background: #f8fafc; font-weight: bold;}
 
