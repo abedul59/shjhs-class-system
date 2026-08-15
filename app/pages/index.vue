@@ -29,7 +29,6 @@
       <div class="board-content">
         <div v-if="parentNotices.length === 0" class="empty-text-italic">目前無特別須知事項</div>
         <ul v-else class="item-list">
-          <!-- 💡 更新：使用 v-html 解析富文字，並套用 flex 排版對齊圖示 -->
           <li v-for="(notice, index) in parentNotices" :key="'n-'+index" class="rich-notice-item">
             <span class="bullet">📌</span>
             <div class="rich-notice-content" v-html="privacyFilter(notice)"></div>
@@ -43,6 +42,20 @@
         <div class="control-card">
           <div class="clock-display">🕒 {{ currentTime }}</div>
           
+          <!-- 💡 新增：動態課表提示 (目前課程與下節課程) -->
+          <div v-if="scheduleDisplay" class="schedule-ticker">
+            <div class="current-class">
+              <span class="pulse-dot" v-if="scheduleDisplay.current.status === '上課中'"></span>
+              <strong>{{ scheduleDisplay.current.label }}：</strong>
+              <span class="subject-text">{{ scheduleDisplay.current.subject }}</span>
+              <span class="teacher-text" v-if="scheduleDisplay.current.teacher">({{ scheduleDisplay.current.teacher }})</span>
+            </div>
+            <div class="next-class" v-if="scheduleDisplay.next">
+              <strong>下節課：</strong>
+              <span>{{ scheduleDisplay.next.subject }}</span>
+            </div>
+          </div>
+
           <div class="button-group">
             <NuxtLink v-if="indexButtonSettings.parentBind" to="/parent-bind" class="btn btn-orange">👨‍👩‍👧 綁定</NuxtLink>
             <NuxtLink v-if="indexButtonSettings.parentMsg" to="/parent-message" class="btn btn-green">💬 家長私訊</NuxtLink>
@@ -51,6 +64,10 @@
             <button v-if="indexButtonSettings.discipline" @click="openDiscipline" class="btn btn-dark-blue">⚖️ 秩序管理</button>
             <NuxtLink v-if="indexButtonSettings.hygiene" to="/hygiene" class="btn btn-cyan">🧹 衛生管理</NuxtLink>            
             <NuxtLink v-if="indexButtonSettings.seats" to="/seats" class="btn btn-teal">🪑 座位管理</NuxtLink>
+            
+            <!-- 💡 新增：課表管理按鈕 -->
+            <NuxtLink v-if="indexButtonSettings.schedule" to="/schedule" class="btn btn-amber">🗓️ 課表管理</NuxtLink>
+            
             <button v-if="indexButtonSettings.emergency" @click="openEmergencyModal" class="btn btn-red">🚨 緊急通知</button>
             <NuxtLink v-if="indexButtonSettings.admin" to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
             
@@ -328,8 +345,11 @@ const isIpBrownlisted = ref(false)
 
 const announcements = ref([])
 
+// 💡 新增：儲存課表資料
+const scheduleData = ref(null)
+
 const indexButtonSettings = ref({
-  parentBind: true, parentMsg: true, studentMsg: true, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: true
+  parentBind: true, parentMsg: true, studentMsg: true, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: true, schedule: true
 })
 
 const defaultHygieneData = {
@@ -439,6 +459,57 @@ const todayDisplay = `${dDate.getFullYear()}年${dDate.getMonth()+1}月${dDate.g
 
 const currentTime = ref('')
 let timer = null
+
+// 💡 課表動態計算邏輯
+const scheduleDisplay = computed(() => {
+  if (!scheduleData.value || !scheduleData.value.periods) return null
+  
+  const now = new Date()
+  const currentDayIndex = now.getDay() - 1 // 0=週一, 4=週五
+  if (currentDayIndex < 0 || currentDayIndex > 4) return null // 週末不顯示
+  
+  const nowMins = now.getHours() * 60 + now.getMinutes()
+  
+  let currentClass = { status: '下課中', label: '目前', subject: '休息時間', teacher: '' }
+  let nextClass = null
+  
+  for (let i = 0; i < scheduleData.value.periods.length; i++) {
+    const p = scheduleData.value.periods[i]
+    if (!p.startTime || !p.endTime) continue
+    
+    const [sh, sm] = p.startTime.split(':').map(Number)
+    const [eh, em] = p.endTime.split(':').map(Number)
+    const startMins = sh * 60 + sm
+    const endMins = eh * 60 + em
+    
+    const dayData = p.days[currentDayIndex]
+    if (!dayData || !dayData.subject) continue
+    
+    // 判斷是否在此節課中
+    if (nowMins >= startMins && nowMins <= endMins) {
+      currentClass = { status: '上課中', label: p.name, subject: dayData.subject, teacher: dayData.teacher }
+      
+      // 尋找下一節有課的
+      for (let j = i + 1; j < scheduleData.value.periods.length; j++) {
+        const nextP = scheduleData.value.periods[j]
+        const nextDayData = nextP.days[currentDayIndex]
+        if (nextDayData && nextDayData.subject) {
+          nextClass = { subject: nextDayData.subject }
+          break
+        }
+      }
+      break
+    }
+    
+    // 如果時間還沒到這節課，這節就是「下一節」
+    if (nowMins < startMins && !nextClass) {
+      nextClass = { subject: dayData.subject }
+    }
+  }
+  
+  return { current: currentClass, next: nextClass }
+})
+
 const updateTime = () => {
   const now = new Date()
   currentTime.value = now.toLocaleTimeString('zh-TW', { hour12: false })
@@ -514,8 +585,9 @@ const fetchData = async () => {
   parentNotices.value = boardData?.notices || []
   contactBookItems.value = boardData?.contact_items || []
 
+  // 💡 增加拉取 class_schedule_data
   const { data: sysData } = await supabase.from('system_settings').select('*')
-    .in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings', 'announcements_data'])
+    .in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings', 'announcements_data', 'class_schedule_data'])
   
   if (sysData) {
     const pwdSetting = sysData.find(s => s.setting_key === 'board_officer_passwords')
@@ -532,6 +604,11 @@ const fetchData = async () => {
     const annSetting = sysData.find(s => s.setting_key === 'announcements_data')
     if (annSetting && annSetting.setting_value) {
       announcements.value = (annSetting.setting_value || []).sort((a, b) => new Date(b.date) - new Date(a.date))
+    }
+
+    const schSetting = sysData.find(s => s.setting_key === 'class_schedule_data')
+    if (schSetting && schSetting.setting_value) {
+      scheduleData.value = schSetting.setting_value
     }
 
     const seatSetting = sysData.find(s => s.setting_key === 'seating_chart_data')
@@ -681,7 +758,19 @@ const formatHistDate = (dateStr) => {
 .main-split { display: flex; gap: 20px; align-items: flex-start; }
 .left-panel { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .control-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; text-align: center; }
-.clock-display { font-size: 2.2rem; font-weight: bold; color: #1e293b; margin-bottom: 20px; }
+.clock-display { font-size: 2.2rem; font-weight: bold; color: #1e293b; margin-bottom: 10px; }
+
+/* 💡 新增：課表提示列樣式 */
+.schedule-ticker { 
+  background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 10px 15px;
+  margin-bottom: 20px; display: flex; justify-content: center; gap: 20px; align-items: center; flex-wrap: wrap;
+}
+.current-class { color: #0f766e; font-size: 1.1rem; display: flex; align-items: center; gap: 6px;}
+.pulse-dot { width: 10px; height: 10px; background-color: #10b981; border-radius: 50%; animation: pulse 2s infinite; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
+.subject-text { font-weight: bold; color: #047857;}
+.teacher-text { font-size: 0.95rem; color: #475569; }
+.next-class { color: #64748b; font-size: 1rem; border-left: 2px solid #cbd5e1; padding-left: 20px; }
 
 .button-group { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .btn { padding: 8px 12px; border-radius: 6px; font-size: 0.95rem; font-weight: bold; color: white; border: none; cursor: pointer; display: inline-block; text-decoration: none;}
@@ -697,6 +786,7 @@ const formatHistDate = (dateStr) => {
 .btn-indigo { background: #6366f1; } 
 .btn-sky { background: #0ea5e9; }
 .btn-pink { background: #ec4899; } 
+.btn-amber { background: #d97706; }
 
 .stats-row { display: flex; gap: 10px; flex-wrap: wrap; }
 .stat-box { flex: 1; padding: 12px; border-radius: 6px; text-align: center; font-size: 1.05rem; font-weight: bold; min-width: 80px; }
@@ -806,5 +896,7 @@ const formatHistDate = (dateStr) => {
   .seats-grid-readonly, .labels-grid-readonly { gap: 5px; }
   .seat-card-readonly { padding: 5px; min-height: 90px; }
   .tabs-container-readonly { justify-content: flex-start; padding-bottom: 10px; }
+  .schedule-ticker { flex-direction: column; gap: 10px; text-align: center; }
+  .next-class { border-left: none; padding-left: 0; border-top: 1px dashed #cbd5e1; padding-top: 10px; width: 100%;}
 }
 </style>
