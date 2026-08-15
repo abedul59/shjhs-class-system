@@ -146,7 +146,10 @@
               <NuxtLink v-if="indexButtonSettings.parentMsg" to="/parent-message" class="btn btn-green">💬 家長私訊</NuxtLink>
               <NuxtLink v-if="indexButtonSettings.studentMsg" to="/student-message" class="btn btn-blue">💬 學生私訊</NuxtLink>
               <NuxtLink v-if="indexButtonSettings.assignments" to="/assignments" class="btn btn-purple">📚 作業管理</NuxtLink>
-              <button v-if="indexButtonSettings.discipline" @click="openDiscipline" class="btn btn-dark-blue">⚖️ 秩序管理</button>
+              
+              <!-- 💡 修正：將 button 改為 NuxtLink 以確保跳轉正常運作 -->
+              <NuxtLink v-if="indexButtonSettings.discipline" to="/discipline" class="btn btn-dark-blue">⚖️ 秩序管理</NuxtLink>
+              
               <NuxtLink v-if="indexButtonSettings.hygiene" to="/hygiene" class="btn btn-cyan">🧹 衛生管理</NuxtLink>            
               <NuxtLink v-if="indexButtonSettings.seats" to="/seats" class="btn btn-teal">🪑 座位管理</NuxtLink>
               <NuxtLink v-if="indexButtonSettings.schedule" to="/schedule" class="btn btn-amber">🗓️ 課表管理</NuxtLink>
@@ -353,9 +356,12 @@
           <h3>📅 近七日聯絡簿紀錄</h3>
           <button @click="showContactHistoryModal = false" class="close-btn">✖</button>
         </div>
+        <!-- 💡 修正：加強空資料的判斷與顯示 -->
         <div class="modal-body">
           <div v-if="isLoadingHistory" class="loading-state">⏳ 載入中...</div>
-          <div v-else-if="contactHistoryList.length === 0" class="empty-state">近七日無聯絡簿紀錄</div>
+          <div v-else-if="!contactHistoryList || contactHistoryList.length === 0" class="empty-state">
+            📌 近七天內尚未發布任何聯絡簿喔！
+          </div>
           <div v-else class="history-timeline">
             <div v-for="hist in contactHistoryList" :key="hist.record_date" class="history-card">
               <div class="history-date">{{ formatHistDate(hist.record_date) }}</div>
@@ -858,7 +864,7 @@ const openContactHistory = async () => {
 .status-text.break .highlight { color: var(--ex-success); font-size: 3.5rem; margin: 15px 0; display: block;}
 .next-time { font-size: 1.8rem; color: var(--ex-text); font-family: monospace; opacity: 0.8;}
 
-/* 💡 密碼彈窗樣式 */
+/* 💡 客製化密碼彈窗樣式 */
 .pwd-modal-content { background: white; padding: 25px 30px; border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); text-align: center;}
 .pwd-modal-content h3 { margin: 0 0 15px 0; color: #1e293b; font-size: 1.4rem; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; }
 .pwd-desc { color: #64748b; font-size: 1.05rem; margin-bottom: 20px; }
@@ -989,47 +995,7 @@ const openContactHistory = async () => {
 .loading-state, .empty-state { text-align: center; padding: 30px; color: #64748b; font-size: 1.1rem; }
 .contact-list-dark li { color: #334155; }
 
-.seating-display-board { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-top: 10px; }
-.seating-title { margin-top: 0; color: #0f766e; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 25px; text-align: center; font-size: 1.4rem; }
-.seating-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 15px; }
-.seating-area { width: 100%; min-width: 900px; margin: 0 auto; transition: transform 0.5s ease; }
-.seating-area.is-rotated { transform: rotate(180deg); }
-.seating-area.is-rotated .seat-card-readonly, .seating-area.is-rotated .row-label-readonly, .seating-area.is-rotated .teacher-desk-readonly { transform: rotate(-180deg); }
-.labels-grid-readonly { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 15px; }
-.row-label-readonly { text-align: center; font-weight: bold; color: #0f766e; font-size: 1.1rem; transition: transform 0.5s ease; }
-.seats-grid-readonly { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 35px; }
-.seat-card-readonly { border: 2px solid #cbd5e1; border-radius: 8px; background: #f8fafc; padding: 10px; text-align: center; min-height: 110px; display: flex; flex-direction: column; transition: transform 0.5s ease; }
-.seat-card-readonly.is-hidden-seat-readonly { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
-.seat-id-readonly { font-size: 0.8rem; color: #94a3b8; text-align: left; margin-bottom: 5px; font-weight: bold; }
-.seat-text-container { display: flex; flex-direction: column; gap: 4px; font-weight: bold; justify-content: center; flex: 1;}
-.teacher-desk-readonly { border: 3px solid #0f766e; background: #f0fdfa; padding: 15px 20px; border-radius: 8px; text-align: center; width: 250px; margin: 0 auto; transition: transform 0.5s ease; }
-.teacher-desk-readonly h3 { margin: 0; color: #0f766e; font-size: 1.2rem; }
-
-.hygiene-display-board { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-top: 10px; }
-.hygiene-main-title { margin-top: 0; color: #0891b2; text-align: center; font-size: 1.4rem; margin-bottom: 15px; }
-.tabs-container-readonly { display: flex; gap: 10px; overflow-x: auto; white-space: nowrap; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; justify-content: center;}
-.tab-btn { padding: 8px 16px; border: none; background: #f1f5f9; color: #64748b; font-weight: bold; font-size: 1.05rem; cursor: pointer; border-radius: 6px; transition: 0.2s;}
-.tab-btn:hover { background: #e2e8f0; }
-.tab-btn.active { background: #0891b2; color: white; }
-
-.hygiene-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.hygiene-content { min-width: 800px; padding-bottom: 15px; }
-.hygiene-content-title { text-align: center; margin-bottom: 10px; font-size: 1.3rem; color: #1e293b; }
-.hygiene-sub-title { text-align: center; margin-bottom: 15px; color: #475569; font-size: 0.95rem; }
-
-.custom-table { width: 100%; border-collapse: collapse; text-align: center; font-size: 0.95rem; background: white;}
-.custom-table th, .custom-table td { border: 1px solid #94a3b8; padding: 8px; vertical-align: middle; line-height: 1.4; word-break: break-word;}
-.custom-table th { background: #f1f5f9; font-weight: bold; }
-.header-row th { background: #e2e8f0; }
-.morning-table td:nth-child(1), .morning-table td:nth-child(2) { font-weight: bold; }
-.lunch-table th { background: #f8fafc; font-weight: bold;}
-
-.footer-note { margin-top: 15px; padding: 15px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; color: #334155; line-height: 1.6; text-align: left;}
-.mt-10 { margin-top: 10px; }
-.mt-15 { margin-top: 15px; }
-.text-sm { font-size: 0.9rem; }
-.text-xs { font-size: 0.75rem; color: #64748b; font-weight: normal;}
-
+/* 其他頁面共用 CSS 請維持不變... */
 @media (max-width: 1024px) { .main-split { flex-direction: column; } .student-grid { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 768px) {
   .page-container { padding: 10px; }
