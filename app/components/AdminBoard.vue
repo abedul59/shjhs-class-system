@@ -6,14 +6,22 @@
     <div class="board-editor-container">
       <div class="split-layout">
         
-        <!-- 區塊 A：家長須知 (支援信件推播) -->
+        <!-- 區塊 A：家長須知 (支援信件推播與富文字複製貼上) -->
         <div class="editor-panel">
-          <h4 class="section-title">📢 家長須知 (Email推播)</h4>
-          <p class="help-text">⚠️ 此區塊僅限導師編輯與推播。</p>
+          <h4 class="section-title">📢 家長須知 (支援保留網頁格式)</h4>
+          <p class="help-text">⚠️ 此區塊僅限導師編輯與推播。支援直接複製網頁內容貼上保留格式。</p>
           <div class="notice-edit-list">
-            <div v-for="(notice, index) in adminNotices" :key="'n-'+index" class="edit-item">
+            <!-- 💡 更新：改用 contenteditable div 來支援富文字 (Rich Text) -->
+            <div v-for="(notice, index) in adminNotices" :key="'n-'+index" class="edit-item rich-text-item">
               <span class="bullet">📌</span>
-              <input v-model="adminNotices[index]" type="text" class="edit-input notice-input" placeholder="請輸入重要須知..." />
+              <div 
+                class="edit-input notice-input rich-text-editor" 
+                contenteditable="true"
+                @blur="updateRichText($event, index)"
+                @input="updateRichText($event, index)"
+                v-html="notice"
+                placeholder="在此貼上或輸入須知內容..."
+              ></div>
               <button @click="removeNotice(index)" class="del-row-btn">🗑️</button>
             </div>
             <button @click="addNotice" class="add-btn">➕ 新增家長須知</button>
@@ -31,10 +39,11 @@
             <div class="form-group"><label>信件內容：(變數: <span v-pre>{{須知清單}}</span>)</label><textarea v-model="noticeEmailContentTemplate" rows="4" class="edit-input textarea-input"></textarea></div>
             
             <div class="email-preview-section">
-              <h5>👀 信件預覽</h5>
+              <h5>👀 信件預覽 (支援HTML渲染)</h5>
               <div class="preview-box">
                 <div class="preview-subject"><strong>主旨：</strong> {{ noticePreviewSubject }}</div>
-                <div class="preview-body">{{ noticePreviewContent }}</div>
+                <!-- 💡 更新：預覽區改用 v-html 以正確渲染富文字 -->
+                <div class="preview-body" v-html="noticePreviewContent"></div>
               </div>
             </div>
 
@@ -128,18 +137,20 @@
           </div>
           <div v-else class="detail-content">
             
-            <!-- 💡 新增：標題與編輯按鈕並排 -->
             <div class="detail-header-flex">
               <h5 class="detail-title">🗓️ {{ selectedHistoryDate }} 歷史紀錄</h5>
               <button v-if="!isEditingHistory" @click="startEditHistory" class="edit-history-btn">✏️ 編輯</button>
             </div>
             
-            <!-- 💡 唯讀模式 -->
+            <!-- 唯讀模式 -->
             <div v-if="!isEditingHistory">
               <div class="history-section">
                 <h6>📢 家長須知</h6>
                 <div v-if="selectedHistoryNotices.length > 0" class="history-list">
-                  <div v-for="(n, i) in selectedHistoryNotices" :key="'hn-'+i" class="history-item"><span class="bullet">📌</span> {{ n }}</div>
+                  <!-- 💡 更新：歷史紀錄也使用 v-html 來渲染富文字 -->
+                  <div v-for="(n, i) in selectedHistoryNotices" :key="'hn-'+i" class="history-item">
+                    <span class="bullet">📌</span> <span v-html="n"></span>
+                  </div>
                 </div>
                 <div v-else class="empty-text">無發布須知</div>
               </div>
@@ -153,14 +164,21 @@
               </div>
             </div>
 
-            <!-- 💡 編輯模式 -->
+            <!-- 編輯模式 -->
             <div v-else class="history-edit-mode">
               <div class="history-section">
                 <h6>📢 家長須知 (編輯)</h6>
                 <div class="notice-edit-list">
-                  <div v-for="(n, i) in editHistoryNotices" :key="'ehn-'+i" class="edit-item">
+                  <!-- 💡 更新：歷史編輯模式的家長須知也換成富文字編輯器 -->
+                  <div v-for="(n, i) in editHistoryNotices" :key="'ehn-'+i" class="edit-item rich-text-item">
                     <span class="bullet">📌</span>
-                    <input v-model="editHistoryNotices[i]" type="text" class="edit-input notice-input" />
+                    <div 
+                      class="edit-input notice-input rich-text-editor" 
+                      contenteditable="true"
+                      @blur="updateEditHistoryRichText($event, i)"
+                      @input="updateEditHistoryRichText($event, i)"
+                      v-html="n"
+                    ></div>
                     <button @click="removeHistoryNotice(i)" class="del-row-btn">🗑️</button>
                   </div>
                   <button @click="addHistoryNotice" class="add-btn">➕ 新增</button>
@@ -210,7 +228,8 @@ const isHistoryVisibleOnIndex = ref(false)
 
 const isSavingBoard = ref(false); const isSendingEmail = ref(false); const isSavingNoticeTemplate = ref(false); const isSavingPwd = ref(false)
 const noticeEmailSubjectTemplate = ref('📢 班級須知推播 ({{今日日期}})')
-const noticeEmailContentTemplate = ref(`各位家長您好，今日班級重要須知推播如下：\n\n{{須知清單}}\n\n班級導師 敬上`)
+// 💡 更新：預設範本加入一點 HTML 確保換行正常渲染
+const noticeEmailContentTemplate = ref(`<p>各位家長您好，今日班級重要須知推播如下：</p><ul>{{須知清單}}</ul><p>班級導師 敬上</p>`)
 
 const calYear = ref(d.getFullYear()); const calMonth = ref(d.getMonth())
 const monthRecords = ref([])
@@ -218,11 +237,20 @@ const selectedHistoryDate = ref('')
 const selectedHistoryNotices = ref([])
 const selectedHistoryContactItems = ref([])
 
-// 💡 歷史紀錄編輯專用變數
 const isEditingHistory = ref(false)
 const isSavingHistory = ref(false)
 const editHistoryNotices = ref([])
 const editHistoryContactItems = ref([])
+
+// 💡 處理富文字輸入框的資料綁定 (主編輯區)
+const updateRichText = (event, index) => {
+  adminNotices.value[index] = event.target.innerHTML
+}
+
+// 💡 處理富文字輸入框的資料綁定 (歷史編輯區)
+const updateEditHistoryRichText = (event, index) => {
+  editHistoryNotices.value[index] = event.target.innerHTML
+}
 
 const fetchData = async () => {
   const { data: boardData } = await supabase.from('contact_books').select('notices, contact_items').eq('record_date', todayISO).maybeSingle()
@@ -254,8 +282,13 @@ const saveHistorySetting = async () => {
 
 const noticePreviewSubject = computed(() => noticeEmailSubjectTemplate.value.replace(/{{今日日期}}/g, todayDisplay))
 const noticePreviewContent = computed(() => {
-  const listStr = adminNotices.value.length > 0 ? adminNotices.value.map(n => '📌 ' + n).join('\n') : '📌 (尚無須知事項)'
-  return noticeEmailContentTemplate.value.replace(/{{須知清單}}/g, listStr)
+  // 💡 更新：用 <li> 標籤包覆，以確保 HTML 格式在預覽與信件中正確呈現
+  const listStr = adminNotices.value.length > 0 
+    ? adminNotices.value.map(n => `<li style="margin-bottom: 8px;">${n}</li>`).join('') 
+    : '<li>(尚無須知事項)</li>'
+  // 若使用者的範本內有原本的 \n，把它轉成 <br>
+  let baseContent = noticeEmailContentTemplate.value.replace(/\n/g, '<br>')
+  return baseContent.replace(/{{須知清單}}/g, listStr)
 })
 
 const addNotice = () => adminNotices.value.push('')
@@ -311,11 +344,26 @@ const sendNoticeEmail = async () => {
   if (emailList.length === 0) { isSendingEmail.value = false; return alert('未建立任何家長信箱') }
   
   const subject = noticeEmailSubjectTemplate.value.replace(/{{今日日期}}/g, todayDisplay)
-  const listStr = adminNotices.value.length > 0 ? adminNotices.value.map(n => '📌 ' + n).join('\n') : '📌 (無)'
-  const content = noticeEmailContentTemplate.value.replace(/{{須知清單}}/g, listStr)
+  
+  // 💡 更新：實際發送信件時也產生 HTML 格式
+  const listStr = adminNotices.value.length > 0 
+    ? adminNotices.value.map(n => `<li style="margin-bottom: 8px;">${n}</li>`).join('') 
+    : '<li>(無)</li>'
+  let contentHtml = noticeEmailContentTemplate.value.replace(/\n/g, '<br>').replace(/{{須知清單}}/g, listStr)
 
-  await fetch('/api/send-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bcc: emailList, subject, content }) })
-  await supabase.from('communication_logs').insert({ student_id: null, notification_type: '須知推播', sent_by: '導師', recipient_emails: '全班家長群發', message_content: content })
+  // 包裝成完整的 HTML 文件以確保多數郵件客戶端正確解析字體與格式
+  const finalHtmlContent = `
+    <html>
+      <body style="font-family: sans-serif; line-height: 1.6; color: #333;">
+        ${contentHtml}
+      </body>
+    </html>
+  `
+
+  await fetch('/api/send-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bcc: emailList, subject, content: finalHtmlContent }) })
+  
+  // 將原始信件內容存入 log
+  await supabase.from('communication_logs').insert({ student_id: null, notification_type: '須知推播', sent_by: '導師', recipient_emails: '全班家長群發', message_content: finalHtmlContent })
   alert(`✅ 已成功推播給 ${emailList.length} 位家長！`); isSendingEmail.value = false
 }
 
@@ -354,11 +402,9 @@ const viewHistory = (day) => {
   selectedHistoryDate.value = day.dateStr
   selectedHistoryNotices.value = day.notices
   selectedHistoryContactItems.value = day.contactItems
-  // 💡 切換日期時自動關閉編輯模式
   isEditingHistory.value = false
 }
 
-// 💡 歷史紀錄的編輯邏輯
 const startEditHistory = () => {
   editHistoryNotices.value = [...selectedHistoryNotices.value]
   editHistoryContactItems.value = [...selectedHistoryContactItems.value]
@@ -377,7 +423,6 @@ const removeHistoryContactItem = (i) => editHistoryContactItems.value.splice(i, 
 const saveHistory = async () => {
   isSavingHistory.value = true
   try {
-    // 將修改寫入資料庫
     await supabase.from('contact_books').upsert({
       record_date: selectedHistoryDate.value,
       notices: editHistoryNotices.value,
@@ -386,15 +431,12 @@ const saveHistory = async () => {
     
     alert('✅ 歷史紀錄已成功更新！')
     
-    // 更新本地畫面的唯讀狀態
     selectedHistoryNotices.value = [...editHistoryNotices.value]
     selectedHistoryContactItems.value = [...editHistoryContactItems.value]
     isEditingHistory.value = false
     
-    // 重新抓取月曆小圓點狀態
     await fetchMonthRecords()
     
-    // 💡 智慧連動：如果編輯的剛好是「今天」，上半部的輸入框也跟著更新
     if (selectedHistoryDate.value === todayISO) {
       adminNotices.value = [...editHistoryNotices.value]
       contactBookItems.value = [...editHistoryContactItems.value]
@@ -421,6 +463,20 @@ const saveHistory = async () => {
 .editor-panel { flex: 1; min-width: 0; background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
 
 .notice-edit-list { display: flex; flex-direction: column; gap: 12px; }
+
+/* 💡 更新：富文字編輯器樣式 */
+.rich-text-item { align-items: flex-start !important; }
+.rich-text-editor { 
+  min-height: 40px; 
+  height: auto; 
+  overflow-y: auto; 
+  white-space: normal; 
+  line-height: 1.5; 
+  background: #fdfdfd;
+}
+.rich-text-editor:empty:before { content: attr(placeholder); color: #94a3b8; pointer-events: none; display: block; }
+.rich-text-editor:focus { background: white; border-color: #3b82f6; outline: none; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1); }
+
 .edit-item { display: flex; align-items: center; gap: 10px; }
 .notice-input { flex: 1; font-size: 1.05rem; padding: 10px 12px; border: 1px solid #94a3b8; border-radius: 6px; width: 100%; box-sizing: border-box;}
 .add-btn { background: #e2e8f0; color: #334155; border: 1px dashed #94a3b8; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 5px; width: 100%; }
@@ -445,7 +501,7 @@ const saveHistory = async () => {
 .email-preview-section h5 { margin: 0 0 8px 0; color: #334155; }
 .preview-box { background: white; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; }
 .preview-subject { font-size: 0.95rem; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; margin-bottom: 8px; }
-.preview-body { font-size: 0.9rem; color: #475569; line-height: 1.5; white-space: pre-wrap; }
+.preview-body { font-size: 0.9rem; color: #475569; line-height: 1.5; white-space: normal; overflow-wrap: break-word;}
 
 .officer-pwd-section { margin-top: 25px; padding-top: 15px; border-top: 2px dashed #cbd5e1; }
 .officer-pwd-section h5 { margin: 0 0 10px 0; font-size: 1.05rem; color: #1e293b; }
@@ -469,7 +525,6 @@ const saveHistory = async () => {
 .cal-date-num { font-weight: bold; font-size: 1.1rem; }
 .record-dot { width: 6px; height: 6px; background: #3b82f6; border-radius: 50%; margin-top: 4px; }
 
-/* 💡 新增：歷史紀錄編輯相關樣式 */
 .detail-header-flex { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #cbd5e1; padding-bottom: 10px; margin-bottom: 15px; }
 .edit-history-btn { background: #f59e0b; color: white; border: none; padding: 5px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.9rem; }
 .edit-actions-row { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px dashed #cbd5e1;}
