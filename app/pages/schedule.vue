@@ -40,7 +40,7 @@
         💡 提示：請設定每節課的開始與結束時間 (24小時制，如 08:15)。首頁會自動根據當下時間顯示目前與下一節課。留空表示該時段沒有特定課程。
       </div>
 
-      <!-- 💡 預覽首頁課表動態 -->
+      <!-- 👀 預覽首頁課表動態 -->
       <div class="preview-section">
         <h3>👀 預覽首頁顯示</h3>
         <div class="mock-controls">
@@ -120,7 +120,7 @@ const isSaving = ref(false)
 const mockDay = ref(1) // 1=星期一
 const mockTime = ref('08:10')
 
-// 💡 更新預設課表，加入早掃與午掃時間
+// 預設課表，包含早掃與午掃時間
 const defaultSchedule = {
   periods: [
     { name: '早修', startTime: '07:30', endTime: '08:00', days: Array(5).fill().map(() => ({ subject: '', teacher: '' })) },
@@ -208,13 +208,36 @@ const handleLogin = async () => {
         expectedPwd = `${yy}${mm}${dd}59`
       } else if (config.type === 'custom' && config.custom_pwd) { expectedPwd = config.custom_pwd }
     }
+    
     if (passwordInput.value === expectedPwd || passwordInput.value === '168168168') {
       isLoggedIn.value = true
       sessionStorage.setItem('schedule_admin_logged_in', 'true')
+      
+      // 💡 登入成功寫入日誌
+      try {
+        const ipRes = await fetch('https://api.ipify.org?format=json')
+        const { ip } = await ipRes.json()
+        await supabase.from('visitor_logs').insert([{ ip_address: ip, device_info: navigator.userAgent, role: '導師' }])
+      } catch(e) { console.error(e) }
+
       await fetchSchedule()
-    } else alert('❌ 密碼錯誤！')
+    } else {
+      alert('❌ 密碼錯誤！')
+    }
   } catch (e) {
-    if (passwordInput.value === '168168168') { isLoggedIn.value = true; sessionStorage.setItem('schedule_admin_logged_in', 'true'); await fetchSchedule() }
+    if (passwordInput.value === '168168168') { 
+       isLoggedIn.value = true; 
+       sessionStorage.setItem('schedule_admin_logged_in', 'true'); 
+       
+       // 降級登入也嘗試寫入紀錄
+       try {
+         const ipRes = await fetch('https://api.ipify.org?format=json')
+         const { ip } = await ipRes.json()
+         await supabase.from('visitor_logs').insert([{ ip_address: ip, device_info: navigator.userAgent, role: '導師(降級登入)' }])
+       } catch(e) { console.error(e) }
+       
+       await fetchSchedule() 
+    }
     else alert('驗證發生錯誤。')
   } finally { isLoggingIn.value = false; passwordInput.value = '' }
 }
@@ -227,7 +250,7 @@ const fetchSchedule = async () => {
   if (data?.setting_value && data.setting_value.periods) {
     let loadedPeriods = data.setting_value.periods
     
-    // 💡 自動升級腳本：確保舊資料能無縫插入「早掃時間」與「午餐和午掃」
+    // 自動升級腳本：確保舊資料能無縫插入「早掃時間」與「午餐和午掃」
     if (!loadedPeriods.find(p => p.name === '早掃時間')) {
       const idx = loadedPeriods.findIndex(p => p.name === '早修')
       if(idx !== -1) {
@@ -267,7 +290,7 @@ const saveSchedule = async () => {
 </script>
 
 <style scoped>
-.schedule-page { min-height: 100vh; background: #f1f5f9; font-family: sans-serif; }
+.schedule-page { min-height: 100vh; background: #f1f5f9; font-family: sans-serif; padding-bottom: 50px;}
 .login-container { display: flex; justify-content: center; align-items: center; min-height: 80vh; padding: 20px; }
 .login-card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
 .subtitle { color: #64748b; margin-bottom: 20px; }
