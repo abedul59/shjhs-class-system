@@ -77,7 +77,7 @@
         <table class="schedule-table">
           <thead>
             <tr>
-              <th width="80">節次</th>
+              <th width="100">節次</th>
               <th width="140">時間設定</th>
               <th>星期一</th>
               <th>星期二</th>
@@ -117,18 +117,20 @@ const isLoggingIn = ref(false)
 const passwordInput = ref('')
 const isSaving = ref(false)
 
-// 💡 預覽用的假想時間狀態
 const mockDay = ref(1) // 1=星期一
-const mockTime = ref('08:30')
+const mockTime = ref('08:10')
 
+// 💡 更新預設課表，加入早掃與午掃時間
 const defaultSchedule = {
   periods: [
-    { name: '早修', startTime: '07:30', endTime: '08:15', days: Array(5).fill().map(() => ({ subject: '', teacher: '' })) },
+    { name: '早修', startTime: '07:30', endTime: '08:00', days: Array(5).fill().map(() => ({ subject: '', teacher: '' })) },
+    { name: '早掃時間', startTime: '08:00', endTime: '08:15', days: Array(5).fill().map(() => ({ subject: '', teacher: '' })) },
     { name: '第一節', startTime: '08:20', endTime: '09:05', days: Array(5).fill().map(() => ({ subject: '', teacher: '' })) },
     { name: '第二節', startTime: '09:15', endTime: '10:00', days: Array(5).fill().map(() => ({ subject: '', teacher: '' })) },
     { name: '第三節', startTime: '10:10', endTime: '10:55', days: Array(5).fill().map(() => ({ subject: '', teacher: '' })) },
     { name: '第四節', startTime: '11:05', endTime: '11:50', days: Array(5).fill().map(() => ({ subject: '', teacher: '' })) },
-    { name: '午休', startTime: '12:00', endTime: '13:00', days: Array(5).fill().map(() => ({ subject: '', teacher: '' })) },
+    { name: '午餐和午掃', startTime: '11:50', endTime: '12:25', days: Array(5).fill().map(() => ({ subject: '', teacher: '' })) },
+    { name: '午休', startTime: '12:25', endTime: '13:00', days: Array(5).fill().map(() => ({ subject: '', teacher: '' })) },
     { name: '第五節', startTime: '13:10', endTime: '13:55', days: Array(5).fill().map(() => ({ subject: '', teacher: '' })) },
     { name: '第六節', startTime: '14:05', endTime: '14:50', days: Array(5).fill().map(() => ({ subject: '', teacher: '' })) },
     { name: '第七節', startTime: '15:05', endTime: '15:50', days: Array(5).fill().map(() => ({ subject: '', teacher: '' })) },
@@ -138,7 +140,6 @@ const defaultSchedule = {
 
 const scheduleData = ref(JSON.parse(JSON.stringify(defaultSchedule)))
 
-// 💡 根據假想時間動態計算首頁顯示的結果
 const previewDisplay = computed(() => {
   if (!scheduleData.value || !scheduleData.value.periods) return null
   
@@ -222,8 +223,26 @@ const logout = () => { sessionStorage.removeItem('schedule_admin_logged_in'); is
 
 const fetchSchedule = async () => {
   const { data } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'class_schedule_data').maybeSingle()
+  
   if (data?.setting_value && data.setting_value.periods) {
-    scheduleData.value = data.setting_value
+    let loadedPeriods = data.setting_value.periods
+    
+    // 💡 自動升級腳本：確保舊資料能無縫插入「早掃時間」與「午餐和午掃」
+    if (!loadedPeriods.find(p => p.name === '早掃時間')) {
+      const idx = loadedPeriods.findIndex(p => p.name === '早修')
+      if(idx !== -1) {
+        loadedPeriods.splice(idx + 1, 0, { name: '早掃時間', startTime: '08:00', endTime: '08:15', days: Array(5).fill().map(() => ({ subject: '', teacher: '' })) })
+      }
+    }
+    
+    if (!loadedPeriods.find(p => p.name === '午餐和午掃') && !loadedPeriods.find(p => p.name === '午餐和午掃時間')) {
+      const idx = loadedPeriods.findIndex(p => p.name === '第四節')
+      if(idx !== -1) {
+        loadedPeriods.splice(idx + 1, 0, { name: '午餐和午掃', startTime: '11:50', endTime: '12:25', days: Array(5).fill().map(() => ({ subject: '', teacher: '' })) })
+      }
+    }
+    
+    scheduleData.value.periods = loadedPeriods
   } else {
     scheduleData.value = JSON.parse(JSON.stringify(defaultSchedule))
   }
@@ -270,7 +289,7 @@ const saveSchedule = async () => {
 .btn-logout { background: #ef4444; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 .tips { background: #fffbeb; color: #b45309; padding: 10px 15px; border-radius: 6px; border: 1px dashed #fcd34d; margin-bottom: 20px; font-size: 0.95rem; line-height: 1.5; }
 
-/* 💡 預覽區塊樣式 */
+/* 預覽區塊樣式 */
 .preview-section { background: white; padding: 15px 20px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
 .preview-section h3 { margin: 0 0 10px 0; font-size: 1.1rem; color: #475569; }
 .mock-controls { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
