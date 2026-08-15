@@ -27,10 +27,13 @@
       <label class="toggle-item" :class="{ 'is-disabled': !settings.seats }">
         <input type="checkbox" v-model="settings.seats"> 🪑 座位管理
       </label>
-      
-      <!-- 💡 新增：課表管理開關 -->
       <label class="toggle-item" :class="{ 'is-disabled': !settings.schedule }">
         <input type="checkbox" v-model="settings.schedule"> 🗓️ 課表管理
+      </label>
+      
+      <!-- 💡 新增：大考管理開關 -->
+      <label class="toggle-item" :class="{ 'is-disabled': !settings.exams }">
+        <input type="checkbox" v-model="settings.exams"> 🎓 大考管理
       </label>
 
       <label class="toggle-item" :class="{ 'is-disabled': !settings.emergency }">
@@ -56,7 +59,7 @@ const supabase = useSupabaseClient()
 const isSaving = ref(false)
 const settings = ref({
   parentBind: true, parentMsg: true, studentMsg: true, assignments: true, 
-  discipline: true, hygiene: true, seats: true, schedule: true, emergency: true, admin: true
+  discipline: true, hygiene: true, seats: true, schedule: true, exams: true, emergency: true, admin: true
 })
 
 onMounted(async () => {
@@ -73,7 +76,6 @@ const saveSettings = async () => {
       setting_key: 'index_button_settings',
       setting_value: settings.value
     }, { onConflict: 'setting_key' })
-    
     if (error) throw error
     alert('✅ 首頁按鈕設定已成功更新！')
   } catch (err) {
