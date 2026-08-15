@@ -131,7 +131,7 @@ const fetchTeachers = async () => {
   if (data) teachersList.value = data
 }
 
-// 雙重密碼驗證 (加入導師邏輯)
+// 雙重密碼驗證 (加入導師與精準身分紀錄邏輯)
 const verifyPassword = async () => {
   if (!selectedSubject.value || !passwordInput.value) return
   
@@ -174,20 +174,23 @@ const verifyPassword = async () => {
   }
 
   const teacherInfo = teachersList.value.find(t => t.subject_name === selectedSubject.value)
+  
   if (teacherInfo && passwordInput.value === teacherInfo.password) {
-    activeRole.value = '科任老師'
+    activeRole.value = '科任老師' // 維持UI判定使用
     isUnlocked.value = true; 
     await fetchDashboardData(); 
-    logAction('系統登入', '科任老師登入成功')
-    // 💡 登入成功寫入全站訪客日誌
-    await logRoleVisit('科任老師')
+    logAction('系統登入', `${teacherInfo.subject_name} 科任老師登入成功`)
+    // 💡 登入成功寫入全站訪客日誌 (加上精準科目名稱！)
+    await logRoleVisit(`${teacherInfo.subject_name}科任老師`)
+    
   } else if (teacherInfo && teacherInfo.assistant_password && passwordInput.value === teacherInfo.assistant_password) {
-    activeRole.value = '小老師'
+    activeRole.value = '小老師' // 維持UI判定使用
     isUnlocked.value = true; 
     await fetchDashboardData(); 
-    logAction('系統登入', '小老師登入成功')
-    // 💡 登入成功寫入全站訪客日誌
-    await logRoleVisit('小老師')
+    logAction('系統登入', `${teacherInfo.subject_name} 小老師登入成功`)
+    // 💡 登入成功寫入全站訪客日誌 (加上精準科目名稱！)
+    await logRoleVisit(`${teacherInfo.subject_name}小老師`)
+    
   } else {
     alert('❌ 密碼錯誤！'); passwordInput.value = ''
   }
