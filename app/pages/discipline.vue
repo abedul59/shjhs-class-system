@@ -274,6 +274,21 @@ const getToday = () => {
   return `${year}-${month}-${day}`
 }
 
+// 💡 登入成功寫入日誌的共用函式
+const logRoleVisit = async (roleName) => {
+  try {
+    const ipRes = await fetch('https://api.ipify.org?format=json')
+    const { ip } = await ipRes.json()
+    await supabase.from('visitor_logs').insert([{ 
+      ip_address: ip, 
+      device_info: navigator.userAgent, 
+      role: roleName 
+    }])
+  } catch (e) { 
+    console.error("日誌寫入失敗", e) 
+  }
+}
+
 // 登入狀態與清單
 const isLoggedIn = ref(false)
 const isLoggingIn = ref(false)
@@ -371,6 +386,10 @@ const completeLogin = async (roleName) => {
   sessionStorage.setItem('discipline_role', roleName)
   isLoggedIn.value = true
   loginForm.value.password = ''
+  
+  // 💡 驗證通過，寫入資料庫日誌
+  await logRoleVisit(roleName)
+  
   await loadMainData()
 }
 
