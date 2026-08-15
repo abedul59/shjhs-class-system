@@ -110,7 +110,7 @@
               </div>
             </div>
 
-            <!-- 💡 大考模式切換按鈕 (僅褐名單可見) -->
+            <!-- 大考模式切換按鈕 (僅褐名單可見) -->
             <button v-if="isIpBrownlisted && examData.periods && examData.periods.length > 0" @click="isExamModeView = true" class="btn-enter-exam">
               🎓 切換至大考看板模式
             </button>
@@ -391,7 +391,6 @@ const isIpBrownlisted = ref(false)
 const announcements = ref([])
 const scheduleData = ref(null)
 
-// 💡 大考模式專用變數
 const isExamModeView = ref(false)
 const examData = ref({ title: '', periods: [] })
 
@@ -426,7 +425,7 @@ const defaultHygieneData = {
     move_n1: '鄭人閤、王\n聰文', move_n2: '劉子涵、楊\n佩綺', move_n3: '王翊潔、周\n宥芸', move_n4: '楊元豪', move_n5: '王麟賢、\n劉沅翰', move_n6: '林科甫',
     serve_header: '配膳組 (先打菜，\n全部同學分配\n完，再用餐)', serve_h1: '飯盒\n1-1', serve_h2: '大菜盒 A\n1-2', serve_h3: '大菜盒 B\n1-3', serve_h4: '小菜盒\n1-4', serve_h5: '湯桶\n1-5', serve_h6: '清潔消毒餐\n桌且移動桌\n子並歸位\n1-6',
     serve_n1: '黃鈺淳', serve_n2: '林毓庭', serve_n3: '黃芊樺', serve_n4: '許珮萱', serve_n5: '副衛生股長', serve_n6: '衛生股長',
-    note1: '1. 1200-1215 為用餐時間，用餐時請勿聊天，活動範圍為教室、陽台和走廊，要上廁所或外出請詢問導師。\n2. 最晚 1215 用餐結束（老師會看用餐狀況調整），每個人請將廚餘丟至「一般垃圾桶」，並用衛生紙將餐盘整理收好，整理抽屜和書櫃，最後自己搬上椅子，沒有工作者請退到掃地區域以外等候，<span style="color:blue">拖地完、地板吹乾後</span>，方可進入。整理組搬椅子的同學請在 1225 前按照導師指示搬下，勿亂跑。\n3. <span style="background:black; color:white; font-weight:bold;">副衛生股長</span>監督「飯菜的搬送」；<span style="background:black; color:white; font-weight:bold;">正衛生股長</span>監督「中午掃地情況」，一遇有缺人則請詢問導師。\n4. <span style="font-weight:bold; text-decoration:underline;">正副衛生股長</span>負責午休鐘響之後<span style="text-decoration:underline;">檢查室內外地板垃圾</span>。(每天輪流)\n5. <span style="font-weight:bold; text-decoration:underline;">禁止私下更換搬運之飯菜，違者下個階段續搬</span>。除非第四節上課老師延後下課，全班之飯菜需於<span style="font-weight:bold; text-decoration:underline;">每天 1200 前</span>搬至教室。\n6. 導師未到教室前不得私自打菜。<span style="font-weight:bold;">若導師在 1205 尚未到教室，由班長宣佈開始打菜。</span>\n7. <span style="text-decoration:underline;">每週不定期</span>有水果或點心，同學記得去廚房搬運<span style="font-weight:bold; text-decoration:underline;">全部搬運回來</span>。(或由老師指派)\n若餐盒配置不太相同時，整組 8 必須負責全部搬回來，先到者先選擇搬運東西。',
+    note1: '1. 1200-1215 為用餐時間，用餐時請勿聊天，活動範圍為教室、陽台和走廊，要上廁所或外出請詢問導師。\n2. 最晚 1215 用餐結束（老師會看用餐狀況調整），每個人請將廚餘丟至「一般垃圾桶」，並用衛生紙將餐盘整理收好，整理抽屜和書櫃，最後自己搬上椅子，沒有工作者請退到掃地區域以外等候，<span style="color:blue">拖地完、地板吹乾後</span>，方可進入。整理組搬椅子的同學請在 1225 前按照導師指示搬下，勿亂跑。\n3. <span style="background:black; color:white; font-weight:bold;">副衛生股長</span>監督「飯菜的搬送」；<span style="background:black; color:white; font-weight:bold;">正衛生股長</span>監督「中午掃地情況」，一遇有缺人則請詢問導師。\n4. <span style="font-weight:bold; text-decoration:underline;">正副衛生股長</span>負責午休鐘響之後<span style="text-decoration:underline;">檢查室內外地板垃圾</span>。(每天輪流)\n5. <span style="font-weight:bold; text-decoration:underline;">禁止私下更換搬運之飯菜，違者下個階段續搬</span>。除非第四節上課老師延後下課，全班之飯菜需於<span style="font-weight:bold; text-decoration:underline;">每天 1200 前</span>搬至教室。\n6. 導師未到教室前不得私自打菜。<span style="font-weight:bold;">若導師在 1205 尚未到教室，由班長宣佈開始打菜。</span>\n7. <span style="text-decoration:underline;">每週不定期</span>有水果或點心，同學記得去廚房搬運<span style="font-weight:bold; text-decoration:underline;">全部搬運回來</span>。(或由老師指派)\n若餐盒配置不太相同時，整組 8 人必須負責全部搬回來，先到者先選擇搬運東西。',
     note2: '----------------------------清潔組（中午打掃）工作守則----------------------------\n1. 清潔組負責「講台桌黑板、餐桌」者，請用抹布擦餐桌，處理廚餘（第一優先），然後擦粉筆槽，請勿在午休時間教室內板擦，然後擦黑板，將粉筆排好，<span style="color:blue">然後掃和拖</span>講台，講桌也要擦，上面的東西請擺好。請將垃圾桶周圍垃圾清理乾淨，將必要垃圾分類。\n2. 清潔組負責「教室掃地」和「座位拖地」者，請於大部分的同學吃完飯後，開始打掃。先掃，後拖。「座位拖地」代表只拖桌子和椅子下方地板。\n3. 清潔組負責「走廊掃拖」者，請「最慢」在 12:20 開始掃地。<span style="font-weight:bold;">唯有拖地的人，必須在 12:25 打鐘後，才開始拖，一共兩次。<span style="text-decoration:underline;">正副衛生股長請在教室內最後進行善後補強工作。</span></span>\n4. 清潔組負責「整理垃圾、用具、洗手臺」者，請將洗手臺廚餘清理乾淨，抹布擺好。然後將垃圾桶旁垃圾整理，垃圾壓好。'
   },
   squad: {
@@ -553,7 +552,6 @@ const scheduleDisplay = computed(() => {
   return { current: currentClass, next: nextClass }
 })
 
-// 💡 大考模式狀態計算邏輯
 const examStatus = computed(() => {
   if (!examData.value || !examData.value.periods || examData.value.periods.length === 0) return { state: 'WAITING', periods: [] }
 
@@ -564,7 +562,6 @@ const examStatus = computed(() => {
   let next = null
   let state = 'WAITING'
 
-  // 深拷貝，以免改到原本的資料
   const periods = JSON.parse(JSON.stringify(examData.value.periods))
 
   for (let i = 0; i < periods.length; i++) {
@@ -593,7 +590,6 @@ const examStatus = computed(() => {
     }
   }
 
-  // 判斷是否全考完
   const lastP = periods[periods.length - 1]
   const [lsh, lsm] = lastP.endTime.split(':').map(Number)
   if (!current && !next && nowMins > (lsh * 60 + lsm)) {
@@ -679,7 +675,6 @@ const fetchData = async () => {
   parentNotices.value = boardData?.notices || []
   contactBookItems.value = boardData?.contact_items || []
 
-  // 💡 增加抓取 exam_schedule_data
   const { data: sysData } = await supabase.from('system_settings').select('*')
     .in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings', 'announcements_data', 'class_schedule_data', 'exam_schedule_data'])
   
@@ -811,7 +806,6 @@ const formatHistDate = (dateStr) => {
 .page-container { min-height: 100vh; background-color: #f3f4f6; padding: 20px; font-family: sans-serif; display: flex; flex-direction: column; gap: 20px; transition: 0.3s; }
 .is-exam-mode { padding: 0; background: #0f172a; }
 
-/* 🎓 大考看板模式專屬樣式 */
 .exam-dashboard { background: #0f172a; color: white; min-height: 100vh; padding: 40px; display: flex; flex-direction: column; align-items: center; position: relative;}
 .exit-exam-btn { position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #cbd5e1; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 1.1rem; transition: 0.2s;}
 .exit-exam-btn:hover { background: rgba(255,255,255,0.2); color: white; }
@@ -839,7 +833,7 @@ const formatHistDate = (dateStr) => {
 .btn-enter-exam { width: 100%; padding: 12px; background: #991b1b; color: white; border: none; border-radius: 6px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(153, 27, 27, 0.3); animation: subtle-pulse 2s infinite;}
 @keyframes subtle-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
 
-/* 軟木塞公佈欄外觀對齊黑板 */
+/* 💡 修正：軟木塞公佈欄縮小 padding 解決手機跑版 */
 .corkboard {
   background-color: #d1a36a;
   background-image: url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.12"/></svg>');
@@ -850,6 +844,7 @@ const formatHistDate = (dateStr) => {
 }
 .cork-title { color: #4a2b18; text-shadow: 1px 1px 0px rgba(255,255,255,0.3); font-size: 1.4rem; }
 .cork-divider { border-bottom: 2px dashed #92400e; margin: 15px 0; opacity: 0.5; }
+/* 💡 修正：使用 1fr 讓卡片在手機版可以自動縮放 */
 .cork-cards-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
 .cork-card {
   background: #fef9c3;
@@ -867,6 +862,7 @@ const formatHistDate = (dateStr) => {
 .cork-link { display: inline-block; background: #fbbf24; color: #92400e; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 0.95rem; border: 1px dashed #d97706; transition: 0.2s; text-align: center;}
 .cork-link:hover { background: #f59e0b; color: white; }
 
+/* 💡 修正：黑板縮小 padding 解決手機跑版 */
 .blackboard { background-color: #315243; border: 10px solid #754d29; border-radius: 8px; padding: 20px 25px; box-shadow: 0 6px 12px rgba(0,0,0,0.15), inset 0 0 10px rgba(0,0,0,0.3); margin-bottom: 20px;}
 .board-title { margin: 0; font-size: 1.4rem; font-weight: bold; }
 .notice-title { color: #fca5a5; }
@@ -874,7 +870,6 @@ const formatHistDate = (dateStr) => {
 .board-date { color: #cbd5e1; margin: 8px 0 0 0; font-size: 0.95rem; }
 .dashed-divider { border-bottom: 2px dashed #94a3b8; margin: 15px 0; opacity: 0.6; }
 
-/* 家長須知內容摺疊與遮罩效果 */
 .board-content-wrapper { position: relative; transition: max-height 0.3s ease; }
 .board-content { color: white; min-height: 40px; }
 .is-collapsed { max-height: 140px; overflow: hidden; }
@@ -1019,10 +1014,14 @@ const formatHistDate = (dateStr) => {
 .text-sm { font-size: 0.9rem; }
 .text-xs { font-size: 0.75rem; color: #64748b; font-weight: normal;}
 
+/* 💡 修正：手機版單欄自適應顯示 */
 @media (max-width: 1024px) { .main-split { flex-direction: column; } .student-grid { grid-template-columns: repeat(3, 1fr); } }
-
-/* 手機版不摺疊並隱藏相關按鈕 */
 @media (max-width: 768px) {
+  .page-container { padding: 10px; }
+  .corkboard, .blackboard { padding: 15px 10px; border-width: 8px; }
+  .cork-cards-container { grid-template-columns: 1fr; gap: 15px; }
+  .cork-card { padding: 15px; }
+
   .student-grid { grid-template-columns: repeat(2, 1fr); }
   .seats-grid-readonly, .labels-grid-readonly { gap: 5px; }
   .seat-card-readonly { padding: 5px; min-height: 90px; }
