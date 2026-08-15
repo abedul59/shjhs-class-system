@@ -1,4 +1,4 @@
-<template><template>
+<template>
   <div class="hygiene-page">
     <!-- ================= 登入介面 ================= -->
     <div v-if="!isLoggedIn" class="login-container">
