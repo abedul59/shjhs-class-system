@@ -22,18 +22,30 @@
       </div>
     </div>
 
-    <!-- 家長須知 -->
+    <!-- 家長須知 (💡 增加電腦版預設摺疊功能) -->
     <div class="blackboard top-board">
       <h2 class="board-title notice-title">📢 家長須知事項</h2>
       <div class="dashed-divider"></div>
-      <div class="board-content">
-        <div v-if="parentNotices.length === 0" class="empty-text-italic">目前無特別須知事項</div>
-        <ul v-else class="item-list">
-          <li v-for="(notice, index) in parentNotices" :key="'n-'+index" class="rich-notice-item">
-            <span class="bullet">📌</span>
-            <div class="rich-notice-content" v-html="privacyFilter(notice)"></div>
-          </li>
-        </ul>
+      
+      <div class="board-content-wrapper" :class="{ 'is-collapsed': !isNoticeExpanded }">
+        <div class="board-content">
+          <div v-if="parentNotices.length === 0" class="empty-text-italic">目前無特別須知事項</div>
+          <ul v-else class="item-list">
+            <li v-for="(notice, index) in parentNotices" :key="'n-'+index" class="rich-notice-item">
+              <span class="bullet">📌</span>
+              <div class="rich-notice-content" v-html="privacyFilter(notice)"></div>
+            </li>
+          </ul>
+        </div>
+        <!-- 漸層遮罩 (僅在折疊且為桌面版時顯示) -->
+        <div v-if="!isNoticeExpanded" class="fade-mask"></div>
+      </div>
+      
+      <!-- 展開/折疊按鈕 (僅限電腦版顯示) -->
+      <div class="expand-action desktop-only" v-if="parentNotices.length > 0">
+        <button @click="isNoticeExpanded = !isNoticeExpanded" class="btn-expand">
+          {{ isNoticeExpanded ? '▲ 收起內容' : '▼ 展開完整須知' }}
+        </button>
       </div>
     </div>
 
@@ -42,7 +54,6 @@
         <div class="control-card">
           <div class="clock-display">🕒 {{ currentTime }}</div>
           
-          <!-- 💡 新增：動態課表提示 (目前課程與下節課程) -->
           <div v-if="scheduleDisplay" class="schedule-ticker">
             <div class="current-class">
               <span class="pulse-dot" v-if="scheduleDisplay.current.status === '上課中'"></span>
@@ -65,7 +76,6 @@
             <NuxtLink v-if="indexButtonSettings.hygiene" to="/hygiene" class="btn btn-cyan">🧹 衛生管理</NuxtLink>            
             <NuxtLink v-if="indexButtonSettings.seats" to="/seats" class="btn btn-teal">🪑 座位管理</NuxtLink>
             
-            <!-- 💡 新增：課表管理按鈕 -->
             <NuxtLink v-if="indexButtonSettings.schedule" to="/schedule" class="btn btn-amber">🗓️ 課表管理</NuxtLink>
             
             <button v-if="indexButtonSettings.emergency" @click="openEmergencyModal" class="btn btn-red">🚨 緊急通知</button>
@@ -334,6 +344,8 @@ const showEmergencyModal = ref(false)
 const showSeatingChartLocal = ref(false)
 const showHygieneLocal = ref(false)
 const activeHygieneTab = ref('morning')
+// 💡 控制家長須知摺疊狀態的變數
+const isNoticeExpanded = ref(false)
 
 const isHistoryVisibleOnIndex = ref(false)
 const showContactHistoryModal = ref(false)
@@ -344,8 +356,6 @@ const isIpWhitelisted = ref(false)
 const isIpBrownlisted = ref(false)
 
 const announcements = ref([])
-
-// 💡 新增：儲存課表資料
 const scheduleData = ref(null)
 
 const indexButtonSettings = ref({
@@ -460,13 +470,12 @@ const todayDisplay = `${dDate.getFullYear()}年${dDate.getMonth()+1}月${dDate.g
 const currentTime = ref('')
 let timer = null
 
-// 💡 課表動態計算邏輯
 const scheduleDisplay = computed(() => {
   if (!scheduleData.value || !scheduleData.value.periods) return null
   
   const now = new Date()
-  const currentDayIndex = now.getDay() - 1 // 0=週一, 4=週五
-  if (currentDayIndex < 0 || currentDayIndex > 4) return null // 週末不顯示
+  const currentDayIndex = now.getDay() - 1 
+  if (currentDayIndex < 0 || currentDayIndex > 4) return null 
   
   const nowMins = now.getHours() * 60 + now.getMinutes()
   
@@ -485,11 +494,9 @@ const scheduleDisplay = computed(() => {
     const dayData = p.days[currentDayIndex]
     if (!dayData || !dayData.subject) continue
     
-    // 判斷是否在此節課中
     if (nowMins >= startMins && nowMins <= endMins) {
       currentClass = { status: '上課中', label: p.name, subject: dayData.subject, teacher: dayData.teacher }
       
-      // 尋找下一節有課的
       for (let j = i + 1; j < scheduleData.value.periods.length; j++) {
         const nextP = scheduleData.value.periods[j]
         const nextDayData = nextP.days[currentDayIndex]
@@ -501,7 +508,6 @@ const scheduleDisplay = computed(() => {
       break
     }
     
-    // 如果時間還沒到這節課，這節就是「下一節」
     if (nowMins < startMins && !nextClass) {
       nextClass = { subject: dayData.subject }
     }
@@ -585,7 +591,6 @@ const fetchData = async () => {
   parentNotices.value = boardData?.notices || []
   contactBookItems.value = boardData?.contact_items || []
 
-  // 💡 增加拉取 class_schedule_data
   const { data: sysData } = await supabase.from('system_settings').select('*')
     .in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings', 'announcements_data', 'class_schedule_data'])
   
@@ -744,11 +749,20 @@ const formatHistDate = (dateStr) => {
 .contact-title { color: #f59e0b; }
 .board-date { color: #cbd5e1; margin: 8px 0 0 0; font-size: 0.95rem; }
 .dashed-divider { border-bottom: 2px dashed #94a3b8; margin: 15px 0; opacity: 0.6; }
-.board-content { color: white; min-height: 80px; }
+
+/* 💡 更新：家長須知內容摺疊與遮罩效果 */
+.board-content-wrapper { position: relative; transition: max-height 0.3s ease; }
+.board-content { color: white; min-height: 40px; }
+.is-collapsed { max-height: 140px; overflow: hidden; }
+.fade-mask { position: absolute; bottom: 0; left: 0; width: 100%; height: 60px; background: linear-gradient(to bottom, rgba(49, 82, 67, 0), rgba(49, 82, 67, 1)); pointer-events: none; }
+.expand-action { text-align: center; margin-top: 5px; }
+.btn-expand { background: transparent; border: 1px dashed #fca5a5; color: #fca5a5; padding: 6px 20px; border-radius: 20px; cursor: pointer; font-size: 0.95rem; transition: 0.2s; font-weight: bold;}
+.btn-expand:hover { background: rgba(252, 165, 165, 0.15); }
+.desktop-only { display: block; }
+
 .empty-text-italic { color: #94a3b8; font-style: italic; font-size: 1.1rem; }
 .item-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
 
-/* 💡 更新：富文字顯示樣式 */
 .rich-notice-item { display: flex; align-items: flex-start; gap: 8px; width: 100%; font-size: 1.15rem; letter-spacing: 0.5px; }
 .rich-notice-content { flex: 1; word-wrap: break-word; overflow-wrap: break-word; line-height: 1.5; }
 .rich-notice-content :deep(p) { margin: 0 0 5px 0; }
@@ -760,7 +774,6 @@ const formatHistDate = (dateStr) => {
 .control-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; text-align: center; }
 .clock-display { font-size: 2.2rem; font-weight: bold; color: #1e293b; margin-bottom: 10px; }
 
-/* 💡 新增：課表提示列樣式 */
 .schedule-ticker { 
   background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 10px 15px;
   margin-bottom: 20px; display: flex; justify-content: center; gap: 20px; align-items: center; flex-wrap: wrap;
@@ -891,6 +904,8 @@ const formatHistDate = (dateStr) => {
 .text-xs { font-size: 0.75rem; color: #64748b; font-weight: normal;}
 
 @media (max-width: 1024px) { .main-split { flex-direction: column; } .student-grid { grid-template-columns: repeat(3, 1fr); } }
+
+/* 💡 手機版維持展開，隱藏摺疊遮罩與按鈕 */
 @media (max-width: 768px) {
   .student-grid { grid-template-columns: repeat(2, 1fr); }
   .seats-grid-readonly, .labels-grid-readonly { gap: 5px; }
@@ -898,5 +913,9 @@ const formatHistDate = (dateStr) => {
   .tabs-container-readonly { justify-content: flex-start; padding-bottom: 10px; }
   .schedule-ticker { flex-direction: column; gap: 10px; text-align: center; }
   .next-class { border-left: none; padding-left: 0; border-top: 1px dashed #cbd5e1; padding-top: 10px; width: 100%;}
+  
+  .is-collapsed { max-height: none; overflow: visible; }
+  .fade-mask { display: none; }
+  .desktop-only { display: none; }
 }
 </style>
