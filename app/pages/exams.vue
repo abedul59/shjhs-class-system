@@ -36,7 +36,6 @@
         </div>
       </header>
 
-      <!-- 💡 新增：大考總開關與主題設定 -->
       <div class="settings-card">
         <div class="toggle-setting-box">
           <label class="toggle-label">
@@ -66,7 +65,7 @@
       <div class="exam-editor-card">
         <div class="form-group">
           <label class="main-label">大考標題名稱：</label>
-          <input type="text" v-model="examData.title" class="form-control title-input" placeholder="例：112學年度 第一學期 第一次段考" />
+          <input type="text" v-model="examData.title" class="form-control title-input" placeholder="例：新化國中第一次段考 第一天" />
         </div>
 
         <div class="periods-container">
@@ -78,30 +77,37 @@
           <table class="periods-table">
             <thead>
               <tr>
-                <th width="80">順序</th>
-                <th width="300">考試科目</th>
+                <th width="60">順序</th>
+                <th width="200">考試科目</th>
                 <th>開始時間</th>
                 <th>結束時間</th>
-                <th width="100">操作</th>
+                <!-- 💡 新增：是否為正式考試 -->
+                <th width="120">正式考試<br><span style="font-size:0.8rem;font-weight:normal">(啟用倒數)</span></th>
+                <th width="80">操作</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="examData.periods.length === 0">
-                <td colspan="5" class="empty-msg">目前無任何考試節次，請點擊右上方新增。</td>
+                <td colspan="6" class="empty-msg">目前無任何考試節次，請點擊右上方新增。</td>
               </tr>
               <tr v-for="(period, index) in examData.periods" :key="index">
                 <td><strong>{{ index + 1 }}</strong></td>
-                <td><input type="text" v-model="period.subject" class="form-control" placeholder="例：國文" /></td>
+                <td><input type="text" v-model="period.subject" class="form-control text-center" placeholder="例：國文" /></td>
                 <td><input type="time" v-model="period.startTime" class="form-control time-ctrl" /></td>
                 <td><input type="time" v-model="period.endTime" class="form-control time-ctrl" /></td>
-                <td><button @click="removePeriod(index)" class="btn-delete">🗑️ 刪除</button></td>
+                <!-- 💡 新增：勾選框綁定 -->
+                <td>
+                  <label class="checkbox-label">
+                    <input type="checkbox" v-model="period.isExam" class="big-checkbox" />
+                  </label>
+                </td>
+                <td><button @click="removePeriod(index)" class="btn-delete">🗑️</button></td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- 💡 新增：大考預覽區塊 -->
       <div class="preview-section-wrapper">
         <div class="preview-header">
           <h3>👀 預覽大考看板</h3>
@@ -113,7 +119,6 @@
         </div>
 
         <div class="preview-scale-container">
-          <!-- 將目前選定的主題顏色注入 CSS 變數供預覽畫面使用 -->
           <div class="exam-dashboard-preview" :style="currentThemeStyles">
             <h1 class="exam-main-title">{{ examData.title || '尚未設定標題' }}</h1>
             
@@ -141,29 +146,30 @@
 
               <div class="exam-right-panel">
                 <div class="clock-label">目前時間 (預覽假定)</div>
-                <!-- 預覽的時鐘只顯示假定時間，後面補上固定的秒數以利展示 -->
                 <div class="exam-clock">{{ mockTime }}:00</div>
 
                 <div class="exam-status-display">
-                  <div v-if="previewStatus.state === 'WAITING'" class="status-text waiting">⏳ 準備考試中...</div>
-                  <div v-else-if="previewStatus.state === 'FINISHED'" class="status-text finished">🎉 今日考試已全數結束</div>
+                  <div v-if="previewStatus.state === 'WAITING'" class="status-text waiting">⏳ 準備中...</div>
+                  <div v-else-if="previewStatus.state === 'FINISHED'" class="status-text finished">🎉 今日全數結束</div>
                   
                   <div v-else-if="previewStatus.state === 'TESTING'" class="status-text testing">
-                    <div class="status-label">✏️ 目前考科</div>
+                    <div class="status-label">✏️ 目前進行</div>
                     <div class="status-subject">{{ previewStatus.current.subject }}</div>
                     
-                    <div class="countdown-wrapper">
+                    <!-- 💡 更新：根據 isExam 決定是否顯示倒數計時 -->
+                    <div v-if="previewStatus.current.isExam" class="countdown-wrapper">
                       <div class="countdown-label">距離本節結束還有</div>
                       <div class="exam-countdown" :class="{ 'text-danger': previewCountdownMinutes < 5 }">
                         {{ previewCountdownText }}
                       </div>
                     </div>
+                    <div v-else class="study-mode-text">📖 溫書自習中</div>
                   </div>
                   
                   <div v-else-if="previewStatus.state === 'BREAK'" class="status-text break">
                     <div class="status-label">☕ 休息時間</div>
                     <div class="status-next" v-if="previewStatus.next">
-                      下一節考科：<span class="highlight">{{ previewStatus.next.subject }}</span> 
+                      下一節：<span class="highlight">{{ previewStatus.next.subject }}</span> 
                       <br>
                       <span class="next-time">({{ previewStatus.next.startTime }} 開始)</span>
                     </div>
@@ -188,10 +194,8 @@ const isLoggingIn = ref(false)
 const passwordInput = ref('')
 const isSaving = ref(false)
 
-// 💡 預覽用的假定時間
 const mockTime = ref('08:30')
 
-// 💡 10 種大考主題色彩定義
 const examThemes = {
   midnight: { name: '午夜藍 (Midnight)', bg: '#0f172a', border: '#334155', title: '#f8fafc', clock: '#fbbf24', text: '#cbd5e1', accent: '#3b82f6', success: '#10b981', danger: '#ef4444', panelBg: '#1e293b' },
   blackboard: { name: '經典黑板 (Blackboard)', bg: '#1a3627', border: '#5b3a1a', title: '#ffffff', clock: '#fbbf24', text: '#e2e8f0', accent: '#fca5a5', success: '#a7f3d0', danger: '#f87171', panelBg: '#234a36' },
@@ -206,19 +210,19 @@ const examThemes = {
 }
 
 const defaultExamData = {
-  isExamModeEnabled: true, // 預設開啟首頁切換按鈕
+  isExamModeEnabled: true,
   theme: 'midnight',
-  title: '第一次段考',
+  title: '新化國中第一次段考 第一天',
   periods: [
-    { subject: '早修/自習', startTime: '07:30', endTime: '08:15' },
-    { subject: '國文', startTime: '08:20', endTime: '09:05' },
-    { subject: '數學', startTime: '09:15', endTime: '10:00' }
+    { subject: '溫書', startTime: '07:30', endTime: '08:15', isExam: false },
+    { subject: '國文', startTime: '08:20', endTime: '09:05', isExam: true },
+    { subject: '溫書', startTime: '09:15', endTime: '10:00', isExam: false },
+    { subject: '數學', startTime: '10:10', endTime: '10:55', isExam: true }
   ]
 }
 
 const examData = ref(JSON.parse(JSON.stringify(defaultExamData)))
 
-// 💡 取得目前選定的主題 CSS 變數，注入給預覽畫面使用
 const currentThemeStyles = computed(() => {
   const t = examThemes[examData.value.theme] || examThemes.midnight
   return {
@@ -234,7 +238,6 @@ const currentThemeStyles = computed(() => {
   }
 })
 
-// 💡 根據假定時間計算考試狀態 (供預覽使用)
 const previewStatus = computed(() => {
   if (!examData.value.periods || examData.value.periods.length === 0) return { state: 'WAITING', periods: [] }
 
@@ -280,7 +283,7 @@ const previewStatus = computed(() => {
   const lastP = periods[periods.length - 1]
   if (lastP && lastP.endTime) {
     const [lsh, lsm] = lastP.endTime.split(':').map(Number)
-    if (!current && !next && mockMins > (lsh * 60 + lsm)) {
+    if (!current && !next && mockMins >= (lsh * 60 + lsm)) {
        state = 'FINISHED'
     }
   }
@@ -288,7 +291,6 @@ const previewStatus = computed(() => {
   return { state, current, next, periods }
 })
 
-// 💡 預覽畫面的倒數計時計算
 const previewCountdownMinutes = computed(() => {
   if (previewStatus.value.state !== 'TESTING' || !previewStatus.value.current) return 999
   const [mh, mm] = mockTime.value.split(':').map(Number)
@@ -347,7 +349,7 @@ const fetchExamData = async () => {
 }
 
 const addPeriod = () => {
-  examData.value.periods.push({ subject: '', startTime: '', endTime: '' })
+  examData.value.periods.push({ subject: '', startTime: '', endTime: '', isExam: true })
 }
 
 const removePeriod = (index) => {
@@ -378,6 +380,7 @@ const saveExamData = async () => {
 .subtitle { color: #64748b; margin-bottom: 20px; }
 .form-group { margin-bottom: 20px; text-align: left; }
 .form-control { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-family: inherit;}
+.text-center { text-align: center; }
 .btn-submit { width: 100%; padding: 12px; background: #dc2626; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
 .back-link { margin-top: 15px; }
 
@@ -416,10 +419,11 @@ const saveExamData = async () => {
 .periods-table th { background: #f8fafc; color: #475569; }
 .empty-msg { color: #94a3b8; font-style: italic; padding: 20px !important; }
 .time-ctrl { font-family: monospace; font-size: 1.05rem; text-align: center; }
+.checkbox-label { display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; cursor: pointer;}
+.big-checkbox { transform: scale(1.8); cursor: pointer; }
 .btn-delete { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; }
 .btn-delete:hover { background: #fecaca; }
 
-/* 💡 預覽畫面區塊 */
 .preview-section-wrapper { background: #1e293b; padding: 25px; border-radius: 12px; margin-top: 30px; }
 .preview-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;}
 .preview-header h3 { margin: 0; color: #f8fafc; }
@@ -431,12 +435,10 @@ const saveExamData = async () => {
   width: 100%; 
   border-radius: 12px; 
   overflow: hidden; 
-  /* 利用 CSS zoom 縮小預覽畫面，使其能塞進編輯區 */
   zoom: 0.6; 
   border: 4px solid #475569;
 }
 
-/* 🎨 大考看板預覽 CSS (使用變數動態切換色彩) */
 .exam-dashboard-preview { 
   background-color: var(--ex-bg); 
   color: var(--ex-text); 
@@ -449,18 +451,16 @@ const saveExamData = async () => {
 .exam-main-title { font-size: 3rem; margin: 0 0 40px 0; color: var(--ex-title); letter-spacing: 2px; text-align: center; border-bottom: 2px solid var(--ex-border); padding-bottom: 20px;}
 .exam-split-layout { display: flex; gap: 40px; flex: 1; align-items: flex-start; justify-content: center; }
 
-/* 左半邊：課表 */
 .exam-left-panel { flex: 1; max-width: 800px; }
 .exam-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 1.6rem; background: var(--ex-panel-bg); border-radius: 16px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.2);}
 .exam-table th, .exam-table td { padding: 22px; text-align: center; border-bottom: 1px solid var(--ex-border); }
 .exam-table th { background: var(--ex-border); color: var(--ex-title); font-weight: normal; font-size: 1.4rem; }
 .exam-table tr:last-child td { border-bottom: none; }
 .active-row { background: rgba(255,255,255,0.1); border-left: 5px solid var(--ex-accent);}
-.active-row td { color: var(--ex-accent); font-weight: bold; }
+.active-row td { color: var(--ex-accent); font-weight: bold; border-bottom-color: transparent;}
 .font-mono { font-family: monospace; }
 .font-bold { font-weight: bold; letter-spacing: 1px; }
 
-/* 右半邊：時鐘與狀態 */
 .exam-right-panel { flex: 1; max-width: 700px; background: var(--ex-panel-bg); border-radius: 20px; padding: 40px; text-align: center; border: 1px solid var(--ex-border); box-shadow: 0 10px 30px rgba(0,0,0,0.3); display: flex; flex-direction: column; justify-content: center; align-items: center;}
 .clock-label { font-size: 1.5rem; color: var(--ex-text); margin-bottom: 10px; opacity: 0.8;}
 .exam-clock { font-size: 6rem; font-weight: bold; font-family: monospace; color: var(--ex-clock); margin-bottom: 30px; line-height: 1; }
@@ -476,6 +476,8 @@ const saveExamData = async () => {
 .exam-countdown { font-size: 5rem; color: var(--ex-success); font-family: monospace; line-height: 1; }
 .text-danger { color: var(--ex-danger) !important; animation: blink 1s infinite; }
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+
+.study-mode-text { font-size: 3rem; color: var(--ex-success); letter-spacing: 2px; margin-top: 20px; padding: 20px; border: 2px dashed var(--ex-success); border-radius: 12px; background: rgba(16, 185, 129, 0.1);}
 
 .status-text.break .status-next { margin-top: 20px; font-size: 2rem; color: var(--ex-text); }
 .status-text.break .highlight { color: var(--ex-success); font-size: 3rem; margin: 15px 0; display: block;}
