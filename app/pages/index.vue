@@ -37,20 +37,24 @@
 
           <div class="exam-status-display">
             <!-- 準備中 -->
-            <div v-if="examStatus.state === 'WAITING'" class="status-text waiting">⏳ 準備考試中...</div>
+            <div v-if="examStatus.state === 'WAITING'" class="status-text waiting">⏳ 準備中...</div>
             <!-- 已結束 -->
-            <div v-else-if="examStatus.state === 'FINISHED'" class="status-text finished">🎉 今日考試已全數結束</div>
+            <div v-else-if="examStatus.state === 'FINISHED'" class="status-text finished">🎉 今日全數結束</div>
             
-            <!-- 考試中 (含倒數計時) -->
+            <!-- 進行中 -->
             <div v-else-if="examStatus.state === 'TESTING'" class="status-text testing">
-              <div class="status-label">✏️ 目前考科</div>
+              <div class="status-label">✏️ 目前進行</div>
               <div class="status-subject">{{ examStatus.current.subject }}</div>
               
-              <div class="countdown-wrapper">
+              <!-- 💡 根據 isExam 決定顯示倒數計時器或溫書文字 -->
+              <div v-if="examStatus.current.isExam" class="countdown-wrapper">
                 <div class="countdown-label">距離本節結束還有</div>
                 <div class="exam-countdown" :class="{ 'text-danger': countdownMinutes < 5 }">
                   {{ countdownText }}
                 </div>
+              </div>
+              <div v-else class="study-mode-text">
+                📖 溫書自習中
               </div>
             </div>
             
@@ -58,7 +62,7 @@
             <div v-else-if="examStatus.state === 'BREAK'" class="status-text break">
               <div class="status-label">☕ 休息時間</div>
               <div class="status-next" v-if="examStatus.next">
-                下一節考科：<span class="highlight">{{ examStatus.next.subject }}</span> 
+                下一節：<span class="highlight">{{ examStatus.next.subject }}</span> 
                 <br>
                 <span class="next-time">({{ examStatus.next.startTime }} 開始)</span>
               </div>
@@ -134,7 +138,7 @@
               </div>
             </div>
 
-            <!-- 💡 大考模式切換按鈕 (由後台 isExamModeEnabled 控制且僅褐名單可見) -->
+            <!-- 大考模式切換按鈕 (由後台 isExamModeEnabled 控制且僅褐名單可見) -->
             <button v-if="isIpBrownlisted && examData.isExamModeEnabled && examData.periods && examData.periods.length > 0" @click="isExamModeView = true" class="btn-enter-exam">
               🎓 切換至大考看板模式
             </button>
@@ -422,7 +426,7 @@ const indexButtonSettings = ref({
   parentBind: true, parentMsg: true, studentMsg: true, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: true, schedule: true, exams: true
 })
 
-// 💡 10 種大考主題色彩定義 (與 exams.vue 保持同步)
+// 💡 10 種大考主題色彩定義 (必須與 exams.vue 同步)
 const examThemes = {
   midnight: { name: '午夜藍 (Midnight)', bg: '#0f172a', border: '#334155', title: '#f8fafc', clock: '#fbbf24', text: '#cbd5e1', accent: '#3b82f6', success: '#10b981', danger: '#ef4444', panelBg: '#1e293b' },
   blackboard: { name: '經典黑板 (Blackboard)', bg: '#1a3627', border: '#5b3a1a', title: '#ffffff', clock: '#fbbf24', text: '#e2e8f0', accent: '#fca5a5', success: '#a7f3d0', danger: '#f87171', panelBg: '#234a36' },
@@ -483,7 +487,7 @@ const defaultHygieneData = {
 
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
-// 💡 取得目前選定的主題 CSS 變數，套用於全螢幕大考看板
+// 💡 動態載入主題變數
 const currentThemeStyles = computed(() => {
   const t = examThemes[examData.value.theme] || examThemes.midnight
   return {
@@ -627,6 +631,7 @@ const examStatus = computed(() => {
 
   for (let i = 0; i < periods.length; i++) {
     const p = periods[i]
+    if (!p.startTime || !p.endTime) continue
     const [sh, sm] = p.startTime.split(':').map(Number)
     const [eh, em] = p.endTime.split(':').map(Number)
     const startMins = sh * 60 + sm
@@ -652,15 +657,25 @@ const examStatus = computed(() => {
   }
 
   const lastP = periods[periods.length - 1]
-  const [lsh, lsm] = lastP.endTime.split(':').map(Number)
-  if (!current && !next && nowMins >= (lsh * 60 + lsm)) {
-     state = 'FINISHED'
+  if (lastP && lastP.endTime) {
+    const [lsh, lsm] = lastP.endTime.split(':').map(Number)
+    if (!current && !next && nowMins >= (lsh * 60 + lsm)) {
+       state = 'FINISHED'
+    }
   }
 
   return { state, current, next, periods }
 })
 
-// 💡 大考動態倒數計時計算
+const countdownMinutes = computed(() => {
+  if (examStatus.value.state !== 'TESTING' || !examStatus.value.current) return 999;
+  const currentTick = nowTick.value;
+  const now = new Date(currentTick);
+  const [eh, em] = examStatus.value.current.endTime.split(':').map(Number);
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em, 0);
+  return Math.floor((end.getTime() - currentTick) / 60000);
+})
+
 const countdownText = computed(() => {
   if (examStatus.value.state !== 'TESTING' || !examStatus.value.current) return '';
   const currentTick = nowTick.value;
@@ -674,15 +689,6 @@ const countdownText = computed(() => {
   const diffMins = Math.floor(diffMs / 60000);
   const diffSecs = Math.floor((diffMs % 60000) / 1000);
   return `${String(diffMins).padStart(2, '0')}:${String(diffSecs).padStart(2, '0')}`;
-})
-
-const countdownMinutes = computed(() => {
-  if (examStatus.value.state !== 'TESTING' || !examStatus.value.current) return 999;
-  const currentTick = nowTick.value;
-  const now = new Date(currentTick);
-  const [eh, em] = examStatus.value.current.endTime.split(':').map(Number);
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em, 0);
-  return Math.floor((end.getTime() - currentTick) / 60000);
 })
 
 const parentNotices = ref([])
@@ -923,6 +929,9 @@ const formatHistDate = (dateStr) => {
 .text-danger { color: var(--ex-danger) !important; animation: blink 1s infinite; }
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
 
+/* 💡 溫書自習中樣式 */
+.study-mode-text { font-size: 4rem; color: var(--ex-success); letter-spacing: 2px; margin-top: 20px; padding: 30px; border: 2px dashed var(--ex-success); border-radius: 16px; background: rgba(255,255,255, 0.05);}
+
 .status-text.break .status-next { margin-top: 20px; font-size: 2rem; color: var(--ex-text); }
 .status-text.break .highlight { color: var(--ex-success); font-size: 3.5rem; margin: 15px 0; display: block;}
 .next-time { font-size: 1.8rem; color: var(--ex-text); font-family: monospace; opacity: 0.8;}
@@ -1044,7 +1053,7 @@ const formatHistDate = (dateStr) => {
 
 .right-panel { flex: 1; min-width: 0; }
 .board-header { display: flex; justify-content: space-between; align-items: flex-start; }
-.edit-btn { background-color: #f59e0b; color: #1e293b; border: none; padding: 6px 16px; border-radius: 6px; font-weight: bold; font-size: 0.95rem; cursor: pointer; }
+.edit-btn { background: #f59e0b; color: #1e293b; border: none; padding: 6px 16px; border-radius: 6px; font-weight: bold; font-size: 0.95rem; cursor: pointer; }
 
 .edit-mode { background: rgba(0, 0, 0, 0.2); padding: 15px; border-radius: 8px; }
 .edit-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
