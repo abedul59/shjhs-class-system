@@ -1,42 +1,69 @@
 <template>
   <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
     
-    <!-- 🎓 大考模式看板 -->
+    <!-- 🎓 進入大考模式後的全螢幕投影畫面 (雙欄設計 + 動態主題配色) -->
     <div v-if="isExamModeView && isIpBrownlisted" class="exam-dashboard" :style="currentThemeStyles">
       <button @click="isExamModeView = false" class="exit-exam-btn">✖ 結束大考模式</button>
+      
       <h1 class="exam-main-title">{{ examData.title }}</h1>
+      
       <div class="exam-split-layout">
+        <!-- 左半邊：考試時間表 -->
         <div class="exam-left-panel">
           <table class="exam-table">
             <thead>
-              <tr><th width="120">節次</th><th>考科</th><th>開始時間</th><th>結束時間</th></tr>
+              <tr>
+                <th width="120">節次</th>
+                <th>考科</th>
+                <th>開始時間</th>
+                <th>結束時間</th>
+              </tr>
             </thead>
             <tbody>
               <tr v-for="(p, i) in examStatus.periods" :key="i" :class="{ 'active-row': p.isActive }">
-                <td>第 {{ i + 1 }} 節</td><td class="font-bold">{{ p.subject }}</td><td class="font-mono">{{ p.startTime }}</td><td class="font-mono">{{ p.endTime }}</td>
+                <td>第 {{ i + 1 }} 節</td>
+                <td class="font-bold">{{ p.subject }}</td>
+                <td class="font-mono">{{ p.startTime }}</td>
+                <td class="font-mono">{{ p.endTime }}</td>
               </tr>
             </tbody>
           </table>
         </div>
+
+        <!-- 右半邊：時鐘與狀態 -->
         <div class="exam-right-panel">
           <div class="clock-label">目前時間</div>
           <div class="exam-clock">{{ currentTime }}</div>
+
           <div class="exam-status-display">
+            <!-- 準備中 -->
             <div v-if="examStatus.state === 'WAITING'" class="status-text waiting">⏳ 準備中...</div>
+            <!-- 已結束 -->
             <div v-else-if="examStatus.state === 'FINISHED'" class="status-text finished">🎉 今日全數結束</div>
+            
+            <!-- 進行中 -->
             <div v-else-if="examStatus.state === 'TESTING'" class="status-text testing">
               <div class="status-label">✏️ 目前進行</div>
               <div class="status-subject">{{ examStatus.current.subject }}</div>
+              
               <div v-if="examStatus.current.isExam" class="countdown-wrapper">
                 <div class="countdown-label">距離本節結束還有</div>
-                <div class="exam-countdown" :class="{ 'text-danger': countdownMinutes < 5 }">{{ countdownText }}</div>
+                <div class="exam-countdown" :class="{ 'text-danger': countdownMinutes < 5 }">
+                  {{ countdownText }}
+                </div>
               </div>
-              <div v-else class="study-mode-text">📖 溫書自習中</div>
+              <div v-else class="study-mode-text">
+                📖 溫書自習中
+              </div>
             </div>
+            
+            <!-- 休息中 -->
             <div v-else-if="examStatus.state === 'BREAK'" class="status-text break">
               <div class="status-label">☕ 休息時間</div>
               <div class="status-next" v-if="examStatus.next">
-                下一節：<span class="highlight">{{ examStatus.next.subject }}</span><br><span class="next-time">({{ examStatus.next.startTime }} 開始)</span>
+                下一節：<span class="highlight">{{ examStatus.next.subject }}</span> 
+                <br>
+                <span class="next-time">({{ examStatus.next.startTime }} 開始)</span>
               </div>
             </div>
           </div>
@@ -44,8 +71,9 @@
       </div>
     </div>
 
-    <!-- 常規首頁內容 -->
+    <!-- 原本的常規首頁內容 (大考模式開啟時隱藏) -->
     <div v-if="!isExamModeView" class="normal-home-content">
+      <!-- 軟木塞公佈欄 -->
       <div v-if="announcements.length > 0 && !isIpBrownlisted" class="corkboard announcement-board">
         <h2 class="board-title cork-title">📌 班級公佈欄</h2>
         <div class="cork-divider"></div>
@@ -58,26 +86,32 @@
             </div>
             <div class="cork-card-content" v-html="formatNL(ann.content)"></div>
             <div v-if="ann.links && ann.links.length > 0" class="cork-card-links">
-               <a v-for="(link, i) in ann.links" :key="i" :href="link.url" target="_blank" class="cork-link">🔗 {{ privacyFilter(link.name) }}</a>
+               <a v-for="(link, i) in ann.links" :key="i" :href="link.url" target="_blank" class="cork-link">
+                 🔗 {{ privacyFilter(link.name) }}
+               </a>
             </div>
           </div>
         </div>
       </div>
 
+      <!-- 家長須知 -->
       <div class="blackboard top-board">
         <h2 class="board-title notice-title">📢 家長須知事項</h2>
         <div class="dashed-divider"></div>
+        
         <div class="board-content-wrapper" :class="{ 'is-collapsed': !isNoticeExpanded }">
           <div class="board-content">
             <div v-if="parentNotices.length === 0" class="empty-text-italic">目前無特別須知事項</div>
             <ul v-else class="item-list">
               <li v-for="(notice, index) in parentNotices" :key="'n-'+index" class="rich-notice-item">
-                <span class="bullet">📌</span><div class="rich-notice-content" v-html="privacyFilter(notice)"></div>
+                <span class="bullet">📌</span>
+                <div class="rich-notice-content" v-html="privacyFilter(notice)"></div>
               </li>
             </ul>
           </div>
           <div v-if="!isNoticeExpanded" class="fade-mask"></div>
         </div>
+        
         <div class="expand-action desktop-only" v-if="parentNotices.length > 0">
           <button @click="isNoticeExpanded = !isNoticeExpanded" class="btn-expand">
             {{ isNoticeExpanded ? '▲ 收起內容' : '▼ 展開完整須知' }}
@@ -98,7 +132,8 @@
                 <span class="teacher-text" v-if="scheduleDisplay.current.teacher">({{ scheduleDisplay.current.teacher }})</span>
               </div>
               <div class="next-class" v-if="scheduleDisplay.next">
-                <strong>下節課：</strong><span>{{ scheduleDisplay.next.subject }}</span>
+                <strong>下節課：</strong>
+                <span>{{ scheduleDisplay.next.subject }}</span>
               </div>
             </div>
 
@@ -639,6 +674,7 @@ const openPwdModal = (target) => {
 
 const closePwdModal = () => { showPwdModal.value = false }
 
+// 💡 修正：聯絡簿解鎖與緊急通知解鎖時，確實寫入對應身分日誌
 const submitPwd = async () => {
   const pwd = pwdInput.value
   const teacherPwd = officerPasswords.value.teacher || '168168168'
