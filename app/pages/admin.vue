@@ -22,6 +22,10 @@
           <button @click="currentTab = 'attendance'" :class="{ active: currentTab === 'attendance' }">⏰ 遲到管理</button>
           <button @click="currentTab = 'homework'" :class="{ active: currentTab === 'homework' }">📚 作業與科任</button>
           <button @click="currentTab = 'board'" :class="{ active: currentTab === 'board' }">📢 須知推播</button>
+          
+          <!-- 💡 僅新增此行：公佈欄管理按鈕 -->
+          <button @click="currentTab = 'announcements'" :class="{ active: currentTab === 'announcements' }">📌 公佈欄管理</button>
+
           <button @click="currentTab = 'messages'" :class="{ active: currentTab === 'messages' }">💬 私訊管理</button>
           <button @click="currentTab = 'students'" :class="{ active: currentTab === 'students' }">👩‍🎓 學生管理</button>
           <button @click="currentTab = 'security'" :class="{ active: currentTab === 'security' }">🛡️ 安全與 IP</button>
@@ -29,7 +33,7 @@
           <button @click="currentTab = 'communication'" :class="{ active: currentTab === 'communication' }">📨 通知紀錄</button>
           <button @click="currentTab = 'officers'" :class="{ active: currentTab === 'officers' }">🔐 職位密碼管理</button>
           
-          <!-- 💡 新增：首頁按鈕控制分頁 -->
+          <!-- 💡 首頁按鈕控制分頁 -->
           <button @click="currentTab = 'indexButtons'" :class="{ active: currentTab === 'indexButtons' }">🎛️ 首頁按鈕控制</button>
           
           <button @click="currentTab = 'settings'" :class="{ active: currentTab === 'settings' }">⚙️ 系統設定</button>
@@ -43,6 +47,10 @@
         <AdminAttendance v-if="currentTab === 'attendance'" />
         <AdminHomework v-if="currentTab === 'homework'" />
         <AdminBoard v-if="currentTab === 'board'" />
+        
+        <!-- 💡 僅新增此行：渲染公佈欄元件 -->
+        <AdminAnnouncements v-if="currentTab === 'announcements'" />
+
         <AdminMessages v-if="currentTab === 'messages'" />
         <AdminStudents v-if="currentTab === 'students'" />
         <AdminSecurity v-if="currentTab === 'security'" />
@@ -50,7 +58,7 @@
         <AdminCommunication v-if="currentTab === 'communication'" />
         <AdminOfficers v-if="currentTab === 'officers'" />
         
-        <!-- 💡 渲染剛剛建立的首頁按鈕控制元件 -->
+        <!-- 💡 渲染首頁按鈕控制元件 -->
         <AdminIndexButtons v-if="currentTab === 'indexButtons'" />
         
         <AdminSettings v-if="currentTab === 'settings'" />
