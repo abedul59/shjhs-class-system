@@ -101,6 +101,21 @@ const students = ref([]); const assignments = ref([]); const allSubmissions = re
 const currentAssignment = ref(null)
 const newAssignment = ref({ title: '', deadline: '' })
 
+// 💡 登入成功寫入日誌的共用函式
+const logRoleVisit = async (roleName) => {
+  try {
+    const ipRes = await fetch('https://api.ipify.org?format=json')
+    const { ip } = await ipRes.json()
+    await supabase.from('visitor_logs').insert([{ 
+      ip_address: ip, 
+      device_info: navigator.userAgent, 
+      role: roleName 
+    }])
+  } catch (e) { 
+    console.error("日誌寫入失敗", e) 
+  }
+}
+
 // === 嚴格紀錄到資料庫的稽核功能 ===
 const logAction = async (actionType, details) => {
   await supabase.from('assignment_audit_logs').insert({
@@ -137,13 +152,21 @@ const verifyPassword = async () => {
       
       if (passwordInput.value === expectedPwd || passwordInput.value === '168168168') {
         activeRole.value = '導師'
-        isUnlocked.value = true; await fetchDashboardData(); logAction('系統登入', '導師登入成功')
+        isUnlocked.value = true; 
+        await fetchDashboardData(); 
+        logAction('系統登入', '導師登入成功')
+        // 💡 登入成功寫入全站訪客日誌
+        await logRoleVisit('導師')
         return
       }
     } catch (e) {
       if (passwordInput.value === '168168168') {
         activeRole.value = '導師'
-        isUnlocked.value = true; await fetchDashboardData(); logAction('系統登入', '導師登入成功')
+        isUnlocked.value = true; 
+        await fetchDashboardData(); 
+        logAction('系統登入', '導師登入成功')
+        // 💡 降級模式登入成功寫入全站訪客日誌
+        await logRoleVisit('導師(降級登入)')
         return
       }
     }
@@ -153,10 +176,18 @@ const verifyPassword = async () => {
   const teacherInfo = teachersList.value.find(t => t.subject_name === selectedSubject.value)
   if (teacherInfo && passwordInput.value === teacherInfo.password) {
     activeRole.value = '科任老師'
-    isUnlocked.value = true; await fetchDashboardData(); logAction('系統登入', '科任老師登入成功')
+    isUnlocked.value = true; 
+    await fetchDashboardData(); 
+    logAction('系統登入', '科任老師登入成功')
+    // 💡 登入成功寫入全站訪客日誌
+    await logRoleVisit('科任老師')
   } else if (teacherInfo && teacherInfo.assistant_password && passwordInput.value === teacherInfo.assistant_password) {
     activeRole.value = '小老師'
-    isUnlocked.value = true; await fetchDashboardData(); logAction('系統登入', '小老師登入成功')
+    isUnlocked.value = true; 
+    await fetchDashboardData(); 
+    logAction('系統登入', '小老師登入成功')
+    // 💡 登入成功寫入全站訪客日誌
+    await logRoleVisit('小老師')
   } else {
     alert('❌ 密碼錯誤！'); passwordInput.value = ''
   }
@@ -191,7 +222,6 @@ const addAssignment = async () => {
   }
 }
 
-// 💡 更新：加入小老師刪除權限檢查
 const deleteAssignment = async (id, title) => {
   if (activeRole.value === '小老師') {
     alert('❌ 權限提示：小老師僅能新增作業與登記繳交狀態，無權限刪除作業。\n\n若需刪除，請聯繫科任老師或導師協助。')
