@@ -1,7 +1,7 @@
 <template>
   <div class="page-container">
     
-    <!-- 💡 更新：軟木塞公佈欄改為「不在褐名單」才顯示 -->
+    <!-- 軟木塞公佈欄 -->
     <div v-if="announcements.length > 0 && !isIpBrownlisted" class="corkboard announcement-board">
       <h2 class="board-title cork-title">📌 班級公佈欄</h2>
       <div class="cork-divider"></div>
@@ -22,14 +22,18 @@
       </div>
     </div>
 
-    <!-- 原本的家長須知 -->
+    <!-- 家長須知 -->
     <div class="blackboard top-board">
       <h2 class="board-title notice-title">📢 家長須知事項</h2>
       <div class="dashed-divider"></div>
       <div class="board-content">
         <div v-if="parentNotices.length === 0" class="empty-text-italic">目前無特別須知事項</div>
         <ul v-else class="item-list">
-          <li v-for="(notice, index) in parentNotices" :key="'n-'+index"><span class="bullet">📌</span> {{ privacyFilter(notice) }}</li>
+          <!-- 💡 更新：使用 v-html 解析富文字，並套用 flex 排版對齊圖示 -->
+          <li v-for="(notice, index) in parentNotices" :key="'n-'+index" class="rich-notice-item">
+            <span class="bullet">📌</span>
+            <div class="rich-notice-content" v-html="privacyFilter(notice)"></div>
+          </li>
         </ul>
       </div>
     </div>
@@ -117,7 +121,7 @@
               <div v-for="(item, index) in editingContactItems" :key="'edit-'+index" class="edit-row">
                 <span class="row-num">{{ index + 1 }}.</span>
                 <input v-model="editingContactItems[index]" type="text" placeholder="輸入事項..." class="edit-input"/>
-                <button @click="removeContactItem(index)" class="del-btn">🗑️</button>
+                <button @click="removeContactItem(index)" class="del-row-btn">🗑️</button>
               </div>
               <div class="edit-actions">
                 <button @click="addContactItem" class="add-btn">➕ 新增事項</button>
@@ -320,7 +324,6 @@ const isLoadingHistory = ref(false)
 const contactHistoryList = ref([])
 
 const isIpWhitelisted = ref(false)
-// 💡 變更：改為褐名單變數
 const isIpBrownlisted = ref(false)
 
 const announcements = ref([])
@@ -356,7 +359,7 @@ const defaultHygieneData = {
     move_n1: '鄭人閤、王\n聰文', move_n2: '劉子涵、楊\n佩綺', move_n3: '王翊潔、周\n宥芸', move_n4: '楊元豪', move_n5: '王麟賢、\n劉沅翰', move_n6: '林科甫',
     serve_header: '配膳組 (先打菜，\n全部同學分配\n完，再用餐)', serve_h1: '飯盒\n1-1', serve_h2: '大菜盒 A\n1-2', serve_h3: '大菜盒 B\n1-3', serve_h4: '小菜盒\n1-4', serve_h5: '湯桶\n1-5', serve_h6: '清潔消毒餐\n桌且移動桌\n子並歸位\n1-6',
     serve_n1: '黃鈺淳', serve_n2: '林毓庭', serve_n3: '黃芊樺', serve_n4: '許珮萱', serve_n5: '副衛生股長', serve_n6: '衛生股長',
-    note1: '1. 1200-1215 為用餐時間，用餐時請勿聊天，活動範圍為教室、陽台和走廊，要上廁所或外出請詢問導師。\n2. 最晚 1215 用餐結束（老師會看用餐狀況調整），每個人請將廚餘丟至「一般垃圾桶」，並用衛生紙將餐盘整理收好，整理抽屜和書櫃，最後自己搬上椅子，沒有工作者請退到掃地區域以外等候，<span style="color:blue">拖地完、地板吹乾後</span>，方可進入。整理組搬椅子的同學請在 1225 前按照導師指示搬下，勿亂跑。\n3. <span style="background:black; color:white; font-weight:bold;">副衛生股長</span>監督「飯菜的搬送」；<span style="background:black; color:white; font-weight:bold;">正衛生股長</span>監督「中午掃地情況」，一遇有缺人則請詢問導師。\n4. <span style="font-weight:bold; text-decoration:underline;">正副衛生股長</span>負責午休鐘響之後<span style="text-decoration:underline;">檢查室內外地板垃圾</span>。(每天輪流)\n5. <span style="font-weight:bold; text-decoration:underline;">禁止私下更換搬運之飯菜，違者下個階段續搬</span>。除非第四節上課老師延後下課，全班之飯菜需於<span style="font-weight:bold; text-decoration:underline;">每天 1200 前</span>搬至教室。\n6. 導師未到教室前不得私自打菜。<span style="font-weight:bold;">若導師在 1205 尚未到教室，由班長宣佈開始打菜。</span>\n7. <span style="text-decoration:underline;">每週不定期</span>有水果或點心，同學記得去廚房搬運<span style="font-weight:bold; text-decoration:underline;">全部搬運回來</span>。(或由老師指派)\n若餐盒配置不太相同時，整組 8 必須負責全部搬回來，先到者先選擇搬運東西。',
+    note1: '1. 1200-1215 為用餐時間，用餐時請勿聊天，活動範圍為教室、陽台和走廊，要上廁所或外出請詢問導師。\n2. 最晚 1215 用餐結束（老師會看用餐狀況調整），每個人請將廚餘丟至「一般垃圾桶」，並用衛生紙將餐盘整理收好，整理抽屜和書櫃，最後自己搬上椅子，沒有工作者請退到掃地區域以外等候，<span style="color:blue">拖地完、地板吹乾後</span>，方可進入。整理組搬椅子的同學請在 1225 前按照導師指示搬下，勿亂跑。\n3. <span style="background:black; color:white; font-weight:bold;">副衛生股長</span>監督「飯菜的搬送」；<span style="background:black; color:white; font-weight:bold;">正衛生股長</span>監督「中午掃地情況」，一遇有缺人則請詢問導師。\n4. <span style="font-weight:bold; text-decoration:underline;">正副衛生股長</span>負責午休鐘響之後<span style="text-decoration:underline;">檢查室內外地板垃圾</span>。(每天輪流)\n5. <span style="font-weight:bold; text-decoration:underline;">禁止私下更換搬運之飯菜，違者下個階段續搬</span>。除非第四節上課老師延後下課，全班之飯菜需於<span style="font-weight:bold; text-decoration:underline;">每天 1200 前</span>搬至教室。\n6. 導師未到教室前不得私自打菜。<span style="font-weight:bold;">若導師在 1205 尚未到教室，由班長宣佈開始打菜。</span>\n7. <span style="text-decoration:underline;">每週不定期</span>有水果或點心，同學記得去廚房搬運<span style="font-weight:bold; text-decoration:underline;">全部搬運回來</span>。(或由老師指派)\n若餐盒配置不太相同時，整組 8 人必須負責全部搬回來，先到者先選擇搬運東西。',
     note2: '----------------------------清潔組（中午打掃）工作守則----------------------------\n1. 清潔組負責「講台桌黑板、餐桌」者，請用抹布擦餐桌，處理廚餘（第一優先），然後擦粉筆槽，請勿在午休時間教室內板擦，然後擦黑板，將粉筆排好，<span style="color:blue">然後掃和拖</span>講台，講桌也要擦，上面的東西請擺好。請將垃圾桶周圍垃圾清理乾淨，將必要垃圾分類。\n2. 清潔組負責「教室掃地」和「座位拖地」者，請於大部分的同學吃完飯後，開始打掃。先掃，後拖。「座位拖地」代表只拖桌子和椅子下方地板。\n3. 清潔組負責「走廊掃拖」者，請「最慢」在 12:20 開始掃地。<span style="font-weight:bold;">唯有拖地的人，必須在 12:25 打鐘後，才開始拖，一共兩次。<span style="text-decoration:underline;">正副衛生股長請在教室內最後進行善後補強工作。</span></span>\n4. 清潔組負責「整理垃圾、用具、洗手臺」者，請將洗手臺廚餘清理乾淨，抹布擺好。然後將垃圾桶旁垃圾整理，垃圾壓好。'
   },
   squad: {
@@ -376,7 +379,6 @@ const defaultHygieneData = {
 
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
-// 💡 變更：改為檢查褐名單與白名單
 const checkIpRules = async () => {
   try {
     const ipRes = await fetch('https://api.ipify.org?format=json')
@@ -569,7 +571,6 @@ const fetchData = async () => {
 onMounted(() => { 
   updateTime(); 
   timer = setInterval(updateTime, 1000); 
-  // 💡 呼叫更新後的 checkIpRules
   checkIpRules().then(() => fetchData()) 
 })
 
@@ -669,7 +670,13 @@ const formatHistDate = (dateStr) => {
 .board-content { color: white; min-height: 80px; }
 .empty-text-italic { color: #94a3b8; font-style: italic; font-size: 1.1rem; }
 .item-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
-.item-list li { font-size: 1.15rem; letter-spacing: 0.5px; }
+
+/* 💡 更新：富文字顯示樣式 */
+.rich-notice-item { display: flex; align-items: flex-start; gap: 8px; width: 100%; font-size: 1.15rem; letter-spacing: 0.5px; }
+.rich-notice-content { flex: 1; word-wrap: break-word; overflow-wrap: break-word; line-height: 1.5; }
+.rich-notice-content :deep(p) { margin: 0 0 5px 0; }
+.rich-notice-content :deep(a) { color: #fbbf24; text-decoration: underline; }
+.rich-notice-content :deep(ol), .rich-notice-content :deep(ul) { margin: 5px 0; padding-left: 20px; }
 
 .main-split { display: flex; gap: 20px; align-items: flex-start; }
 .left-panel { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
