@@ -180,16 +180,16 @@ const verifyPassword = async () => {
     isUnlocked.value = true; 
     await fetchDashboardData(); 
     logAction('系統登入', `${teacherInfo.subject_name} 科任老師登入成功`)
-    // 💡 登入成功寫入全站訪客日誌 (加上精準科目名稱！)
-    await logRoleVisit(`${teacherInfo.subject_name}科任老師`)
+    // 💡 登入成功寫入全站訪客日誌 (精準標示科目)
+    await logRoleVisit(`${teacherInfo.subject_name} 科任老師`)
     
   } else if (teacherInfo && teacherInfo.assistant_password && passwordInput.value === teacherInfo.assistant_password) {
     activeRole.value = '小老師' // 維持UI判定使用
     isUnlocked.value = true; 
     await fetchDashboardData(); 
     logAction('系統登入', `${teacherInfo.subject_name} 小老師登入成功`)
-    // 💡 登入成功寫入全站訪客日誌 (加上精準科目名稱！)
-    await logRoleVisit(`${teacherInfo.subject_name}小老師`)
+    // 💡 登入成功寫入全站訪客日誌 (精準標示科目)
+    await logRoleVisit(`${teacherInfo.subject_name} 小老師`)
     
   } else {
     alert('❌ 密碼錯誤！'); passwordInput.value = ''
