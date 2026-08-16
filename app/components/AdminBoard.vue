@@ -322,7 +322,6 @@ const deleteNotice = async (id) => {
   } catch (err) { alert('❌ 刪除失敗：' + err.message) } finally { isSaving.value = false }
 }
 
-// 💡 徹底解決信箱搜尋問題
 const sendNoticeEmail = async () => {
   isSendingEmail.value = true
   try {
@@ -341,16 +340,19 @@ const sendNoticeEmail = async () => {
 
     let emailList = []
     
-    // 雙重掃描機制：掃描 parents 表
-    const { data: parents } = await supabase.from('parents').select('email').catch(() => null)
-    if (parents) emailList.push(...parents.map(p => p.email))
+    // 💡 徹底修復：移除 .catch()，改以安全解構取得資料
+    const { data: parents, error: pErr } = await supabase.from('parents').select('email')
+    if (!pErr && parents) {
+      emailList.push(...parents.map(p => p.email))
+    }
     
-    // 雙重掃描機制：掃描 students 表
-    const { data: students } = await supabase.from('students').select('*').catch(() => null)
-    if (students) emailList.push(...students.map(s => s.parent_email || s.parent_mail || s.email || s.guardian_email))
+    const { data: students, error: sErr } = await supabase.from('students').select('*')
+    if (!sErr && students) {
+      emailList.push(...students.map(s => s.parent_email || s.parent_mail || s.email || s.guardian_email))
+    }
     
     // 過濾出真實包含 @ 的信箱並去重
-    emailList = [...new Set(emailList.filter(e => e && e.includes('@')))]
+    emailList = [...new Set(emailList.filter(e => e && String(e).includes('@')))]
     
     if (emailList.length === 0) { 
       isSendingEmail.value = false
@@ -462,7 +464,7 @@ const importJSON = (event) => {
     } catch(err) {
       alert('❌ 匯入失敗：' + err.message)
     }
-    event.target.value = '' // 清除 input 檔案以便重複選取
+    event.target.value = '' 
   }
   reader.readAsText(file)
 }
