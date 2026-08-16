@@ -4,7 +4,7 @@
     <div class="security-section">
       
       <div class="add-rule-box">
-        <!-- 💡 升級：使用 input + datalist，既有下拉選單，也可自由輸入新名單 -->
+        <!-- 💡 使用 input + datalist，既可下拉選擇，也可自由輸入新名單 -->
         <div class="input-wrapper type-col">
           <input 
             v-model="newR.rule_type" 
@@ -31,7 +31,7 @@
         <button @click="add" class="add-btn">➕ 新增</button>
       </div>
 
-      <!-- 💡 升級：響應式表格 (手機版自動轉為卡片式排列) -->
+      <!-- 💡 響應式表格 (手機版自動轉為卡片式排列) -->
       <div class="table-responsive">
         <table class="custom-table">
           <thead>
@@ -69,7 +69,7 @@ const supabase = useSupabaseClient()
 const rules = ref([])
 const newR = ref({ rule_type: '白名單', ip_range: '', description: '' })
 
-// 💡 動態抓取資料庫中「不重複」的新名單種類，餵給下拉選單
+// 動態抓取資料庫中「不重複」的新名單種類，餵給下拉選單
 const existingTypes = computed(() => {
   const types = rules.value.map(r => r.rule_type).filter(Boolean)
   return [...new Set(types)].filter(t => !['白名單', '褐名單', '黑名單'].includes(t))
@@ -148,9 +148,7 @@ const getBadgeClass = (type) => {
 .del-btn { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 0.95rem;}
 .del-btn:hover { background: #fecaca; }
 
-/* =======================================
-   💡 手機端 RWD 排版 (Card 模式)
-   ======================================= */
+/* 手機端 RWD 排版 (Card 模式) */
 @media (max-width: 768px) {
   .security-section { padding: 15px; }
   
