@@ -14,6 +14,7 @@
 
     <div v-if="!isExamModeView" class="normal-home-content">
       
+      <!-- 💡 班級公佈欄 -->
       <div v-if="isAnnouncementVisibleOnIndex && announcements.length > 0 && !isIpBrownlisted" class="corkboard announcement-board">
         <h2 class="board-title cork-title">📌 班級公佈欄</h2>
         <div class="cork-divider"></div>
@@ -34,7 +35,7 @@
         </div>
       </div>
 
-      <!-- 💡 家長須知 (加上了是否顯示的防護開關) -->
+      <!-- 💡 家長須知 (加上了 isNoticeBoardVisibleOnIndex 開關防護) -->
       <div v-if="isNoticeBoardVisibleOnIndex" class="blackboard top-board">
         <h2 class="board-title notice-title">📢 家長須知事項</h2>
         <div class="dashed-divider"></div>
@@ -474,7 +475,7 @@ const fetchData = async () => {
   const { data: boardData } = await supabase.from('contact_books').select('contact_items').eq('record_date', todayISO).maybeSingle()
   contactBookItems.value = boardData?.contact_items || []
 
-  // 💡 增加讀取 parent_notices_board_visible
+  // 💡 在這行補上了 'parent_notices_board_visible'，確保它能撈到開關狀態
   const { data: sysData } = await supabase.from('system_settings').select('*')
     .in('setting_key', [
       'board_officer_passwords', 
@@ -525,7 +526,7 @@ const fetchData = async () => {
       }).map(n => n.content) 
     } else { parentNotices.value = [] }
 
-    // 💡 獲取家長須知首頁顯示狀態
+    // 💡 賦值給「家長須知顯示狀態」
     const noticeVisSetting = sysData.find(s => s.setting_key === 'parent_notices_board_visible')
     if (noticeVisSetting !== undefined && noticeVisSetting.setting_value !== null) {
       isNoticeBoardVisibleOnIndex.value = noticeVisSetting.setting_value
