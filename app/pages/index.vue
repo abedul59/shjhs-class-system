@@ -160,8 +160,6 @@
               <button v-if="hygieneData.isVisibleOnIndex && indexButtonSettings.hygiene" @click="showHygieneLocal = !showHygieneLocal" class="btn btn-sky">
                 {{ showHygieneLocal ? '🙈 隱藏衛生工作' : '🧹 顯示衛生工作' }}
               </button>
-              
-              <!-- 💡 修正：將歷史查詢改為跳轉到新頁面 -->
               <NuxtLink v-if="isHistoryVisibleOnIndex" to="/history" class="btn btn-pink">📅 查詢近期聯絡簿</NuxtLink>
             </div>
           </div>
@@ -382,7 +380,6 @@ const showHygieneLocal = ref(false)
 const activeHygieneTab = ref('morning')
 const isNoticeExpanded = ref(false)
 
-// 保留此變數，用來控制首頁是否要顯示「查詢近期聯絡簿」的按鈕
 const isHistoryVisibleOnIndex = ref(false)
 
 const isIpWhitelisted = ref(false)
@@ -727,8 +724,19 @@ const fetchData = async () => {
   const { data: boardData } = await supabase.from('contact_books').select('contact_items').eq('record_date', todayISO).maybeSingle()
   contactBookItems.value = boardData?.contact_items || []
 
+  // 💡 已補上 'parent_notices_data'
   const { data: sysData } = await supabase.from('system_settings').select('*')
-    .in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings', 'announcements_data', 'class_schedule_data', 'exam_schedule_data', 'parent_notices_data'])
+    .in('setting_key', [
+      'board_officer_passwords', 
+      'seating_chart_data', 
+      'hygiene_management_data', 
+      'contact_history_visible', 
+      'index_button_settings', 
+      'announcements_data', 
+      'class_schedule_data', 
+      'exam_schedule_data', 
+      'parent_notices_data'
+    ])
   
   if (sysData) {
     const pwdSetting = sysData.find(s => s.setting_key === 'board_officer_passwords')
@@ -749,6 +757,7 @@ const fetchData = async () => {
     const exSetting = sysData.find(s => s.setting_key === 'exam_schedule_data')
     if (exSetting && exSetting.setting_value) { examData.value = { ...examData.value, ...exSetting.setting_value } }
 
+    // 💡 同步更新首頁的家長須知
     const noticesSetting = sysData.find(s => s.setting_key === 'parent_notices_data')
     if (noticesSetting && noticesSetting.setting_value) {
       const allNotices = noticesSetting.setting_value || []
