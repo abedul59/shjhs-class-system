@@ -1,25 +1,34 @@
 <template>
   <div class="exam-dashboard" :style="currentThemeStyles">
     <button @click="$emit('exit')" class="exit-exam-btn">✖ 結束大考模式</button>
+    
     <h1 class="exam-main-title">{{ examData.title }}</h1>
+    
     <div class="exam-split-layout">
       <!-- 左半邊：考試時間表 -->
       <div class="exam-left-panel">
         <table class="exam-table">
           <thead>
-            <tr><th width="120">節次</th><th>考科</th><th>開始時間</th><th>結束時間</th></tr>
+            <tr>
+              <th width="120">節次</th><th>考科</th><th>開始時間</th><th>結束時間</th>
+            </tr>
           </thead>
           <tbody>
             <tr v-for="(p, i) in examStatus.periods" :key="i" :class="{ 'active-row': p.isActive }">
-              <td>第 {{ i + 1 }} 節</td><td class="font-bold">{{ p.subject }}</td><td class="font-mono">{{ p.startTime }}</td><td class="font-mono">{{ p.endTime }}</td>
+              <td>第 {{ i + 1 }} 節</td>
+              <td class="font-bold">{{ p.subject }}</td>
+              <td class="font-mono">{{ p.startTime }}</td>
+              <td class="font-mono">{{ p.endTime }}</td>
             </tr>
           </tbody>
         </table>
       </div>
+
       <!-- 右半邊：時鐘與狀態 -->
       <div class="exam-right-panel">
         <div class="clock-label">目前時間</div>
         <div class="exam-clock">{{ currentTime }}</div>
+
         <div class="exam-status-display">
           <div v-if="examStatus.state === 'WAITING'" class="status-text waiting">⏳ 準備中...</div>
           <div v-else-if="examStatus.state === 'FINISHED'" class="status-text finished">🎉 今日全數結束</div>
@@ -46,7 +55,14 @@
 </template>
 
 <script setup>
-defineProps(['examData', 'examStatus', 'currentTime', 'countdownMinutes', 'countdownText', 'currentThemeStyles'])
+defineProps({
+  examData: Object,
+  examStatus: Object,
+  currentTime: String,
+  countdownMinutes: Number,
+  countdownText: String,
+  currentThemeStyles: Object
+})
 defineEmits(['exit'])
 </script>
 
