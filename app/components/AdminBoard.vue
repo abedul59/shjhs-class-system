@@ -539,11 +539,61 @@ const importJSON = (event) => {
 .edit-actions-row { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px dashed #cbd5e1;}
 .save-btn { background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 
+/* =======================================
+   💡 強化的手機排版 (Mobile Optimizations)
+   ======================================= */
 @media (max-width: 768px) {
-  .date-row { flex-direction: column; align-items: stretch; }
-  .form-actions { display: flex; flex-direction: column; width: 100%; margin-top: 10px;}
-  .auto-width-btn { width: 100%; text-align: center; }
-  .item-actions { width: 100%; flex-direction: row; }
-  .item-actions button { flex: 1; }
+  .admin-board-container { padding-bottom: 20px; }
+  .table-header h3 { font-size: 1.25rem; }
+  
+  /* 頁籤全寬且堆疊 */
+  .view-tabs { flex-direction: column; gap: 8px; border-bottom: none; }
+  .tab-btn { width: 100%; border-radius: 8px; padding: 12px; font-size: 1.05rem; border: 1px solid #cbd5e1; background: white; }
+  .tab-btn.active { border: 2px solid #3b82f6; background: #eff6ff; }
+
+  /* 縮減外框內距，挪出螢幕空間 */
+  .board-editor-container { padding: 10px; border: none; background: transparent; }
+  .editor-panel, .notices-list-section, .email-editor-section, .history-calendar-container { 
+    padding: 15px; 
+  }
+
+  /* 表單與日期輸入框全寬展開 */
+  .date-row { flex-direction: column; align-items: stretch; gap: 12px; padding: 12px; }
+  .date-group { min-width: 100%; }
+  
+  /* 按鈕全寬展開 */
+  .form-actions { display: flex; flex-direction: column; width: 100%; margin-top: 10px; gap: 10px;}
+  .auto-width-btn { width: 100%; text-align: center; margin-top: 0; padding: 12px;}
+  .cancel-btn { padding: 12px; }
+
+  /* 匯出匯入按鈕 */
+  .list-header-flex { flex-direction: column; align-items: stretch; gap: 12px; }
+  .io-actions { display: flex; width: 100%; gap: 10px; }
+  .io-btn { flex: 1; text-align: center; padding: 10px; }
+
+  /* 列表項目排版 */
+  .notice-item { flex-direction: column; padding: 15px; gap: 15px; }
+  .notice-content { min-width: 100%; }
+  .notice-dates { display: block; font-size: 0.9rem; line-height: 1.8; padding: 12px; border-radius: 8px;}
+  .item-actions { width: 100%; flex-direction: row; gap: 10px; }
+  .item-actions button { flex: 1; padding: 12px; font-size: 1rem; }
+
+  /* 推播設定區 */
+  .editor-header { flex-direction: column; align-items: stretch; gap: 12px;}
+  .save-template-btn.small-btn { width: 100%; padding: 12px; font-size: 1.05rem; }
+  .email-btn { padding: 15px; font-size: 1.1rem; }
+  .plain-text-preview { padding: 15px; }
+  .preview-subject, .preview-body { font-size: 1rem; }
+
+  /* 歷史查詢區 */
+  .query-header { flex-direction: column; align-items: stretch; gap: 10px; }
+  .date-picker { width: 100%; }
+
+  .detail-header-flex { flex-direction: column; align-items: stretch; gap: 12px; }
+  .btn-edit { width: 100%; text-align: center; padding: 12px;}
+  .history-item { padding: 15px; font-size: 1.05rem; }
+  
+  .edit-actions-row { flex-direction: column; align-items: stretch; gap: 10px; }
+  .save-btn { width: 100%; padding: 15px; font-size: 1.1rem; }
 }
 </style>
