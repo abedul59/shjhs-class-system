@@ -1,7 +1,6 @@
 <template>
   <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
     
-    <!-- 1. 🎓 大考看板組件 (使用精準引入名稱) -->
     <ExamDashboard 
       v-if="isExamModeView && isIpBrownlisted" 
       :examData="examData" 
@@ -15,7 +14,6 @@
 
     <div v-if="!isExamModeView" class="normal-home-content">
       
-      <!-- 軟木塞公佈欄 -->
       <div v-if="announcements.length > 0 && !isIpBrownlisted" class="corkboard announcement-board">
         <h2 class="board-title cork-title">📌 班級公佈欄</h2>
         <div class="cork-divider"></div>
@@ -28,19 +26,15 @@
             </div>
             <div class="cork-card-content" v-html="formatNL(ann.content)"></div>
             <div v-if="ann.links && ann.links.length > 0" class="cork-card-links">
-               <a v-for="(link, i) in ann.links" :key="i" :href="link.url" target="_blank" class="cork-link">
-                 🔗 {{ privacyFilter(link.name) }}
-               </a>
+               <a v-for="(link, i) in ann.links" :key="i" :href="link.url" target="_blank" class="cork-link">🔗 {{ privacyFilter(link.name) }}</a>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- 家長須知 -->
       <div class="blackboard top-board">
         <h2 class="board-title notice-title">📢 家長須知事項</h2>
         <div class="dashed-divider"></div>
-        
         <div class="board-content-wrapper" :class="{ 'is-collapsed': !isNoticeExpanded }">
           <div class="board-content">
             <div v-if="parentNotices.length === 0" class="empty-text-italic">目前無特別須知事項</div>
@@ -53,20 +47,15 @@
           </div>
           <div v-if="!isNoticeExpanded" class="fade-mask"></div>
         </div>
-        
         <div class="expand-action desktop-only" v-if="parentNotices.length > 0">
-          <button @click="isNoticeExpanded = !isNoticeExpanded" class="btn-expand">
-            {{ isNoticeExpanded ? '▲ 收起內容' : '▼ 展開完整須知' }}
-          </button>
+          <button @click="isNoticeExpanded = !isNoticeExpanded" class="btn-expand">{{ isNoticeExpanded ? '▲ 收起內容' : '▼ 展開完整須知' }}</button>
         </div>
       </div>
 
       <div class="main-split">
-        <!-- 左半邊 -->
         <div class="left-panel">
           <div class="control-card">
             <div class="clock-display">🕒 {{ currentTime }}</div>
-            
             <div v-if="scheduleDisplay" class="schedule-ticker">
               <div class="current-class">
                 <span class="pulse-dot" v-if="scheduleDisplay.current.status === '上課中'"></span>
@@ -80,9 +69,7 @@
               </div>
             </div>
 
-            <button v-if="isIpBrownlisted && examData.isExamModeEnabled && examData.periods && examData.periods.length > 0" @click="isExamModeView = true" class="btn-enter-exam">
-              🎓 切換至大考看板模式
-            </button>
+            <button v-if="isIpBrownlisted && examData.isExamModeEnabled && examData.periods && examData.periods.length > 0" @click="isExamModeView = true" class="btn-enter-exam">🎓 切換至大考看板模式</button>
 
             <div class="button-group">
               <NuxtLink v-if="indexButtonSettings.parentBind" to="/parent-bind" class="btn btn-orange">👨‍👩‍👧 綁定</NuxtLink>
@@ -97,17 +84,12 @@
               <button v-if="indexButtonSettings.emergency" @click="openPwdModal('emergency')" class="btn btn-red">🚨 緊急通知</button>
               <NuxtLink v-if="indexButtonSettings.admin" to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
               
-              <button v-if="seatingChart.isVisible && indexButtonSettings.seats" @click="showSeatingChartLocal = !showSeatingChartLocal" class="btn btn-indigo">
-                {{ showSeatingChartLocal ? '🙈 隱藏教室座位表' : '👀 顯示教室座位表' }}
-              </button>
-              <button v-if="hygieneData.isVisibleOnIndex && indexButtonSettings.hygiene" @click="showHygieneLocal = !showHygieneLocal" class="btn btn-sky">
-                {{ showHygieneLocal ? '🙈 隱藏衛生工作' : '🧹 顯示衛生工作' }}
-              </button>
+              <button v-if="seatingChart.isVisible && indexButtonSettings.seats" @click="showSeatingChartLocal = !showSeatingChartLocal" class="btn btn-indigo">{{ showSeatingChartLocal ? '🙈 隱藏教室座位表' : '👀 顯示教室座位表' }}</button>
+              <button v-if="hygieneData.isVisibleOnIndex && indexButtonSettings.hygiene" @click="showHygieneLocal = !showHygieneLocal" class="btn btn-sky">{{ showHygieneLocal ? '🙈 隱藏衛生工作' : '🧹 顯示衛生工作' }}</button>
               <NuxtLink v-if="isHistoryVisibleOnIndex" to="/history" class="btn btn-pink">📅 查詢近期聯絡簿</NuxtLink>
             </div>
           </div>
 
-          <!-- 2. 出缺席與點名組件 -->
           <AttendanceGrid 
             :allStudents="allStudents"
             :todayAttendances="todayAttendances"
@@ -121,9 +103,23 @@
           />
         </div>
 
-        <!-- 右半邊 -->
         <div class="right-panel">
-          <!-- 3. 今日聯絡簿組件 -->
+          <!-- 💡 全新的今日注意事項組件 (深海藍) -->
+          <ClassNotes 
+            :classNoteItems="classNoteItems"
+            :editingClassNoteItems="editingClassNoteItems"
+            :isEditingClassNotes="isEditingClassNotes"
+            :todayDisplay="todayDisplay"
+            :privacyFilter="privacyFilter"
+            @open-pwd="openPwdModal('classNotes')"
+            @cancel-edit="isEditingClassNotes = false"
+            @save-items="saveClassNoteItems"
+            @add-item="addClassNoteItem"
+            @remove-item="removeClassNoteItem"
+            @update-item="updateEditingClassNoteItem"
+          />
+
+          <!-- 原本的今日聯絡簿組件 (黑板綠) -->
           <ContactBook 
             :contactBookItems="contactBookItems"
             :editingContactItems="editingContactItems"
@@ -140,7 +136,6 @@
         </div>
       </div>
       
-      <!-- 4. 座位與衛生組件 -->
       <SeatingAndHygiene 
         :seatingChart="seatingChart"
         :showSeatingChartLocal="showSeatingChartLocal"
@@ -172,11 +167,10 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 
-// 💡 重大修正：將 `~/` 改為 `~~/`，強制指回專案最外層的根目錄
-// 這樣無論您的 components 資料夾放在哪裡，只要存在於根目錄，系統就絕對找得到！
 import ExamDashboard from '~~/components/home/ExamDashboard.vue'
 import AttendanceGrid from '~~/components/home/AttendanceGrid.vue'
 import ContactBook from '~~/components/home/ContactBook.vue'
+import ClassNotes from '~~/components/home/ClassNotes.vue' // 💡 引入新組件
 import SeatingAndHygiene from '~~/components/home/SeatingAndHygiene.vue'
 
 const supabase = useSupabaseClient()
@@ -247,7 +241,7 @@ const checkIpRules = async () => {
       isIpWhitelisted.value = rules.filter(r => r.rule_type === '白名單').some(r => ip.startsWith(r.ip_range))
       isIpBrownlisted.value = rules.filter(r => r.rule_type === '褐名單').some(r => ip.startsWith(r.ip_range))
     }
-  } catch (e) { console.error('IP check failed', e) }
+  } catch (e) {}
 }
 
 const logVisit = async () => {
@@ -262,7 +256,7 @@ const logVisit = async () => {
 }
 
 const logRoleVisit = async (roleName) => {
-  try { await supabase.from('visitor_logs').insert([{ ip_address: currentIpStr.value || '未知IP', device_info: navigator.userAgent, role: roleName }]) } catch (e) { console.error(e) }
+  try { await supabase.from('visitor_logs').insert([{ ip_address: currentIpStr.value || '未知IP', device_info: navigator.userAgent, role: roleName }]) } catch (e) {}
 }
 
 const privacyFilter = (txt) => {
@@ -388,13 +382,19 @@ const countdownText = computed(() => {
 })
 
 const parentNotices = ref([])
-const contactBookItems = ref([])
 const officerPasswords = ref({ academic: '', counseling: '', discipline: '', teacher: '168168168' })
-
 const seatingChart = ref({ isVisible: false, isRotated: false, seats: [], settings: {} })
 
+// 💡 聯絡簿變數
+const contactBookItems = ref([])
 const isEditingContact = ref(false)
 const editingContactItems = ref([])
+
+// 💡 班級注意事項變數
+const classNoteItems = ref([])
+const isEditingClassNotes = ref(false)
+const editingClassNoteItems = ref([])
+
 const currentEditorRole = ref('') 
 
 const showPwdModal = ref(false)
@@ -406,8 +406,14 @@ const pwdInput = ref('')
 const openPwdModal = (target) => {
   pwdTarget.value = target
   pwdInput.value = ''
-  if (target === 'emergency') { pwdModalTitle.value = '🚨 緊急通知系統解鎖'; pwdModalDesc.value = '請輸入「導師」密碼：' } 
-  else if (target === 'contact') { pwdModalTitle.value = '✏️ 編輯聯絡簿解鎖'; pwdModalDesc.value = '請輸入「學藝股長」、「輔導股長」或「導師」密碼：' }
+  if (target === 'emergency') { 
+    pwdModalTitle.value = '🚨 緊急通知系統解鎖'; pwdModalDesc.value = '請輸入「導師」密碼：' 
+  } else if (target === 'contact') { 
+    pwdModalTitle.value = '✏️ 編輯聯絡簿解鎖'; pwdModalDesc.value = '請輸入「學藝股長」、「輔導股長」或「導師」密碼：' 
+  } else if (target === 'classNotes') { 
+    // 💡 新增注意事項解鎖介面
+    pwdModalTitle.value = '⚡ 編輯注意事項解鎖'; pwdModalDesc.value = '請輸入「學藝股長」、「輔導股長」或「導師」密碼：' 
+  }
   showPwdModal.value = true
 }
 
@@ -424,6 +430,13 @@ const submitPwd = async () => {
     if (officerPasswords.value.academic && pwd === officerPasswords.value.academic) { currentEditorRole.value = '學藝股長'; isEditingContact.value = true; editingContactItems.value = [...contactBookItems.value]; showPwdModal.value = false; await logRoleVisit('學藝股長') } 
     else if (officerPasswords.value.counseling && pwd === officerPasswords.value.counseling) { currentEditorRole.value = '輔導股長'; isEditingContact.value = true; editingContactItems.value = [...contactBookItems.value]; showPwdModal.value = false; await logRoleVisit('輔導股長') } 
     else if (pwd === teacherPwd) { currentEditorRole.value = '導師'; isEditingContact.value = true; editingContactItems.value = [...contactBookItems.value]; showPwdModal.value = false; await logRoleVisit('導師') } 
+    else { alert("❌ 密碼錯誤！請確認密碼是否正確。") }
+  }
+  else if (pwdTarget.value === 'classNotes') {
+    // 💡 新增注意事項驗證邏輯
+    if (officerPasswords.value.academic && pwd === officerPasswords.value.academic) { currentEditorRole.value = '學藝股長'; isEditingClassNotes.value = true; editingClassNoteItems.value = [...classNoteItems.value]; showPwdModal.value = false; await logRoleVisit('學藝股長') } 
+    else if (officerPasswords.value.counseling && pwd === officerPasswords.value.counseling) { currentEditorRole.value = '輔導股長'; isEditingClassNotes.value = true; editingClassNoteItems.value = [...classNoteItems.value]; showPwdModal.value = false; await logRoleVisit('輔導股長') } 
+    else if (pwd === teacherPwd) { currentEditorRole.value = '導師'; isEditingClassNotes.value = true; editingClassNoteItems.value = [...classNoteItems.value]; showPwdModal.value = false; await logRoleVisit('導師') } 
     else { alert("❌ 密碼錯誤！請確認密碼是否正確。") }
   }
 }
@@ -456,8 +469,9 @@ const fetchData = async () => {
   const { data: boardData } = await supabase.from('contact_books').select('contact_items').eq('record_date', todayISO).maybeSingle()
   contactBookItems.value = boardData?.contact_items || []
 
+  // 💡 增加讀取 class_notes_data
   const { data: sysData } = await supabase.from('system_settings').select('*')
-    .in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings', 'announcements_data', 'class_schedule_data', 'exam_schedule_data', 'parent_notices_data'])
+    .in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings', 'announcements_data', 'class_schedule_data', 'exam_schedule_data', 'parent_notices_data', 'class_notes_data'])
   
   if (sysData) {
     const pwdSetting = sysData.find(s => s.setting_key === 'board_officer_passwords')
@@ -487,6 +501,14 @@ const fetchData = async () => {
         return startOk && endOk
       }).map(n => n.content) 
     } else { parentNotices.value = [] }
+
+    // 💡 讀取今日注意事項
+    const classNotesSetting = sysData.find(s => s.setting_key === 'class_notes_data')
+    if (classNotesSetting && classNotesSetting.setting_value) {
+      classNoteItems.value = classNotesSetting.setting_value[todayISO] || []
+    } else {
+      classNoteItems.value = []
+    }
 
     const seatSetting = sysData.find(s => s.setting_key === 'seating_chart_data')
     if (seatSetting) {
@@ -518,6 +540,7 @@ onMounted(() => {
 })
 onUnmounted(() => { if (timer) clearInterval(timer) })
 
+// 💡 聯絡簿操作邏輯
 const addContactItem = () => { editingContactItems.value.push('') }
 const removeContactItem = (idx) => { editingContactItems.value.splice(idx, 1) }
 const updateEditingContactItem = (index, value) => { editingContactItems.value[index] = value }
@@ -528,6 +551,30 @@ const saveContactItems = async () => {
     alert("✅ 聯絡簿已成功更新發布！")
     contactBookItems.value = [...editingContactItems.value]; isEditingContact.value = false
   } catch (error) { alert("❌ 聯絡簿儲存失敗：" + error.message) }
+}
+
+// 💡 班級注意事項操作邏輯
+const addClassNoteItem = () => { editingClassNoteItems.value.push('') }
+const removeClassNoteItem = (idx) => { editingClassNoteItems.value.splice(idx, 1) }
+const updateEditingClassNoteItem = (index, value) => { editingClassNoteItems.value[index] = value }
+
+const saveClassNoteItems = async () => {
+  try {
+    // 注意事項我們統一存放在 system_settings，以 { "2026-08-16": [...] } 的格式儲存，這樣後台才能用日期找歷史
+    const { data: currentSettings } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'class_notes_data').maybeSingle()
+    
+    let updatedData = currentSettings?.setting_value || {}
+    updatedData[todayISO] = editingClassNoteItems.value
+
+    await supabase.from('system_settings').upsert({
+      setting_key: 'class_notes_data',
+      setting_value: updatedData
+    }, { onConflict: 'setting_key' })
+
+    alert("✅ 注意事項已成功更新發布！")
+    classNoteItems.value = [...editingClassNoteItems.value]
+    isEditingClassNotes.value = false
+  } catch (error) { alert("❌ 儲存失敗：" + error.message) }
 }
 </script>
 
