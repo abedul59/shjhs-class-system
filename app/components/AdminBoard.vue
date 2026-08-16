@@ -10,6 +10,25 @@
       </div>
 
       <div v-show="activeTab === 'manage'">
+        
+        <!-- 💡 首頁顯示開關 -->
+        <div class="visibility-control-card">
+          <div class="control-info">
+            <h4>首頁顯示狀態</h4>
+            <p>控制是否要在前台首頁顯示「家長須知事項」區塊。</p>
+          </div>
+          <div class="toggle-wrapper">
+            <label class="switch">
+              <input type="checkbox" v-model="isVisibleOnIndex" @change="toggleVisibility">
+              <span class="slider round"></span>
+            </label>
+            <span class="status-text" :class="{ 'is-active': isVisibleOnIndex }">
+              {{ isVisibleOnIndex ? '👀 顯示中' : '🙈 已隱藏' }}
+            </span>
+            <span v-if="isSavingVis" class="saving-text">儲存中...</span>
+          </div>
+        </div>
+
         <div class="editor-panel">
           <h4 class="section-title">
             {{ editingNoticeId ? '✏️ 編輯須知事項' : '📝 新增須知事項' }} (支援保留網頁格式)
@@ -180,6 +199,9 @@ const activeTab = ref('manage')
 const isLoading = ref(true)
 const isSaving = ref(false)
 
+const isVisibleOnIndex = ref(true)
+const isSavingVis = ref(false)
+
 const d = new Date()
 const todayISO = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 const todayDisplay = d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })
@@ -210,10 +232,18 @@ const updateEditHistoryRichText = (event, index) => { editHistoryNotices.value[i
 
 const fetchData = async () => {
   isLoading.value = true
-  const { data: boardData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'parent_notices_data').maybeSingle()
-  if (boardData?.setting_value) { 
-    // 💡 確保讀取時按照 ID (時間戳) 由小到大排序
-    notices.value = (boardData.setting_value || []).sort((a, b) => Number(a.id) - Number(b.id))
+  const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', ['parent_notices_data', 'parent_notices_board_visible'])
+  
+  if (sysData) {
+    const boardData = sysData.find(s => s.setting_key === 'parent_notices_data')
+    if (boardData && boardData.setting_value) { 
+      notices.value = (boardData.setting_value || []).sort((a, b) => Number(a.id) - Number(b.id))
+    }
+
+    const visData = sysData.find(s => s.setting_key === 'parent_notices_board_visible')
+    if (visData !== undefined && visData.setting_value !== null) {
+      isVisibleOnIndex.value = visData.setting_value
+    }
   }
   
   const { data: tmplData } = await supabase.from('email_templates').select('*').eq('template_id', 'notice_board').maybeSingle()
@@ -228,6 +258,15 @@ onMounted(async () => {
   await fetchData()
   await fetchHistory()
 })
+
+const toggleVisibility = async () => {
+  isSavingVis.value = true
+  await supabase.from('system_settings').upsert({
+    setting_key: 'parent_notices_board_visible',
+    setting_value: isVisibleOnIndex.value
+  }, { onConflict: 'setting_key' })
+  isSavingVis.value = false
+}
 
 const isActiveToday = (startDate, endDate) => {
   const startOk = !startDate || startDate <= todayISO
@@ -248,7 +287,6 @@ const stripHtmlToPlainText = (html) => {
   return txt.value.replace(/\n\s*\n/g, '\n\n').trim() 
 }
 
-// 💡 推播信件會自動按照 notices 陣列順序生成
 const activeNoticesPlainText = computed(() => {
   const active = notices.value.filter(n => isActiveToday(n.startDate, n.endDate))
   if (active.length === 0) return '(今日尚無生效的須知事項)'
@@ -281,7 +319,6 @@ const addNotice = async () => {
     const idx = updatedNotices.findIndex(n => n.id === editingNoticeId.value)
     if (idx !== -1) updatedNotices[idx] = { ...newNotice.value, id: editingNoticeId.value }
   } else {
-    // 💡 修正：使用 push 加到最後面，確保越早發布的在越上面
     updatedNotices.push({
       id: Date.now().toString(),
       content: newNotice.value.content,
@@ -290,7 +327,6 @@ const addNotice = async () => {
     })
   }
   
-  // 💡 儲存前確保排序正確
   updatedNotices.sort((a, b) => Number(a.id) - Number(b.id))
   
   try {
@@ -431,7 +467,6 @@ const importJSON = (event) => {
         merged = [...notices.value, ...imported]
       }
       
-      // 💡 匯入後確保排序
       merged.sort((a, b) => Number(a.id) - Number(b.id))
 
       await supabase.from('system_settings').upsert({ setting_key: 'parent_notices_data', setting_value: merged }, { onConflict: 'setting_key' })
@@ -449,6 +484,24 @@ const importJSON = (event) => {
 .admin-board-container { font-family: sans-serif; padding-bottom: 30px;}
 .table-header { border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; } 
 .table-header h3 { margin: 0; color: #334155; font-size: 1.4rem;}
+
+/* 開關控制卡片 */
+.visibility-control-card { display: flex; justify-content: space-between; align-items: center; background: #fdf2f8; padding: 20px 25px; border-radius: 8px; border: 1px dashed #fbcfe8; margin-bottom: 25px; flex-wrap: wrap; gap: 15px;}
+.control-info h4 { margin: 0 0 5px 0; color: #be185d; font-size: 1.15rem;}
+.control-info p { margin: 0; color: #9d174d; font-size: 0.95rem;}
+.toggle-wrapper { display: flex; align-items: center; gap: 12px; }
+.status-text { font-weight: bold; color: #94a3b8; font-size: 1.1rem; }
+.status-text.is-active { color: #ec4899; }
+.saving-text { color: #f59e0b; font-size: 0.9rem; font-weight: bold; animation: pulse 1s infinite;}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+/* 切換開關 CSS */
+.switch { position: relative; display: inline-block; width: 50px; height: 28px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: .4s; border-radius: 34px;}
+.slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%;}
+input:checked + .slider { background-color: #ec4899; }
+input:checked + .slider:before { transform: translateX(22px); }
 
 .view-tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; flex-wrap: wrap;}
 .tab-btn { background: transparent; border: none; padding: 10px 20px; font-size: 1.1rem; font-weight: bold; color: #64748b; cursor: pointer; border-radius: 8px 8px 0 0; transition: 0.2s;}
@@ -539,61 +592,12 @@ const importJSON = (event) => {
 .edit-actions-row { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px dashed #cbd5e1;}
 .save-btn { background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 
-/* =======================================
-   💡 強化的手機排版 (Mobile Optimizations)
-   ======================================= */
 @media (max-width: 768px) {
-  .admin-board-container { padding-bottom: 20px; }
-  .table-header h3 { font-size: 1.25rem; }
-  
-  /* 頁籤全寬且堆疊 */
-  .view-tabs { flex-direction: column; gap: 8px; border-bottom: none; }
-  .tab-btn { width: 100%; border-radius: 8px; padding: 12px; font-size: 1.05rem; border: 1px solid #cbd5e1; background: white; }
-  .tab-btn.active { border: 2px solid #3b82f6; background: #eff6ff; }
-
-  /* 縮減外框內距，挪出螢幕空間 */
-  .board-editor-container { padding: 10px; border: none; background: transparent; }
-  .editor-panel, .notices-list-section, .email-editor-section, .history-calendar-container { 
-    padding: 15px; 
-  }
-
-  /* 表單與日期輸入框全寬展開 */
-  .date-row { flex-direction: column; align-items: stretch; gap: 12px; padding: 12px; }
-  .date-group { min-width: 100%; }
-  
-  /* 按鈕全寬展開 */
-  .form-actions { display: flex; flex-direction: column; width: 100%; margin-top: 10px; gap: 10px;}
-  .auto-width-btn { width: 100%; text-align: center; margin-top: 0; padding: 12px;}
-  .cancel-btn { padding: 12px; }
-
-  /* 匯出匯入按鈕 */
-  .list-header-flex { flex-direction: column; align-items: stretch; gap: 12px; }
-  .io-actions { display: flex; width: 100%; gap: 10px; }
-  .io-btn { flex: 1; text-align: center; padding: 10px; }
-
-  /* 列表項目排版 */
-  .notice-item { flex-direction: column; padding: 15px; gap: 15px; }
-  .notice-content { min-width: 100%; }
-  .notice-dates { display: block; font-size: 0.9rem; line-height: 1.8; padding: 12px; border-radius: 8px;}
-  .item-actions { width: 100%; flex-direction: row; gap: 10px; }
-  .item-actions button { flex: 1; padding: 12px; font-size: 1rem; }
-
-  /* 推播設定區 */
-  .editor-header { flex-direction: column; align-items: stretch; gap: 12px;}
-  .save-template-btn.small-btn { width: 100%; padding: 12px; font-size: 1.05rem; }
-  .email-btn { padding: 15px; font-size: 1.1rem; }
-  .plain-text-preview { padding: 15px; }
-  .preview-subject, .preview-body { font-size: 1rem; }
-
-  /* 歷史查詢區 */
-  .query-header { flex-direction: column; align-items: stretch; gap: 10px; }
-  .date-picker { width: 100%; }
-
-  .detail-header-flex { flex-direction: column; align-items: stretch; gap: 12px; }
-  .btn-edit { width: 100%; text-align: center; padding: 12px;}
-  .history-item { padding: 15px; font-size: 1.05rem; }
-  
-  .edit-actions-row { flex-direction: column; align-items: stretch; gap: 10px; }
-  .save-btn { width: 100%; padding: 15px; font-size: 1.1rem; }
+  .date-row { flex-direction: column; align-items: stretch; }
+  .form-actions { display: flex; flex-direction: column; width: 100%; margin-top: 10px;}
+  .auto-width-btn { width: 100%; text-align: center; }
+  .item-actions { width: 100%; flex-direction: row; }
+  .item-actions button { flex: 1; }
+  .visibility-control-card { flex-direction: column; align-items: flex-start;}
 }
 </style>
