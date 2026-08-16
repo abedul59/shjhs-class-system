@@ -107,7 +107,7 @@
             </div>
           </div>
 
-          <!-- 2. 出缺席與點名組件 (使用精準引入名稱) -->
+          <!-- 2. 出缺席與點名組件 -->
           <AttendanceGrid 
             :allStudents="allStudents"
             :todayAttendances="todayAttendances"
@@ -123,7 +123,7 @@
 
         <!-- 右半邊 -->
         <div class="right-panel">
-          <!-- 3. 今日聯絡簿組件 (使用精準引入名稱) -->
+          <!-- 3. 今日聯絡簿組件 -->
           <ContactBook 
             :contactBookItems="contactBookItems"
             :editingContactItems="editingContactItems"
@@ -140,7 +140,7 @@
         </div>
       </div>
       
-      <!-- 4. 座位與衛生組件 (使用精準引入名稱) -->
+      <!-- 4. 座位與衛生組件 -->
       <SeatingAndHygiene 
         :seatingChart="seatingChart"
         :showSeatingChartLocal="showSeatingChartLocal"
@@ -172,11 +172,12 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 
-// 💡 100% 確保精準載入您的子組件，避免 Nuxt auto-import 失敗導致畫面消失！
-import ExamDashboard from '~/components/home/ExamDashboard.vue'
-import AttendanceGrid from '~/components/home/AttendanceGrid.vue'
-import ContactBook from '~/components/home/ContactBook.vue'
-import SeatingAndHygiene from '~/components/home/SeatingAndHygiene.vue'
+// 💡 重大修正：將 `~/` 改為 `~~/`，強制指回專案最外層的根目錄
+// 這樣無論您的 components 資料夾放在哪裡，只要存在於根目錄，系統就絕對找得到！
+import ExamDashboard from '~~/components/home/ExamDashboard.vue'
+import AttendanceGrid from '~~/components/home/AttendanceGrid.vue'
+import ContactBook from '~~/components/home/ContactBook.vue'
+import SeatingAndHygiene from '~~/components/home/SeatingAndHygiene.vue'
 
 const supabase = useSupabaseClient()
 
