@@ -95,7 +95,9 @@
 </template>
 
 <script setup>
+// 💡 確保核心套件完整引入，防止出現 500 系統報錯
 import { ref, onMounted } from 'vue'
+
 const supabase = useSupabaseClient()
 
 const isUnlocked = ref(false)
@@ -109,7 +111,7 @@ const records = ref([])
 const allStudents = ref([])
 const isIpWhitelisted = ref(false)
 
-// 預設設定
+// 預設查詢設定
 const settings = ref({
   viewer_password: '',
   password_hint: '請輸入學校電話七碼',
@@ -117,13 +119,17 @@ const settings = ref({
 })
 
 onMounted(async () => {
-  // 1. 載入查詢設定 (為了在登入頁顯示密碼提示)
-  const { data: setObj } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'contact_history_settings').maybeSingle()
-  if (setObj?.setting_value) {
-    settings.value = { ...settings.value, ...setObj.setting_value }
+  // 1. 載入查詢設定
+  try {
+    const { data: setObj } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'contact_history_settings').maybeSingle()
+    if (setObj && setObj.setting_value) {
+      settings.value = { ...settings.value, ...setObj.setting_value }
+    }
+  } catch (e) {
+    console.error("載入設定失敗", e)
   }
 
-  // 2. 背景載入防護與學生資料 (用於姓名隱私遮蔽)
+  // 2. IP 防護檢查
   try {
     const ipRes = await fetch('https://api.ipify.org?format=json')
     const { ip } = await ipRes.json()
@@ -131,10 +137,19 @@ onMounted(async () => {
     if (rules) {
       isIpWhitelisted.value = rules.some(r => ip.startsWith(r.ip_range))
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn("IP防護檢查發生錯誤", e)
+  }
 
-  const { data: sData } = await supabase.from('students').select('real_name, hidden_name')
-  if (sData) allStudents.value = sData
+  // 3. 學生名單 (用於隱私遮蔽)
+  try {
+    const { data: sData } = await supabase.from('students').select('real_name, hidden_name')
+    if (sData) {
+      allStudents.value = sData
+    }
+  } catch (e) {
+    console.warn("載入學生資料失敗", e)
+  }
 })
 
 const handleLogin = async () => {
@@ -146,10 +161,13 @@ const handleLogin = async () => {
     const { data: tData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'admin_password').maybeSingle()
     let expectedTeacherPwd = '168168168'
     
-    if (tData?.setting_value) {
+    if (tData && tData.setting_value) {
       const config = tData.setting_value
       if (config.type === 'dynamic') {
-        const d = new Date(); const yy = String(d.getFullYear()).slice(2); const mm = String(d.getMonth() + 1).padStart(2, '0'); const dd = String(d.getDate()).padStart(2, '0')
+        const d = new Date()
+        const yy = String(d.getFullYear()).slice(2)
+        const mm = String(d.getMonth() + 1).padStart(2, '0')
+        const dd = String(d.getDate()).padStart(2, '0')
         expectedTeacherPwd = `${yy}${mm}${dd}59`
       } else if (config.type === 'custom' && config.custom_pwd) {
         expectedTeacherPwd = config.custom_pwd
@@ -180,6 +198,9 @@ const handleLogin = async () => {
 
     await fetchRecords()
 
+  } catch (err) {
+    console.error(err)
+    alert("系統連線發生異常，請重試！")
   } finally {
     isLoggingIn.value = false
     passwordInput.value = ''
@@ -194,7 +215,7 @@ const saveSettings = async () => {
       setting_value: settings.value
     }, { onConflict: 'setting_key' })
     alert('✅ 查詢設定已成功儲存！')
-    await fetchRecords() // 天數可能改變，重新撈取
+    await fetchRecords() 
   } catch (error) {
     alert('❌ 儲存失敗：' + error.message)
   } finally {
@@ -205,27 +226,35 @@ const saveSettings = async () => {
 const fetchRecords = async () => {
   isLoading.value = true
   
-  const dObj = new Date()
-  const endStr = `${dObj.getFullYear()}-${String(dObj.getMonth()+1).padStart(2,'0')}-${String(dObj.getDate()).padStart(2,'0')}`
-  
-  dObj.setDate(dObj.getDate() - (settings.value.visible_days || 7))
-  const startStr = `${dObj.getFullYear()}-${String(dObj.getMonth()+1).padStart(2,'0')}-${String(dObj.getDate()).padStart(2,'0')}`
+  try {
+    const dObj = new Date()
+    const endStr = `${dObj.getFullYear()}-${String(dObj.getMonth()+1).padStart(2,'0')}-${String(dObj.getDate()).padStart(2,'0')}`
+    
+    // 計算往前推的天數
+    dObj.setDate(dObj.getDate() - (settings.value.visible_days || 7))
+    const startStr = `${dObj.getFullYear()}-${String(dObj.getMonth()+1).padStart(2,'0')}-${String(dObj.getDate()).padStart(2,'0')}`
 
-  const { data } = await supabase
-    .from('contact_books')
-    .select('record_date, contact_items')
-    .gte('record_date', startStr)
-    .lte('record_date', endStr)
-    .order('record_date', { ascending: false })
+    const { data, error } = await supabase
+      .from('contact_books')
+      .select('record_date, contact_items')
+      .gte('record_date', startStr)
+      .lte('record_date', endStr)
+      .order('record_date', { ascending: false })
+      
+    if (error) throw error
 
-  records.value = data ? data.filter(r => r.contact_items && r.contact_items.length > 0) : []
-  isLoading.value = false
+    records.value = data ? data.filter(r => r.contact_items && r.contact_items.length > 0) : []
+  } catch (e) {
+    console.error("載入歷史紀錄發生錯誤", e)
+  } finally {
+    isLoading.value = false
+  }
 }
 
 // 隱私遮蔽邏輯
 const privacyFilter = (txt) => {
   let result = String(txt || '')
-  if (!isIpWhitelisted.value && allStudents.value.length > 0) {
+  if (!isIpWhitelisted.value && allStudents.value && allStudents.value.length > 0) {
     const sortedStudents = [...allStudents.value].sort((a, b) => (b.real_name || '').length - (a.real_name || '').length)
     sortedStudents.forEach(stu => {
       if (stu.real_name && stu.hidden_name && stu.real_name.trim() !== '') { 
@@ -236,12 +265,21 @@ const privacyFilter = (txt) => {
   return result
 }
 
+// 日期格式化 (加入防呆)
 const formatDisplayDate = (dateStr) => {
   if (!dateStr) return ''
-  const [y, m, d] = dateStr.split('-')
-  const dt = new Date(y, m - 1, d)
-  const daysOfWeek = ['日', '一', '二', '三', '四', '五', '六']
-  return `${y}年${m}月${d}日 (星期${daysOfWeek[dt.getDay()]})`
+  try {
+    const parts = String(dateStr).split('-')
+    if (parts.length !== 3) return dateStr
+    const y = parseInt(parts[0], 10)
+    const m = parseInt(parts[1], 10)
+    const d = parseInt(parts[2], 10)
+    const dt = new Date(y, m - 1, d)
+    const daysOfWeek = ['日', '一', '二', '三', '四', '五', '六']
+    return `${y}年${String(m).padStart(2, '0')}月${String(d).padStart(2, '0')}日 (星期${daysOfWeek[dt.getDay()]})`
+  } catch (e) {
+    return dateStr
+  }
 }
 </script>
 
