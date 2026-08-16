@@ -160,7 +160,9 @@
               <button v-if="hygieneData.isVisibleOnIndex && indexButtonSettings.hygiene" @click="showHygieneLocal = !showHygieneLocal" class="btn btn-sky">
                 {{ showHygieneLocal ? '🙈 隱藏衛生工作' : '🧹 顯示衛生工作' }}
               </button>
-              <button v-if="isHistoryVisibleOnIndex" @click="openContactHistory" class="btn btn-pink">📅 查詢近期聯絡簿</button>
+              
+              <!-- 💡 修正：將歷史查詢改為跳轉到新頁面 -->
+              <NuxtLink v-if="isHistoryVisibleOnIndex" to="/history" class="btn btn-pink">📅 查詢近期聯絡簿</NuxtLink>
             </div>
           </div>
 
@@ -346,30 +348,6 @@
       </div>
     </div> 
 
-    <!-- 歷史查詢視窗 -->
-    <div v-if="showContactHistoryModal" class="modal-overlay" @click.self="showContactHistoryModal = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>📅 近七日聯絡簿紀錄</h3>
-          <button @click="showContactHistoryModal = false" class="close-btn">✖</button>
-        </div>
-        <div class="modal-body">
-          <div v-if="isLoadingHistory" class="loading-state">⏳ 載入中...</div>
-          <div v-else-if="!contactHistoryList || contactHistoryList.length === 0" class="empty-state">
-            📌 近七天內尚未發布任何聯絡簿喔！
-          </div>
-          <div v-else class="history-timeline">
-            <div v-for="hist in contactHistoryList" :key="hist.record_date" class="history-card">
-              <div class="history-date">{{ formatHistDate(hist.record_date) }}</div>
-              <ul class="item-list contact-list-dark">
-                <li v-for="(item, idx) in hist.contact_items" :key="idx">{{ idx + 1 }}. {{ privacyFilter(item) }}</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- 客製化密碼輸入彈窗 -->
     <div v-if="showPwdModal" class="modal-overlay" @click.self="closePwdModal">
       <div class="pwd-modal-content">
@@ -404,10 +382,8 @@ const showHygieneLocal = ref(false)
 const activeHygieneTab = ref('morning')
 const isNoticeExpanded = ref(false)
 
+// 保留此變數，用來控制首頁是否要顯示「查詢近期聯絡簿」的按鈕
 const isHistoryVisibleOnIndex = ref(false)
-const showContactHistoryModal = ref(false)
-const isLoadingHistory = ref(false)
-const contactHistoryList = ref([])
 
 const isIpWhitelisted = ref(false)
 const isIpBrownlisted = ref(false)
@@ -748,11 +724,9 @@ const toggleAttendance = async (student) => {
 }
 
 const fetchData = async () => {
-  // 💡 修正：聯絡簿只讀取 contact_items
   const { data: boardData } = await supabase.from('contact_books').select('contact_items').eq('record_date', todayISO).maybeSingle()
   contactBookItems.value = boardData?.contact_items || []
 
-  // 💡 修正：增加讀取 parent_notices_data
   const { data: sysData } = await supabase.from('system_settings').select('*')
     .in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings', 'announcements_data', 'class_schedule_data', 'exam_schedule_data', 'parent_notices_data'])
   
@@ -775,7 +749,6 @@ const fetchData = async () => {
     const exSetting = sysData.find(s => s.setting_key === 'exam_schedule_data')
     if (exSetting && exSetting.setting_value) { examData.value = { ...examData.value, ...exSetting.setting_value } }
 
-    // 💡 解析家長須知 (自動過濾區間)
     const noticesSetting = sysData.find(s => s.setting_key === 'parent_notices_data')
     if (noticesSetting && noticesSetting.setting_value) {
       const allNotices = noticesSetting.setting_value || []
@@ -783,7 +756,7 @@ const fetchData = async () => {
         const startOk = !n.startDate || n.startDate <= todayISO
         const endOk = !n.endDate || n.endDate >= todayISO
         return startOk && endOk
-      }).map(n => n.content) // 為了相容原本介面，只抽取內容
+      }).map(n => n.content) 
     } else {
       parentNotices.value = []
     }
@@ -820,23 +793,15 @@ onMounted(() => {
 })
 onUnmounted(() => { if (timer) clearInterval(timer) })
 
+const addContactItem = () => { editingContactItems.value.push('') }
+const removeContactItem = (idx) => { editingContactItems.value.splice(idx, 1) }
+
 const saveContactItems = async () => {
   try {
-    // 💡 修正：聯絡簿儲存時不再覆蓋家長須知
     await supabase.from('contact_books').upsert({ record_date: todayISO, contact_items: editingContactItems.value }, { onConflict: 'record_date' })
     alert("✅ 聯絡簿已成功更新發布！")
     contactBookItems.value = [...editingContactItems.value]; isEditingContact.value = false
   } catch (error) { alert("❌ 聯絡簿儲存失敗：" + error.message) }
-}
-
-const openContactHistory = async () => {
-  showContactHistoryModal.value = true
-  isLoadingHistory.value = true
-  const dObj = new Date(); const endStr = `${dObj.getFullYear()}-${String(dObj.getMonth()+1).padStart(2,'0')}-${String(dObj.getDate()).padStart(2,'0')}`
-  dObj.setDate(dObj.getDate() - 7); const startStr = `${dObj.getFullYear()}-${String(dObj.getMonth()+1).padStart(2,'0')}-${String(dObj.getDate()).padStart(2,'0')}`
-  const { data } = await supabase.from('contact_books').select('record_date, contact_items').gte('record_date', startStr).lte('record_date', endStr).order('record_date', { ascending: false })
-  contactHistoryList.value = data ? data.filter(r => r.contact_items && r.contact_items.length > 0) : []
-  isLoadingHistory.value = false
 }
 </script>
 
@@ -985,7 +950,7 @@ const openContactHistory = async () => {
 
 .right-panel { flex: 1; min-width: 0; }
 .board-header { display: flex; justify-content: space-between; align-items: flex-start; }
-.edit-btn { background-color: #f59e0b; color: #1e293b; border: none; padding: 6px 16px; border-radius: 6px; font-weight: bold; font-size: 0.95rem; cursor: pointer; }
+.edit-btn { background: #f59e0b; color: #1e293b; border: none; padding: 6px 16px; border-radius: 6px; font-weight: bold; font-size: 0.95rem; cursor: pointer; }
 
 .edit-mode { background: rgba(0, 0, 0, 0.2); padding: 15px; border-radius: 8px; }
 .edit-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
@@ -1005,10 +970,47 @@ const openContactHistory = async () => {
 .modal-header h3 { margin: 0; color: #1e293b; font-size: 1.2rem; }
 .close-btn { background: none; border: none; font-size: 1.3rem; cursor: pointer; color: #64748b; }
 .modal-body { padding: 20px; overflow-y: auto; background: #f1f5f9; }
-.history-card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
-.history-date { font-weight: bold; color: #f59e0b; border-bottom: 1px dashed #cbd5e1; padding-bottom: 8px; margin-bottom: 10px; font-size: 1.1rem; }
-.loading-state, .empty-state { text-align: center; padding: 30px; color: #64748b; font-size: 1.1rem; }
-.contact-list-dark li { color: #334155; }
+
+.seating-display-board { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-top: 10px; }
+.seating-title { margin-top: 0; color: #0f766e; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 25px; text-align: center; font-size: 1.4rem; }
+.seating-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 15px; }
+.seating-area { width: 100%; min-width: 900px; margin: 0 auto; transition: transform 0.5s ease; }
+.seating-area.is-rotated { transform: rotate(180deg); }
+.seating-area.is-rotated .seat-card-readonly, .seating-area.is-rotated .row-label-readonly, .seating-area.is-rotated .teacher-desk-readonly { transform: rotate(-180deg); }
+.labels-grid-readonly { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 15px; }
+.row-label-readonly { text-align: center; font-weight: bold; color: #0f766e; font-size: 1.1rem; transition: transform 0.5s ease; }
+.seats-grid-readonly { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 35px; }
+.seat-card-readonly { border: 2px solid #cbd5e1; border-radius: 8px; background: #f8fafc; padding: 10px; text-align: center; min-height: 110px; display: flex; flex-direction: column; transition: transform 0.5s ease; }
+.seat-card-readonly.is-hidden-seat-readonly { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
+.seat-id-readonly { font-size: 0.8rem; color: #94a3b8; text-align: left; margin-bottom: 5px; font-weight: bold; }
+.seat-text-container { display: flex; flex-direction: column; gap: 4px; font-weight: bold; justify-content: center; flex: 1;}
+.teacher-desk-readonly { border: 3px solid #0f766e; background: #f0fdfa; padding: 15px 20px; border-radius: 8px; text-align: center; width: 250px; margin: 0 auto; transition: transform 0.5s ease; }
+.teacher-desk-readonly h3 { margin: 0; color: #0f766e; font-size: 1.2rem; }
+
+.hygiene-display-board { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-top: 10px; }
+.hygiene-main-title { margin-top: 0; color: #0891b2; text-align: center; font-size: 1.4rem; margin-bottom: 15px; }
+.tabs-container-readonly { display: flex; gap: 10px; overflow-x: auto; white-space: nowrap; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; justify-content: center;}
+.tab-btn { padding: 8px 16px; border: none; background: #f1f5f9; color: #64748b; font-weight: bold; font-size: 1.05rem; cursor: pointer; border-radius: 6px; transition: 0.2s;}
+.tab-btn:hover { background: #e2e8f0; }
+.tab-btn.active { background: #0891b2; color: white; }
+
+.hygiene-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.hygiene-content { min-width: 800px; padding-bottom: 15px; }
+.hygiene-content-title { text-align: center; margin-bottom: 10px; font-size: 1.3rem; color: #1e293b; }
+.hygiene-sub-title { text-align: center; margin-bottom: 15px; color: #475569; font-size: 0.95rem; }
+
+.custom-table { width: 100%; border-collapse: collapse; text-align: center; font-size: 0.95rem; background: white;}
+.custom-table th, .custom-table td { border: 1px solid #94a3b8; padding: 8px; vertical-align: middle; line-height: 1.4; word-break: break-word;}
+.custom-table th { background: #f1f5f9; font-weight: bold; }
+.header-row th { background: #e2e8f0; }
+.morning-table td:nth-child(1), .morning-table td:nth-child(2) { font-weight: bold; }
+.lunch-table th { background: #f8fafc; font-weight: bold;}
+
+.footer-note { margin-top: 15px; padding: 15px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; color: #334155; line-height: 1.6; text-align: left;}
+.mt-10 { margin-top: 10px; }
+.mt-15 { margin-top: 15px; }
+.text-sm { font-size: 0.9rem; }
+.text-xs { font-size: 0.75rem; color: #64748b; font-weight: normal;}
 
 @media (max-width: 1024px) { .main-split { flex-direction: column; } .student-grid { grid-template-columns: repeat(3, 1fr); } }
 
