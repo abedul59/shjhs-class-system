@@ -724,7 +724,6 @@ const fetchData = async () => {
   const { data: boardData } = await supabase.from('contact_books').select('contact_items').eq('record_date', todayISO).maybeSingle()
   contactBookItems.value = boardData?.contact_items || []
 
-  // 💡 已補上 'parent_notices_data'
   const { data: sysData } = await supabase.from('system_settings').select('*')
     .in('setting_key', [
       'board_officer_passwords', 
@@ -757,10 +756,10 @@ const fetchData = async () => {
     const exSetting = sysData.find(s => s.setting_key === 'exam_schedule_data')
     if (exSetting && exSetting.setting_value) { examData.value = { ...examData.value, ...exSetting.setting_value } }
 
-    // 💡 同步更新首頁的家長須知
+    // 💡 確保首頁的須知也依照建立順序 (id) 排列
     const noticesSetting = sysData.find(s => s.setting_key === 'parent_notices_data')
     if (noticesSetting && noticesSetting.setting_value) {
-      const allNotices = noticesSetting.setting_value || []
+      const allNotices = (noticesSetting.setting_value || []).sort((a, b) => Number(a.id) - Number(b.id))
       parentNotices.value = allNotices.filter(n => {
         const startOk = !n.startDate || n.startDate <= todayISO
         const endOk = !n.endDate || n.endDate >= todayISO
