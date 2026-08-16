@@ -1,37 +1,116 @@
 <template>
-  <div class="admin-contact-container">
-    <div class="card">
-      <h2 class="section-title">⭐ 聯絡簿歷史與管理中心</h2>
-      <p class="section-desc">在此可以查詢、補登或修改過去任何一天的聯絡簿事項。</p>
-
-      <!-- 查詢與編輯區塊 -->
-      <div class="query-box">
-        <div class="query-header">
-          <h3>📅 選擇查詢日期</h3>
-          <input type="date" v-model="selectedDate" @change="fetchContactByDate" class="form-control date-picker" />
-        </div>
+  <div class="split-contact-container">
+    <div class="table-header"><h3>⭐ 聯絡簿管理</h3></div>
+    
+    <!-- 編輯區塊 -->
+    <div class="board-editor-container">
+      <div class="editor-panel">
+        <h4 class="section-title">📝 今日聯絡簿事項 (前台黑板)</h4>
         
-        <div class="edit-section">
-          <div v-if="isLoading" class="loading-state">⏳ 載入中...</div>
-          
-          <div v-else>
-            <h4 class="edit-title">{{ formatDisplayDate(selectedDate) }} 聯絡簿事項：</h4>
+        <div class="toggle-setting-box">
+          <label class="toggle-label">
+            <input type="checkbox" v-model="isHistoryVisibleOnIndex" @change="saveHistorySetting" />
+            開放前台首頁讓家長查詢「近一週聯絡簿紀錄」
+          </label>
+        </div>
+
+        <p class="help-text">用於記錄每日作業、明日攜帶物品。前台可由股長登入編輯。</p>
+        <div class="notice-edit-list">
+          <div v-for="(item, index) in contactBookItems" :key="'c-'+index" class="edit-item">
+            <span class="bullet">✏️</span>
+            <input v-model="contactBookItems[index]" type="text" class="edit-input notice-input" placeholder="請輸入聯絡簿事項..." />
+            <button @click="removeContactItem(index)" class="del-row-btn">🗑️</button>
+          </div>
+          <button @click="addContactItem" class="add-btn">➕ 新增聯絡簿事項</button>
+        </div>
+
+        <div class="officer-pwd-section">
+          <h5>🔒 股長聯絡簿編輯密碼設定</h5>
+          <div class="form-group">
+            <label>學藝股長密碼：</label>
+            <div class="pwd-input-group">
+              <input type="text" v-model="officerPasswords.academic" class="edit-input" placeholder="尚未設定..." />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>輔導股長密碼：</label>
+            <div class="pwd-input-group">
+              <input type="text" v-model="officerPasswords.counseling" class="edit-input" placeholder="尚未設定..." />
+            </div>
+          </div>
+          <button @click="saveOfficerPasswords" class="save-template-btn small-btn pwd-btn" :disabled="isSavingPwd">
+            {{ isSavingPwd ? '儲存中...' : '💾 儲存股長密碼' }}
+          </button>
+        </div>
+
+        <div class="action-bar" style="margin-top: 20px;">
+          <button @click="saveBoard" class="save-btn lg-btn" :disabled="isSavingBoard">
+            {{ isSavingBoard ? '儲存中...' : '💾 儲存今日聯絡簿並同步至前台' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 歷史紀錄月曆查詢 -->
+    <div class="history-calendar-container" style="margin-top: 30px;">
+      <h4 class="section-title">📅 歷史聯絡簿查詢</h4>
+      <div class="calendar-layout">
+        <div class="calendar-box">
+          <div class="calendar-header">
+            <button @click="prevMonth" class="cal-nav-btn">◀</button>
+            <strong class="cal-title">{{ calYear }} 年 {{ calMonth + 1 }} 月</strong>
+            <button @click="nextMonth" class="cal-nav-btn">▶</button>
+          </div>
+          <div class="calendar-grid">
+            <div class="cal-day-name">日</div><div class="cal-day-name">一</div><div class="cal-day-name">二</div>
+            <div class="cal-day-name">三</div><div class="cal-day-name">四</div><div class="cal-day-name">五</div><div class="cal-day-name">六</div>
             
-            <div v-if="editingItems.length === 0" class="empty-state">
-              這天尚未建立任何聯絡簿事項。
+            <div 
+              v-for="(day, idx) in calendarDays" 
+              :key="idx" 
+              :class="['cal-cell', { 'empty': day.empty, 'has-record': day.hasRecord, 'selected': selectedHistoryDate === day.dateStr }]"
+              @click="viewHistory(day)"
+            >
+              <span v-if="!day.empty" class="cal-date-num">{{ day.day }}</span>
+              <span v-if="day.hasRecord" class="record-dot"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="history-detail-box">
+          <div v-if="!selectedHistoryDate" class="empty-detail">👈 請從上方/左側月曆點選日期以查看歷史紀錄</div>
+          <div v-else class="detail-content">
+            <div class="detail-header-flex">
+              <h5 class="detail-title">🗓️ {{ selectedHistoryDate }} 聯絡簿紀錄</h5>
+              <button v-if="!isEditingHistory" @click="startEditHistory" class="edit-history-btn">✏️ 編輯</button>
+            </div>
+            
+            <!-- 唯讀模式 -->
+            <div v-if="!isEditingHistory">
+              <div class="history-section">
+                <div v-if="selectedHistoryContactItems.length > 0" class="history-list">
+                  <div v-for="(c, i) in selectedHistoryContactItems" :key="'hc-'+i" class="history-item"><span class="bullet">✏️</span> {{ c }}</div>
+                </div>
+                <div v-else class="empty-text">當日無聯絡簿事項</div>
+              </div>
             </div>
 
-            <div class="edit-mode">
-              <div v-for="(item, index) in editingItems" :key="'edit-'+index" class="edit-row">
-                <span class="row-num">{{ index + 1 }}.</span>
-                <input v-model="editingItems[index]" type="text" placeholder="輸入事項..." class="edit-input"/>
-                <button @click="removeItem(index)" class="del-row-btn">🗑️</button>
+            <!-- 編輯模式 -->
+            <div v-else class="history-edit-mode">
+              <div class="history-section">
+                <div class="notice-edit-list">
+                  <div v-for="(c, i) in editHistoryContactItems" :key="'ehc-'+i" class="edit-item">
+                    <span class="bullet">✏️</span>
+                    <input v-model="editHistoryContactItems[i]" type="text" class="edit-input notice-input" />
+                    <button @click="removeHistoryContactItem(i)" class="del-row-btn">🗑️</button>
+                  </div>
+                  <button @click="addHistoryContactItem" class="add-btn">➕ 新增</button>
+                </div>
               </div>
-              
-              <div class="edit-actions">
-                <button @click="addItem" class="add-btn">➕ 新增事項</button>
-                <button @click="saveContactItems" class="save-btn" :disabled="isSaving">
-                  {{ isSaving ? '儲存中...' : '💾 儲存並發布' }}
+              <div class="edit-actions-row">
+                <button @click="cancelEditHistory" class="cancel-btn">取消</button>
+                <button @click="saveHistory" class="save-btn" :disabled="isSavingHistory">
+                  {{ isSavingHistory ? '儲存中...' : '💾 儲存歷史紀錄' }}
                 </button>
               </div>
             </div>
@@ -43,126 +122,187 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 const supabase = useSupabaseClient()
+const d = new Date()
+const todayISO = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 
-const getTodayStr = () => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-}
+const contactBookItems = ref([]) 
+const officerPasswords = ref({ academic: '', counseling: '' }) 
+const isHistoryVisibleOnIndex = ref(false)
 
-const selectedDate = ref(getTodayStr())
-const editingItems = ref([])
-const isLoading = ref(false)
-const isSaving = ref(false)
+const isSavingBoard = ref(false)
+const isSavingPwd = ref(false)
 
-const formatDisplayDate = (dateStr) => {
-  if (!dateStr) return ''
-  const [y, m, d] = dateStr.split('-')
-  const dt = new Date(y, m - 1, d)
-  const daysOfWeek = ['日', '一', '二', '三', '四', '五', '六']
-  return `${y}年${m}月${d}日 (星期${daysOfWeek[dt.getDay()]})`
-}
+const calYear = ref(d.getFullYear()); const calMonth = ref(d.getMonth())
+const monthRecords = ref([])
+const selectedHistoryDate = ref('')
+const selectedHistoryContactItems = ref([])
 
-const fetchContactByDate = async () => {
-  isLoading.value = true
-  editingItems.value = []
+const isEditingHistory = ref(false)
+const isSavingHistory = ref(false)
+const editHistoryContactItems = ref([])
+
+const fetchData = async () => {
+  const { data: boardData } = await supabase.from('contact_books').select('contact_items').eq('record_date', todayISO).maybeSingle()
+  contactBookItems.value = boardData?.contact_items || []
   
-  try {
-    const { data, error } = await supabase
-      .from('contact_books')
-      .select('contact_items')
-      .eq('record_date', selectedDate.value)
-      .maybeSingle()
-      
-    if (error && error.code !== 'PGRST116') throw error
-    
-    if (data && data.contact_items) {
-      editingItems.value = [...data.contact_items]
-    }
-  } catch (e) {
-    console.error('Fetch error:', e)
-  } finally {
-    isLoading.value = false
+  const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', ['board_officer_passwords', 'contact_history_visible'])
+  if (sysData) {
+    const pwdData = sysData.find(s => s.setting_key === 'board_officer_passwords')
+    if (pwdData) officerPasswords.value = pwdData.setting_value
+
+    const histData = sysData.find(s => s.setting_key === 'contact_history_visible')
+    if (histData) isHistoryVisibleOnIndex.value = histData.setting_value
   }
+
+  await fetchMonthRecords()
+}
+onMounted(() => fetchData())
+
+const saveHistorySetting = async () => {
+  await supabase.from('system_settings').upsert({
+    setting_key: 'contact_history_visible',
+    setting_value: isHistoryVisibleOnIndex.value
+  }, { onConflict: 'setting_key' })
 }
 
-const addItem = () => {
-  editingItems.value.push('')
+const addContactItem = () => contactBookItems.value.push('')
+const removeContactItem = (i) => contactBookItems.value.splice(i, 1)
+
+const saveOfficerPasswords = async () => {
+  isSavingPwd.value = true
+  await supabase.from('system_settings').upsert({ 
+    setting_key: 'board_officer_passwords', 
+    setting_value: officerPasswords.value 
+  }, { onConflict: 'setting_key' })
+  alert('✅ 股長密碼已成功更新！')
+  isSavingPwd.value = false
 }
 
-const removeItem = (index) => {
-  editingItems.value.splice(index, 1)
+const saveBoard = async () => {
+  isSavingBoard.value = true
+  await supabase.from('contact_books').upsert({ 
+    record_date: todayISO, 
+    contact_items: contactBookItems.value 
+  }, { onConflict: 'record_date' })
+  alert('✅ 聯絡簿已成功儲存至資料庫並同步前台！')
+  isSavingBoard.value = false
+  await fetchMonthRecords()
 }
 
-const saveContactItems = async () => {
-  isSaving.value = true
-  
-  // 過濾掉全空白的項目
-  const filteredItems = editingItems.value.filter(item => item.trim() !== '')
-  
-  try {
-    const { error } = await supabase
-      .from('contact_books')
-      .upsert({ 
-        record_date: selectedDate.value, 
-        contact_items: filteredItems 
-      }, { onConflict: 'record_date' })
-      
-    if (error) throw error
-    
-    editingItems.value = filteredItems
-    alert(`✅ ${selectedDate.value} 的聯絡簿已成功儲存！`)
-  } catch (error) {
-    alert("❌ 儲存失敗：" + error.message)
-  } finally {
-    isSaving.value = false
+const fetchMonthRecords = async () => {
+  const y = calYear.value; const m = String(calMonth.value + 1).padStart(2, '0')
+  const startDate = `${y}-${m}-01`; const endDate = `${y}-${m}-31`
+  const { data } = await supabase.from('contact_books').select('record_date, contact_items').gte('record_date', startDate).lte('record_date', endDate)
+  monthRecords.value = data || []
+}
+
+const calendarDays = computed(() => {
+  const days = []
+  const firstDayOfWeek = new Date(calYear.value, calMonth.value, 1).getDay()
+  const daysInMonth = new Date(calYear.value, calMonth.value + 1, 0).getDate()
+  for (let i = 0; i < firstDayOfWeek; i++) { days.push({ empty: true }) }
+  for (let i = 1; i <= daysInMonth; i++) {
+    const dateStr = `${calYear.value}-${String(calMonth.value + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`
+    const record = monthRecords.value.find(r => r.record_date === dateStr)
+    const hasC = record && record.contact_items && record.contact_items.length > 0
+    days.push({ empty: false, day: i, dateStr: dateStr, hasRecord: hasC, contactItems: record ? (record.contact_items || []) : [] })
   }
-}
-
-onMounted(() => {
-  fetchContactByDate()
+  return days
 })
+
+const prevMonth = async () => { if (calMonth.value === 0) { calYear.value--; calMonth.value = 11 } else { calMonth.value-- } selectedHistoryDate.value = ''; isEditingHistory.value = false; await fetchMonthRecords() }
+const nextMonth = async () => { if (calMonth.value === 11) { calYear.value++; calMonth.value = 0 } else { calMonth.value++ } selectedHistoryDate.value = ''; isEditingHistory.value = false; await fetchMonthRecords() }
+
+const viewHistory = (day) => {
+  if (day.empty) return
+  selectedHistoryDate.value = day.dateStr
+  selectedHistoryContactItems.value = day.contactItems
+  isEditingHistory.value = false
+}
+
+const startEditHistory = () => { editHistoryContactItems.value = [...selectedHistoryContactItems.value]; isEditingHistory.value = true }
+const cancelEditHistory = () => { isEditingHistory.value = false }
+const addHistoryContactItem = () => editHistoryContactItems.value.push('')
+const removeHistoryContactItem = (i) => editHistoryContactItems.value.splice(i, 1)
+
+const saveHistory = async () => {
+  isSavingHistory.value = true
+  try {
+    await supabase.from('contact_books').upsert({ record_date: selectedHistoryDate.value, contact_items: editHistoryContactItems.value }, { onConflict: 'record_date' })
+    alert('✅ 歷史紀錄已成功更新！')
+    selectedHistoryContactItems.value = [...editHistoryContactItems.value]; isEditingHistory.value = false
+    await fetchMonthRecords()
+    if (selectedHistoryDate.value === todayISO) { contactBookItems.value = [...editHistoryContactItems.value] }
+  } catch (error) { alert('❌ 儲存失敗：' + error.message) } finally { isSavingHistory.value = false }
+}
 </script>
 
 <style scoped>
-.admin-contact-container { font-family: sans-serif; }
-.card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-.section-title { margin: 0 0 10px 0; color: #1e293b; }
-.section-desc { color: #64748b; margin-bottom: 25px; border-bottom: 2px solid #f1f5f9; padding-bottom: 15px;}
+.split-contact-container { font-family: sans-serif; }
+.table-header { border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; } 
+.table-header h3 { margin: 0; color: #334155; font-size: 1.4rem;}
+.section-title { margin: 0 0 10px 0; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; font-size: 1.15rem; }
 
-.query-box { background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; }
-.query-header { display: flex; align-items: center; gap: 15px; margin-bottom: 25px; flex-wrap: wrap;}
-.query-header h3 { margin: 0; color: #334155; }
-.date-picker { width: 200px; padding: 10px; font-weight: bold; font-size: 1.1rem; color: #0f766e; }
+.toggle-setting-box { margin-bottom: 15px; padding: 10px; background: #f0fdfa; border: 1px dashed #0f766e; border-radius: 6px; }
+.toggle-label { font-weight: bold; color: #0f766e; display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.95rem; }
 
-.form-control { border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
-.form-control:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+.board-editor-container, .history-calendar-container { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 20px; }
+.editor-panel { background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
 
-.edit-section { background: white; padding: 20px; border-radius: 8px; border: 1px dashed #cbd5e1; }
-.edit-title { margin-top: 0; margin-bottom: 15px; color: #f59e0b; font-size: 1.2rem; }
+.notice-edit-list { display: flex; flex-direction: column; gap: 12px; }
 
-.loading-state, .empty-state { text-align: center; padding: 30px; color: #94a3b8; font-style: italic; background: #f1f5f9; border-radius: 8px; }
+.edit-item { display: flex; align-items: center; gap: 10px; }
+.notice-input { flex: 1; font-size: 1.05rem; padding: 10px 12px; border: 1px solid #94a3b8; border-radius: 6px; width: 100%; box-sizing: border-box;}
+.add-btn { background: #e2e8f0; color: #334155; border: 1px dashed #94a3b8; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 5px; width: 100%; }
+.del-row-btn { background: #ef4444; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; }
 
-.edit-mode { display: flex; flex-direction: column; gap: 12px; }
-.edit-row { display: flex; align-items: center; gap: 10px; }
-.row-num { font-size: 1.1rem; color: #f59e0b; width: 25px; font-weight: bold; text-align: right; }
-.edit-input { flex: 1; padding: 12px; font-size: 1.05rem; border-radius: 6px; border: 1px solid #e2e8f0; background: #f8fafc;}
-.edit-input:focus { background: white; border-color: #3b82f6; outline: none; }
-.del-row-btn { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 10px 15px; border-radius: 6px; cursor: pointer; transition: 0.2s;}
-.del-row-btn:hover { background: #fecaca; }
+.action-bar { display: flex; justify-content: center; padding-top: 15px; border-top: 2px dashed #cbd5e1; }
+.lg-btn { font-size: 1.2rem; padding: 15px 30px; width: 100%; max-width: 600px; }
+.save-btn { background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; padding: 10px 15px;} 
+.cancel-btn { background: #64748b; color: white; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; }
 
-.edit-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-top: 15px; border-top: 2px dashed #e2e8f0;}
-.add-btn { background: transparent; color: #3b82f6; border: 2px dashed #3b82f6; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s;}
-.add-btn:hover { background: #eff6ff; }
-.save-btn { background: #10b981; color: white; border: none; padding: 12px 30px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.1rem; transition: 0.2s;}
-.save-btn:hover:not(:disabled) { background: #059669; }
-.save-btn:disabled { background: #9ca3af; cursor: not-allowed; }
+.officer-pwd-section { margin-top: 25px; padding-top: 15px; border-top: 2px dashed #cbd5e1; }
+.officer-pwd-section h5 { margin: 0 0 10px 0; font-size: 1.05rem; color: #1e293b; }
+.form-group { margin-bottom: 10px; } .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #475569; font-size: 0.9rem; }
+.edit-input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; width: 100%; }
+.pwd-input-group { display: flex; gap: 10px; }
+.pwd-btn { margin-top: 10px; width: 100%; padding: 10px; font-size: 1rem; }
+.save-template-btn.small-btn { padding: 6px 12px; font-size: 0.9rem; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; }
+.help-text { font-size: 0.9rem; color: #64748b; margin-bottom: 15px; }
+
+.calendar-layout { display: flex; gap: 20px; flex-wrap: nowrap; }
+.calendar-box { flex: 1; min-width: 0; background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; }
+.history-detail-box { flex: 1; min-width: 0; background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
+
+.calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+.cal-nav-btn { background: #f1f5f9; border: 1px solid #cbd5e1; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; color: #475569; }
+.cal-title { font-size: 1.2rem; color: #1e293b; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; text-align: center; }
+.cal-day-name { font-weight: bold; color: #64748b; padding-bottom: 10px; }
+.cal-cell { height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 6px; cursor: pointer; background: #f8fafc; border: 1px solid transparent; transition: all 0.2s; }
+.cal-cell:not(.empty):hover { background: #e0e7ff; border-color: #a5b4fc; }
+.cal-cell.empty { background: transparent; cursor: default; }
+.cal-cell.selected { background: #3b82f6; color: white; border-color: #2563eb; }
+.cal-cell.selected .record-dot { background: white; }
+.cal-date-num { font-weight: bold; font-size: 1.1rem; }
+.record-dot { width: 6px; height: 6px; background: #3b82f6; border-radius: 50%; margin-top: 4px; }
+
+.detail-header-flex { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #cbd5e1; padding-bottom: 10px; margin-bottom: 15px; }
+.edit-history-btn { background: #f59e0b; color: white; border: none; padding: 5px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.9rem; }
+.edit-actions-row { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px dashed #cbd5e1;}
+
+.empty-detail { text-align: center; color: #94a3b8; margin-top: 50px; font-size: 1.1rem; }
+.detail-title { margin: 0; font-size: 1.2rem; color: #1e293b; }
+.history-section h6 { font-size: 1.05rem; color: #475569; margin: 0 0 10px 0; }
+.history-list { display: flex; flex-direction: column; gap: 8px; }
+.history-item { font-size: 1.05rem; color: #334155; line-height: 1.4; word-break: break-all; }
+.empty-text { color: #94a3b8; font-style: italic; }
 
 @media (max-width: 768px) {
-  .edit-row { flex-wrap: wrap; }
-  .edit-input { width: calc(100% - 40px); flex: none; }
-  .edit-actions { flex-direction: column; gap: 15px; align-items: stretch; }
-  .add-btn, .save-btn { width: 100%; text-align: center; }
+  .calendar-layout { flex-direction: column; }
+  .editor-panel, .calendar-box, .history-detail-box { padding: 15px; }
+  .lg-btn { font-size: 1.05rem; padding: 12px; }
 }
 </style>
