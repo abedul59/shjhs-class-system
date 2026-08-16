@@ -1,6 +1,6 @@
 <template>
-  <div>
-    <!-- 座位表 -->
+  <div class="extra-modules">
+    <!-- 座位表顯示區 -->
     <div v-if="seatingChart.isVisible && showSeatingChartLocal && indexButtonSettings.seats" class="seating-display-board">
       <h3 class="seating-title">🪑 班級座位表</h3>
       <div class="seating-wrapper">
@@ -23,7 +23,7 @@
       </div>
     </div>
 
-    <!-- 衛生工作 -->
+    <!-- 班級衛生工作顯示區 -->
     <div v-if="hygieneData.isVisibleOnIndex && showHygieneLocal && indexButtonSettings.hygiene" class="hygiene-display-board">
       <h3 class="hygiene-main-title">🧹 班級衛生工作管理</h3>
       <div class="tabs-container-readonly">
@@ -31,6 +31,7 @@
         <button class="tab-btn" :class="{ active: activeHygieneTab === 'lunch' }" @click="activeHygieneTab = 'lunch'">🍱 中午搬餐</button>
         <button class="tab-btn" :class="{ active: activeHygieneTab === 'squad' }" @click="activeHygieneTab = 'squad'">🛡️ 小隊工作</button>
       </div>
+      
       <div class="hygiene-wrapper">
         <!-- 早上掃地 -->
         <div v-show="activeHygieneTab === 'morning'" class="hygiene-content">
@@ -138,11 +139,21 @@
 
 <script setup>
 import { ref } from 'vue'
-const props = defineProps(['seatingChart', 'showSeatingChartLocal', 'indexButtonSettings', 'hygieneData', 'showHygieneLocal', 'privacyFilter', 'formatNL'])
+const props = defineProps({
+  seatingChart: Object,
+  showSeatingChartLocal: Boolean,
+  indexButtonSettings: Object,
+  hygieneData: Object,
+  showHygieneLocal: Boolean,
+  privacyFilter: Function,
+  formatNL: Function
+})
+
 const activeHygieneTab = ref('morning')
 </script>
 
 <style scoped>
+.extra-modules { width: 100%; }
 .seating-display-board { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-top: 10px; }
 .seating-title { margin-top: 0; color: #0f766e; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 25px; text-align: center; font-size: 1.4rem; }
 .seating-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 15px; }
