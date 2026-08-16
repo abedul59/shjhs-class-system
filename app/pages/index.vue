@@ -146,10 +146,7 @@
               <NuxtLink v-if="indexButtonSettings.parentMsg" to="/parent-message" class="btn btn-green">💬 家長私訊</NuxtLink>
               <NuxtLink v-if="indexButtonSettings.studentMsg" to="/student-message" class="btn btn-blue">💬 學生私訊</NuxtLink>
               <NuxtLink v-if="indexButtonSettings.assignments" to="/assignments" class="btn btn-purple">📚 作業管理</NuxtLink>
-              
-              <!-- 💡 修正：將 button 改為 NuxtLink 以確保跳轉正常運作 -->
               <NuxtLink v-if="indexButtonSettings.discipline" to="/discipline" class="btn btn-dark-blue">⚖️ 秩序管理</NuxtLink>
-              
               <NuxtLink v-if="indexButtonSettings.hygiene" to="/hygiene" class="btn btn-cyan">🧹 衛生管理</NuxtLink>            
               <NuxtLink v-if="indexButtonSettings.seats" to="/seats" class="btn btn-teal">🪑 座位管理</NuxtLink>
               <NuxtLink v-if="indexButtonSettings.schedule" to="/schedule" class="btn btn-amber">🗓️ 課表管理</NuxtLink>
@@ -356,7 +353,6 @@
           <h3>📅 近七日聯絡簿紀錄</h3>
           <button @click="showContactHistoryModal = false" class="close-btn">✖</button>
         </div>
-        <!-- 💡 修正：加強空資料的判斷與顯示 -->
         <div class="modal-body">
           <div v-if="isLoadingHistory" class="loading-state">⏳ 載入中...</div>
           <div v-else-if="!contactHistoryList || contactHistoryList.length === 0" class="empty-state">
@@ -680,7 +676,6 @@ const openPwdModal = (target) => {
 
 const closePwdModal = () => { showPwdModal.value = false }
 
-// 💡 修正：聯絡簿解鎖與緊急通知解鎖時，確實寫入對應身分日誌
 const submitPwd = async () => {
   const pwd = pwdInput.value
   const teacherPwd = officerPasswords.value.teacher || '168168168'
@@ -753,12 +748,13 @@ const toggleAttendance = async (student) => {
 }
 
 const fetchData = async () => {
-  const { data: boardData } = await supabase.from('contact_books').select('notices, contact_items').eq('record_date', todayISO).maybeSingle()
-  parentNotices.value = boardData?.notices || []
+  // 💡 修正：聯絡簿只讀取 contact_items
+  const { data: boardData } = await supabase.from('contact_books').select('contact_items').eq('record_date', todayISO).maybeSingle()
   contactBookItems.value = boardData?.contact_items || []
 
+  // 💡 修正：增加讀取 parent_notices_data
   const { data: sysData } = await supabase.from('system_settings').select('*')
-    .in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings', 'announcements_data', 'class_schedule_data', 'exam_schedule_data'])
+    .in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings', 'announcements_data', 'class_schedule_data', 'exam_schedule_data', 'parent_notices_data'])
   
   if (sysData) {
     const pwdSetting = sysData.find(s => s.setting_key === 'board_officer_passwords')
@@ -779,6 +775,19 @@ const fetchData = async () => {
     const exSetting = sysData.find(s => s.setting_key === 'exam_schedule_data')
     if (exSetting && exSetting.setting_value) { examData.value = { ...examData.value, ...exSetting.setting_value } }
 
+    // 💡 解析家長須知 (自動過濾區間)
+    const noticesSetting = sysData.find(s => s.setting_key === 'parent_notices_data')
+    if (noticesSetting && noticesSetting.setting_value) {
+      const allNotices = noticesSetting.setting_value || []
+      parentNotices.value = allNotices.filter(n => {
+        const startOk = !n.startDate || n.startDate <= todayISO
+        const endOk = !n.endDate || n.endDate >= todayISO
+        return startOk && endOk
+      }).map(n => n.content) // 為了相容原本介面，只抽取內容
+    } else {
+      parentNotices.value = []
+    }
+
     const seatSetting = sysData.find(s => s.setting_key === 'seating_chart_data')
     if (seatSetting) {
       const rawValue = seatSetting.setting_value || {}
@@ -790,6 +799,11 @@ const fetchData = async () => {
         return seat
       })
       seatingChart.value = { isVisible: rawValue.isVisible || false, isRotated: rawValue.isRotated || false, seats: normalizedSeats, settings: rawValue.settings || {} }
+    }
+    
+    const hygieneSetting = sysData.find(s => s.setting_key === 'hygiene_management_data')
+    if (hygieneSetting && hygieneSetting.setting_value) {
+      hygieneData.value = { ...JSON.parse(JSON.stringify(defaultHygieneData)), ...hygieneSetting.setting_value }
     }
   }
 
@@ -808,7 +822,8 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 
 const saveContactItems = async () => {
   try {
-    await supabase.from('contact_books').upsert({ record_date: todayISO, notices: parentNotices.value, contact_items: editingContactItems.value }, { onConflict: 'record_date' })
+    // 💡 修正：聯絡簿儲存時不再覆蓋家長須知
+    await supabase.from('contact_books').upsert({ record_date: todayISO, contact_items: editingContactItems.value }, { onConflict: 'record_date' })
     alert("✅ 聯絡簿已成功更新發布！")
     contactBookItems.value = [...editingContactItems.value]; isEditingContact.value = false
   } catch (error) { alert("❌ 聯絡簿儲存失敗：" + error.message) }
@@ -864,7 +879,7 @@ const openContactHistory = async () => {
 .status-text.break .highlight { color: var(--ex-success); font-size: 3.5rem; margin: 15px 0; display: block;}
 .next-time { font-size: 1.8rem; color: var(--ex-text); font-family: monospace; opacity: 0.8;}
 
-/* 💡 客製化密碼彈窗樣式 */
+/* 密碼彈窗樣式 */
 .pwd-modal-content { background: white; padding: 25px 30px; border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); text-align: center;}
 .pwd-modal-content h3 { margin: 0 0 15px 0; color: #1e293b; font-size: 1.4rem; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; }
 .pwd-desc { color: #64748b; font-size: 1.05rem; margin-bottom: 20px; }
@@ -976,7 +991,7 @@ const openContactHistory = async () => {
 .edit-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .row-num { font-size: 1.1rem; color: #f59e0b; width: 25px; font-weight: bold; }
 .edit-input { flex: 1; padding: 8px 12px; font-size: 1rem; border-radius: 6px; border: none; }
-.del-btn { background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+.del-row-btn { background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
 
 .edit-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
 .add-btn { background: transparent; color: white; border: 1px dashed #cbd5e1; padding: 8px 15px; border-radius: 6px; cursor: pointer; }
@@ -995,8 +1010,8 @@ const openContactHistory = async () => {
 .loading-state, .empty-state { text-align: center; padding: 30px; color: #64748b; font-size: 1.1rem; }
 .contact-list-dark li { color: #334155; }
 
-/* 其他頁面共用 CSS 請維持不變... */
 @media (max-width: 1024px) { .main-split { flex-direction: column; } .student-grid { grid-template-columns: repeat(3, 1fr); } }
+
 @media (max-width: 768px) {
   .page-container { padding: 10px; }
   .corkboard, .blackboard { padding: 15px 10px; border-width: 8px; }
@@ -1011,5 +1026,20 @@ const openContactHistory = async () => {
   .is-collapsed { max-height: none; overflow: visible; }
   .fade-mask { display: none; }
   .desktop-only { display: none; }
+
+  /* 手機版面優化 */
+  .board-header { align-items: center; }
+  .contact-title { font-size: 1.2rem; }
+  .board-date { font-size: 0.85rem; }
+  .contact-list li { line-height: 1.6; word-break: break-word; margin-bottom: 8px; }
+  
+  .edit-row { gap: 6px; flex-wrap: wrap; }
+  .row-num { width: auto; min-width: 20px; font-size: 1rem; }
+  .edit-input { width: calc(100% - 50px); padding: 8px; font-size: 0.95rem; flex: none; }
+  .del-row-btn { padding: 8px 10px; }
+  
+  .edit-actions { flex-direction: column; align-items: stretch; gap: 15px; }
+  .action-right { display: flex; width: 100%; gap: 10px; }
+  .cancel-btn, .save-btn { flex: 1; text-align: center; justify-content: center;}
 }
 </style>
