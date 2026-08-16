@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="attendance-wrapper">
     <div class="stats-row">
       <div class="stat-box stat-expected">應到: <strong>{{ expectedCount }}</strong></div>
       <div class="stat-box stat-present">已到: <strong>{{ presentCount }}</strong></div>
@@ -19,11 +19,27 @@
 </template>
 
 <script setup>
-const props = defineProps(['allStudents', 'todayAttendances', 'expectedCount', 'presentCount', 'leaveCount', 'lateCount', 'absentCount', 'privacyFilter'])
+const props = defineProps({
+  allStudents: Array,
+  todayAttendances: Array,
+  expectedCount: Number,
+  presentCount: Number,
+  leaveCount: Number,
+  lateCount: Number,
+  absentCount: Number,
+  privacyFilter: Function
+})
+
 defineEmits(['toggle-attendance'])
 
-const getAttendanceRecord = (studentId) => props.todayAttendances.find(a => a.student_id === studentId)
-const getAttendanceStatus = (studentId) => getAttendanceRecord(studentId)?.status || '未到'
+const getAttendanceRecord = (studentId) => {
+  return props.todayAttendances.find(a => a.student_id === studentId)
+}
+
+const getAttendanceStatus = (studentId) => {
+  return getAttendanceRecord(studentId)?.status || '未到'
+}
+
 const getAttendanceClass = (studentId) => {
   const status = getAttendanceStatus(studentId)
   if (status === '已到') return 'present-card'
@@ -34,6 +50,7 @@ const getAttendanceClass = (studentId) => {
 </script>
 
 <style scoped>
+.attendance-wrapper { width: 100%; }
 .stats-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;}
 .stat-box { flex: 1; padding: 12px; border-radius: 6px; text-align: center; font-size: 1.05rem; font-weight: bold; min-width: 80px; }
 .stat-expected { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
