@@ -16,7 +16,7 @@
           <button @click="currentTab = 'attendance'" :class="{ active: currentTab === 'attendance' }">⏰ 遲到管理</button>
           <button @click="currentTab = 'homework'" :class="{ active: currentTab === 'homework' }">📚 作業與科任</button>
           
-          <!-- 💡 新增：注意事項管理按鈕 -->
+          <!-- 注意事項管理按鈕 -->
           <button @click="currentTab = 'classNotes'" :class="{ active: currentTab === 'classNotes' }">⚡ 注意事項</button>
           
           <button @click="currentTab = 'contact'" :class="{ active: currentTab === 'contact' }">⭐ 聯絡簿管理</button>
@@ -42,7 +42,7 @@
         <AdminAttendance v-if="currentTab === 'attendance'" />
         <AdminHomework v-if="currentTab === 'homework'" />
         
-        <!-- 💡 呼叫新的組件 -->
+        <!-- 呼叫新的組件 (由 Nuxt 自動導入) -->
         <AdminClassNotes v-if="currentTab === 'classNotes'" />
         
         <AdminContact v-if="currentTab === 'contact'" />
@@ -68,7 +68,6 @@
 
 <script setup>
 import { ref } from 'vue'
-import AdminClassNotes from '~~/components/AdminClassNotes.vue' // 💡 精準引入
 
 const supabase = useSupabaseClient()
 const isUnlocked = ref(false)
