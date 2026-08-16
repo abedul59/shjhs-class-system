@@ -11,6 +11,8 @@
           @keyup.enter="verifyPassword"
         />
         <button @click="verifyPassword">解鎖進入</button>
+        <!-- 💡 新增：返回首頁連結 -->
+        <NuxtLink to="/" class="back-link">⬅️ 返回首頁</NuxtLink>
       </div>
     </div>
 
@@ -22,16 +24,14 @@
           <button @click="currentTab = 'attendance'" :class="{ active: currentTab === 'attendance' }">⏰ 遲到管理</button>
           <button @click="currentTab = 'homework'" :class="{ active: currentTab === 'homework' }">📚 作業與科任</button>
           
-          <!-- 💡 新增：獨立聯絡簿管理分頁 -->
           <button @click="currentTab = 'contact'" :class="{ active: currentTab === 'contact' }">⭐ 聯絡簿管理</button>
-          
           <button @click="currentTab = 'board'" :class="{ active: currentTab === 'board' }">📢 須知推播</button>
+          
           <button @click="currentTab = 'announcements'" :class="{ active: currentTab === 'announcements' }">📌 公佈欄管理</button>
           <button @click="currentTab = 'messages'" :class="{ active: currentTab === 'messages' }">💬 私訊管理</button>
           <button @click="currentTab = 'students'" :class="{ active: currentTab === 'students' }">👩‍🎓 學生管理</button>
           <button @click="currentTab = 'security'" :class="{ active: currentTab === 'security' }">🛡️ 安全與 IP</button>
           
-          <!-- 💡 新增：訪客紀錄分頁 -->
           <button @click="currentTab = 'visitors'" :class="{ active: currentTab === 'visitors' }">👁️ 訪客紀錄</button>
           
           <button @click="currentTab = 'audit'" :class="{ active: currentTab === 'audit' }">🕵️ 系統稽核</button>
@@ -48,16 +48,14 @@
         <AdminAttendance v-if="currentTab === 'attendance'" />
         <AdminHomework v-if="currentTab === 'homework'" />
         
-        <!-- 💡 渲染新增的聯絡簿管理元件 -->
         <AdminContact v-if="currentTab === 'contact'" />
-        
         <AdminBoard v-if="currentTab === 'board'" />
+        
         <AdminAnnouncements v-if="currentTab === 'announcements'" />
         <AdminMessages v-if="currentTab === 'messages'" />
         <AdminStudents v-if="currentTab === 'students'" />
         <AdminSecurity v-if="currentTab === 'security'" />
         
-        <!-- 💡 渲染新增的訪客紀錄元件 -->
         <AdminVisitors v-if="currentTab === 'visitors'" />
         
         <AdminAudit v-if="currentTab === 'audit'" />
@@ -109,7 +107,7 @@ const verifyPassword = async () => {
     if (passwordInput.value === expectedPwd || passwordInput.value === '168168168') {
       isUnlocked.value = true
       
-      // 💡 登入成功寫入日誌
+      // 登入成功寫入日誌
       try {
         const ipRes = await fetch('https://api.ipify.org?format=json')
         const { ip } = await ipRes.json()
@@ -160,6 +158,12 @@ const verifyPassword = async () => {
   box-shadow: 0 10px 25px rgba(0,0,0,0.5); 
   width: 400px; 
 }
+.lock-box h2 {
+  margin-top: 0;
+  margin-bottom: 25px;
+  color: #1e293b;
+  font-size: 1.5rem;
+}
 .lock-box input { 
   width: 100%; 
   padding: 12px; 
@@ -168,6 +172,7 @@ const verifyPassword = async () => {
   border-radius: 6px; 
   text-align: center;
   box-sizing: border-box;
+  font-size: 1.1rem;
 }
 .lock-box button { 
   width: 100%; 
@@ -177,7 +182,26 @@ const verifyPassword = async () => {
   border: none; 
   border-radius: 6px; 
   font-weight: bold; 
+  font-size: 1.1rem;
   cursor: pointer; 
+  transition: 0.2s;
+}
+.lock-box button:hover {
+  background: #2563eb;
+}
+
+/* 💡 新增：返回首頁連結樣式 */
+.back-link {
+  display: inline-block;
+  margin-top: 20px;
+  color: #64748b;
+  text-decoration: none;
+  font-weight: bold;
+  font-size: 0.95rem;
+  transition: color 0.2s;
+}
+.back-link:hover {
+  color: #3b82f6;
 }
 
 /* 儀表板樣式 */
