@@ -21,12 +21,19 @@
         <div class="header-buttons">
           <button @click="currentTab = 'attendance'" :class="{ active: currentTab === 'attendance' }">⏰ 遲到管理</button>
           <button @click="currentTab = 'homework'" :class="{ active: currentTab === 'homework' }">📚 作業與科任</button>
+          
+          <!-- 💡 新增：獨立聯絡簿管理分頁 -->
+          <button @click="currentTab = 'contact'" :class="{ active: currentTab === 'contact' }">⭐ 聯絡簿管理</button>
+          
           <button @click="currentTab = 'board'" :class="{ active: currentTab === 'board' }">📢 須知推播</button>
           <button @click="currentTab = 'announcements'" :class="{ active: currentTab === 'announcements' }">📌 公佈欄管理</button>
           <button @click="currentTab = 'messages'" :class="{ active: currentTab === 'messages' }">💬 私訊管理</button>
           <button @click="currentTab = 'students'" :class="{ active: currentTab === 'students' }">👩‍🎓 學生管理</button>
           <button @click="currentTab = 'security'" :class="{ active: currentTab === 'security' }">🛡️ 安全與 IP</button>
+          
+          <!-- 💡 新增：訪客紀錄分頁 -->
           <button @click="currentTab = 'visitors'" :class="{ active: currentTab === 'visitors' }">👁️ 訪客紀錄</button>
+          
           <button @click="currentTab = 'audit'" :class="{ active: currentTab === 'audit' }">🕵️ 系統稽核</button>
           <button @click="currentTab = 'communication'" :class="{ active: currentTab === 'communication' }">📨 通知紀錄</button>
           <button @click="currentTab = 'officers'" :class="{ active: currentTab === 'officers' }">🔐 職位密碼管理</button>
@@ -40,12 +47,19 @@
       <main class="data-table">
         <AdminAttendance v-if="currentTab === 'attendance'" />
         <AdminHomework v-if="currentTab === 'homework'" />
+        
+        <!-- 💡 渲染新增的聯絡簿管理元件 -->
+        <AdminContact v-if="currentTab === 'contact'" />
+        
         <AdminBoard v-if="currentTab === 'board'" />
         <AdminAnnouncements v-if="currentTab === 'announcements'" />
         <AdminMessages v-if="currentTab === 'messages'" />
         <AdminStudents v-if="currentTab === 'students'" />
         <AdminSecurity v-if="currentTab === 'security'" />
+        
+        <!-- 💡 渲染新增的訪客紀錄元件 -->
         <AdminVisitors v-if="currentTab === 'visitors'" />
+        
         <AdminAudit v-if="currentTab === 'audit'" />
         <AdminCommunication v-if="currentTab === 'communication'" />
         <AdminOfficers v-if="currentTab === 'officers'" />
