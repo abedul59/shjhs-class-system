@@ -3,16 +3,13 @@
     <div class="table-header"><h3>📢 家長須知管理中心</h3></div>
 
     <div class="board-editor-container">
-      <!-- 💡 頁籤切換 -->
       <div class="view-tabs">
         <button :class="['tab-btn', { active: activeTab === 'manage' }]" @click="activeTab = 'manage'">📝 發布與管理</button>
         <button :class="['tab-btn', { active: activeTab === 'email' }]" @click="activeTab = 'email'">📧 信件推播設定</button>
         <button :class="['tab-btn', { active: activeTab === 'history' }]" @click="activeTab = 'history'">📅 歷史紀錄查詢</button>
       </div>
 
-      <!-- ================== 頁籤 1：發布與管理 ================== -->
       <div v-show="activeTab === 'manage'">
-        <!-- 新增/編輯須知表單 -->
         <div class="editor-panel">
           <h4 class="section-title">
             {{ editingNoticeId ? '✏️ 編輯須知事項' : '📝 新增須知事項' }} (支援保留網頁格式)
@@ -31,7 +28,6 @@
             ></div>
           </div>
           
-          <!-- 刊登起始與結束日期 -->
           <div class="date-row">
             <div class="date-group">
               <label>起始日期：</label>
@@ -52,7 +48,6 @@
           </div>
         </div>
 
-        <!-- 現有須知列表與匯出匯入 -->
         <div class="notices-list-section" style="margin-top: 30px;">
           <div class="list-header-flex">
             <h4 class="section-title" style="border:none; margin:0; padding:0;">📋 目前已建立的須知清單</h4>
@@ -86,7 +81,6 @@
         </div>
       </div>
 
-      <!-- ================== 頁籤 2：信件推播 ================== -->
       <div v-show="activeTab === 'email'" class="email-editor-section">
         <div class="editor-header">
           <h4>📧 編輯與推播信件</h4>
@@ -118,7 +112,6 @@
         </button>
       </div>
 
-      <!-- ================== 頁籤 3：歷史查詢與編輯 ================== -->
       <div v-show="activeTab === 'history'" class="history-calendar-container">
         <h4 class="section-title">📅 歷史須知紀錄查詢與編輯</h4>
         <div class="query-box">
@@ -137,7 +130,6 @@
               <button v-if="!isEditingHistory" @click="startEditHistory" class="btn-edit">✏️ 編輯歷史</button>
             </div>
             
-            <!-- 唯讀模式 -->
             <div v-if="!isEditingHistory">
               <div v-if="historicalNotices.length === 0" class="empty-state">這一天沒有任何生效的家長須知。</div>
               <div v-else class="history-list">
@@ -148,7 +140,6 @@
               </div>
             </div>
 
-            <!-- 編輯模式 -->
             <div v-else class="history-edit-mode">
               <p class="help-text">修改此處內容將會儲存為該日期的「歷史快照」，不會影響到現正刊登中的發布設定。</p>
               <div class="notice-edit-list">
@@ -189,7 +180,6 @@ const activeTab = ref('manage')
 const isLoading = ref(true)
 const isSaving = ref(false)
 
-// 取得今日字串
 const d = new Date()
 const todayISO = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 const todayDisplay = d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })
@@ -203,13 +193,11 @@ const newNotice = ref({
   endDate: ''
 })
 
-// Email 設定
 const isSendingEmail = ref(false)
 const isSavingNoticeTemplate = ref(false)
 const noticeEmailSubjectTemplate = ref('📢 班級須知推播 ({{今日日期}})')
 const noticeEmailContentTemplate = ref(`各位家長您好，今日班級重要須知推播如下：\n\n{{須知清單}}\n\n班級導師 敬上`)
 
-// 歷史查詢設定
 const historyDate = ref(todayISO)
 const isHistoryLoading = ref(false)
 const historicalNotices = ref([])
@@ -223,7 +211,10 @@ const updateEditHistoryRichText = (event, index) => { editHistoryNotices.value[i
 const fetchData = async () => {
   isLoading.value = true
   const { data: boardData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'parent_notices_data').maybeSingle()
-  if (boardData?.setting_value) { notices.value = boardData.setting_value || [] }
+  if (boardData?.setting_value) { 
+    // 💡 確保讀取時按照 ID (時間戳) 由小到大排序
+    notices.value = (boardData.setting_value || []).sort((a, b) => Number(a.id) - Number(b.id))
+  }
   
   const { data: tmplData } = await supabase.from('email_templates').select('*').eq('template_id', 'notice_board').maybeSingle()
   if (tmplData) { 
@@ -244,7 +235,6 @@ const isActiveToday = (startDate, endDate) => {
   return startOk && endOk
 }
 
-// 純文字轉換引擎 (防垃圾郵件)
 const stripHtmlToPlainText = (html) => {
   if (!html) return ''
   let res = html.replace(/<br\s*\/?>/ig, '\n')
@@ -258,6 +248,7 @@ const stripHtmlToPlainText = (html) => {
   return txt.value.replace(/\n\s*\n/g, '\n\n').trim() 
 }
 
+// 💡 推播信件會自動按照 notices 陣列順序生成
 const activeNoticesPlainText = computed(() => {
   const active = notices.value.filter(n => isActiveToday(n.startDate, n.endDate))
   if (active.length === 0) return '(今日尚無生效的須知事項)'
@@ -267,7 +258,6 @@ const activeNoticesPlainText = computed(() => {
 const noticePreviewSubject = computed(() => noticeEmailSubjectTemplate.value.replace(/{{今日日期}}/g, todayDisplay))
 const noticePreviewContent = computed(() => noticeEmailContentTemplate.value.replace(/{{須知清單}}/g, activeNoticesPlainText.value))
 
-// 發布與編輯操作
 const editNotice = (notice) => {
   editingNoticeId.value = notice.id
   newNotice.value = { ...notice }
@@ -291,13 +281,17 @@ const addNotice = async () => {
     const idx = updatedNotices.findIndex(n => n.id === editingNoticeId.value)
     if (idx !== -1) updatedNotices[idx] = { ...newNotice.value, id: editingNoticeId.value }
   } else {
-    updatedNotices.unshift({
+    // 💡 修正：使用 push 加到最後面，確保越早發布的在越上面
+    updatedNotices.push({
       id: Date.now().toString(),
       content: newNotice.value.content,
       startDate: newNotice.value.startDate,
       endDate: newNotice.value.endDate
     })
   }
+  
+  // 💡 儲存前確保排序正確
+  updatedNotices.sort((a, b) => Number(a.id) - Number(b.id))
   
   try {
     const { error } = await supabase.from('system_settings').upsert({ setting_key: 'parent_notices_data', setting_value: updatedNotices }, { onConflict: 'setting_key' })
@@ -339,19 +333,12 @@ const sendNoticeEmail = async () => {
     }
 
     let emailList = []
-    
-    // 💡 徹底修復：移除 .catch()，改以安全解構取得資料
     const { data: parents, error: pErr } = await supabase.from('parents').select('email')
-    if (!pErr && parents) {
-      emailList.push(...parents.map(p => p.email))
-    }
+    if (!pErr && parents) emailList.push(...parents.map(p => p.email))
     
     const { data: students, error: sErr } = await supabase.from('students').select('*')
-    if (!sErr && students) {
-      emailList.push(...students.map(s => s.parent_email || s.parent_mail || s.email || s.guardian_email))
-    }
+    if (!sErr && students) emailList.push(...students.map(s => s.parent_email || s.parent_mail || s.email || s.guardian_email))
     
-    // 過濾出真實包含 @ 的信箱並去重
     emailList = [...new Set(emailList.filter(e => e && String(e).includes('@')))]
     
     if (emailList.length === 0) { 
@@ -362,23 +349,12 @@ const sendNoticeEmail = async () => {
     await fetch('/api/send-email', { 
       method: 'POST', 
       headers: { 'Content-Type': 'application/json' }, 
-      body: JSON.stringify({ 
-        bcc: emailList, 
-        subject: noticePreviewSubject.value, 
-        content: noticePreviewContent.value 
-      }) 
+      body: JSON.stringify({ bcc: emailList, subject: noticePreviewSubject.value, content: noticePreviewContent.value }) 
     })
     
-    await supabase.from('communication_logs').insert({ 
-      student_id: null, notification_type: '須知推播', sent_by: '導師', recipient_emails: '全班家長群發', 
-      message_content: noticePreviewContent.value 
-    })
+    await supabase.from('communication_logs').insert({ student_id: null, notification_type: '須知推播', sent_by: '導師', recipient_emails: '全班家長群發', message_content: noticePreviewContent.value })
     alert(`✅ 已成功以「純文字防垃圾格式」推播給 ${emailList.length} 個家長信箱！`)
-  } catch(e) {
-    alert("❌ 推播失敗: " + e.message)
-  } finally {
-    isSendingEmail.value = false
-  }
+  } catch(e) { alert("❌ 推播失敗: " + e.message) } finally { isSendingEmail.value = false }
 }
 
 const saveNoticeEmailTemplate = async () => {
@@ -389,7 +365,6 @@ const saveNoticeEmailTemplate = async () => {
   isSavingNoticeTemplate.value = false
 }
 
-// 歷史查詢與編輯邏輯
 const fetchHistory = async () => {
   if (!historyDate.value) return
   isHistoryLoading.value = true
@@ -429,7 +404,6 @@ const saveHistory = async () => {
   } catch (error) { alert('❌ 儲存失敗：' + error.message) } finally { isSavingHistory.value = false }
 }
 
-// JSON 匯出匯入邏輯
 const exportJSON = () => {
   const dataStr = JSON.stringify(notices.value, null, 2)
   const blob = new Blob([dataStr], { type: "application/json" })
@@ -454,16 +428,17 @@ const importJSON = (event) => {
       if (confirm('是否要【完全覆蓋】現有清單？\n(按「確定」將覆蓋，按「取消」則附加在原有清單之後)')) {
         merged = imported
       } else {
-        merged = [...imported, ...notices.value]
+        merged = [...notices.value, ...imported]
       }
+      
+      // 💡 匯入後確保排序
+      merged.sort((a, b) => Number(a.id) - Number(b.id))
 
       await supabase.from('system_settings').upsert({ setting_key: 'parent_notices_data', setting_value: merged }, { onConflict: 'setting_key' })
       notices.value = merged
       alert('✅ 匯入成功！')
       await fetchHistory()
-    } catch(err) {
-      alert('❌ 匯入失敗：' + err.message)
-    }
+    } catch(err) { alert('❌ 匯入失敗：' + err.message) }
     event.target.value = '' 
   }
   reader.readAsText(file)
