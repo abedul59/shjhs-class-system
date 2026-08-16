@@ -1,8 +1,8 @@
 <template>
   <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
     
-    <!-- 1. 大考看板組件 -->
-    <HomeExamDashboard 
+    <!-- 1. 🎓 大考看板組件 (使用精準引入名稱) -->
+    <ExamDashboard 
       v-if="isExamModeView && isIpBrownlisted" 
       :examData="examData" 
       :examStatus="examStatus"
@@ -15,7 +15,7 @@
 
     <div v-if="!isExamModeView" class="normal-home-content">
       
-      <!-- 軟木塞公佈欄 (直接保留，因為相對簡短) -->
+      <!-- 軟木塞公佈欄 -->
       <div v-if="announcements.length > 0 && !isIpBrownlisted" class="corkboard announcement-board">
         <h2 class="board-title cork-title">📌 班級公佈欄</h2>
         <div class="cork-divider"></div>
@@ -28,16 +28,19 @@
             </div>
             <div class="cork-card-content" v-html="formatNL(ann.content)"></div>
             <div v-if="ann.links && ann.links.length > 0" class="cork-card-links">
-               <a v-for="(link, i) in ann.links" :key="i" :href="link.url" target="_blank" class="cork-link">🔗 {{ privacyFilter(link.name) }}</a>
+               <a v-for="(link, i) in ann.links" :key="i" :href="link.url" target="_blank" class="cork-link">
+                 🔗 {{ privacyFilter(link.name) }}
+               </a>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- 家長須知 (直接保留，因為相對簡短) -->
+      <!-- 家長須知 -->
       <div class="blackboard top-board">
         <h2 class="board-title notice-title">📢 家長須知事項</h2>
         <div class="dashed-divider"></div>
+        
         <div class="board-content-wrapper" :class="{ 'is-collapsed': !isNoticeExpanded }">
           <div class="board-content">
             <div v-if="parentNotices.length === 0" class="empty-text-italic">目前無特別須知事項</div>
@@ -50,6 +53,7 @@
           </div>
           <div v-if="!isNoticeExpanded" class="fade-mask"></div>
         </div>
+        
         <div class="expand-action desktop-only" v-if="parentNotices.length > 0">
           <button @click="isNoticeExpanded = !isNoticeExpanded" class="btn-expand">
             {{ isNoticeExpanded ? '▲ 收起內容' : '▼ 展開完整須知' }}
@@ -58,8 +62,8 @@
       </div>
 
       <div class="main-split">
+        <!-- 左半邊 -->
         <div class="left-panel">
-          <!-- 操控中心 (控制項過於分散且與路由耦合高，直接留在首頁最安全) -->
           <div class="control-card">
             <div class="clock-display">🕒 {{ currentTime }}</div>
             
@@ -103,8 +107,8 @@
             </div>
           </div>
 
-          <!-- 2. 出缺席與點名組件 -->
-          <HomeAttendanceGrid 
+          <!-- 2. 出缺席與點名組件 (使用精準引入名稱) -->
+          <AttendanceGrid 
             :allStudents="allStudents"
             :todayAttendances="todayAttendances"
             :expectedCount="expectedCount"
@@ -117,9 +121,10 @@
           />
         </div>
 
+        <!-- 右半邊 -->
         <div class="right-panel">
-          <!-- 3. 今日聯絡簿組件 -->
-          <HomeContactBook 
+          <!-- 3. 今日聯絡簿組件 (使用精準引入名稱) -->
+          <ContactBook 
             :contactBookItems="contactBookItems"
             :editingContactItems="editingContactItems"
             :isEditingContact="isEditingContact"
@@ -135,8 +140,8 @@
         </div>
       </div>
       
-      <!-- 4. 座位表與衛生管理組件 -->
-      <HomeSeatingAndHygiene 
+      <!-- 4. 座位與衛生組件 (使用精準引入名稱) -->
+      <SeatingAndHygiene 
         :seatingChart="seatingChart"
         :showSeatingChartLocal="showSeatingChartLocal"
         :indexButtonSettings="indexButtonSettings"
@@ -159,12 +164,20 @@
         </div>
       </div>
     </div>
+
     <EmergencyModal v-if="showEmergencyModal" @close="showEmergencyModal = false" />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+
+// 💡 100% 確保精準載入您的子組件，避免 Nuxt auto-import 失敗導致畫面消失！
+import ExamDashboard from '~/components/home/ExamDashboard.vue'
+import AttendanceGrid from '~/components/home/AttendanceGrid.vue'
+import ContactBook from '~/components/home/ContactBook.vue'
+import SeatingAndHygiene from '~/components/home/SeatingAndHygiene.vue'
+
 const supabase = useSupabaseClient()
 
 const showEmergencyModal = ref(false)
@@ -506,7 +519,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 
 const addContactItem = () => { editingContactItems.value.push('') }
 const removeContactItem = (idx) => { editingContactItems.value.splice(idx, 1) }
-const updateEditingContactItem = ({ index, value }) => { editingContactItems.value[index] = value }
+const updateEditingContactItem = (index, value) => { editingContactItems.value[index] = value }
 
 const saveContactItems = async () => {
   try {
@@ -585,7 +598,6 @@ const saveContactItems = async () => {
 .btn-rose { background: #be123c; }
 
 .btn-enter-exam { width: 100%; padding: 12px; background: #991b1b; color: white; border: none; border-radius: 6px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(153, 27, 27, 0.3); animation: subtle-pulse 2s infinite;}
-@keyframes subtle-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
 
 .right-panel { flex: 1; min-width: 0; }
 
