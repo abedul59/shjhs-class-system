@@ -1,10 +1,15 @@
 <template>
   <div class="blackboard contact-board">
     <div class="board-header">
-      <div><h2 class="board-title contact-title">⭐ 今日聯絡簿</h2><p class="board-date">{{ todayDisplay }}</p></div>
+      <div>
+        <h2 class="board-title contact-title">⭐ 今日聯絡簿</h2>
+        <p class="board-date">{{ todayDisplay }}</p>
+      </div>
       <button v-if="!isEditingContact" @click="$emit('open-pwd')" class="edit-btn">✏️ 編輯</button>
     </div>
+    
     <div class="dashed-divider"></div>
+    
     <div class="board-content">
       <div v-if="!isEditingContact">
         <div v-if="contactBookItems.length === 0" class="empty-text-italic">目前尚無聯絡簿事項...</div>
@@ -12,17 +17,20 @@
           <li v-for="(item, index) in contactBookItems" :key="'c-'+index">{{ index + 1 }}. {{ privacyFilter(item) }}</li>
         </ul>
       </div>
+      
       <div v-else class="edit-mode">
         <div v-for="(item, index) in editingContactItems" :key="'edit-'+index" class="edit-row">
           <span class="row-num">{{ index + 1 }}.</span>
-          <!-- 💡 使用 v-model 和 emit update，讓父層同步更新陣列 -->
           <input 
-            :value="editingContactItems[index]" 
-            @input="$emit('update-item', { index, value: $event.target.value })"
-            type="text" placeholder="輸入事項..." class="edit-input"
+            :value="item" 
+            @input="$emit('update-item', index, $event.target.value)" 
+            type="text" 
+            placeholder="輸入事項..." 
+            class="edit-input"
           />
           <button @click="$emit('remove-item', index)" class="del-row-btn">🗑️</button>
         </div>
+        
         <div class="edit-actions">
           <button @click="$emit('add-item')" class="add-btn">➕ 新增事項</button>
           <div class="action-right">
@@ -36,7 +44,14 @@
 </template>
 
 <script setup>
-defineProps(['contactBookItems', 'editingContactItems', 'isEditingContact', 'todayDisplay', 'privacyFilter'])
+defineProps({
+  contactBookItems: Array,
+  editingContactItems: Array,
+  isEditingContact: Boolean,
+  todayDisplay: String,
+  privacyFilter: Function
+})
+
 defineEmits(['open-pwd', 'cancel-edit', 'save-items', 'add-item', 'remove-item', 'update-item'])
 </script>
 
