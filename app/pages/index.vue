@@ -1037,19 +1037,41 @@ const saveContactItems = async () => {
   .fade-mask { display: none; }
   .desktop-only { display: none; }
 
-  /* 手機版面優化 */
-  .board-header { align-items: center; }
-  .contact-title { font-size: 1.2rem; }
-  .board-date { font-size: 0.85rem; }
-  .contact-list li { line-height: 1.6; word-break: break-word; margin-bottom: 8px; }
+  /* =======================================
+     💡 今日聯絡簿專屬手機排版優化 
+     ======================================= */
+  .board-header { flex-direction: column; align-items: stretch; gap: 12px; }
+  .board-header > div { text-align: center; }
+  .contact-title { font-size: 1.3rem; }
+  .board-date { font-size: 0.9rem; margin-top: 5px;}
+  .edit-btn { width: 100%; padding: 10px; text-align: center; font-size: 1.05rem;}
   
-  .edit-row { gap: 6px; flex-wrap: wrap; }
-  .row-num { width: auto; min-width: 20px; font-size: 1rem; }
-  .edit-input { width: calc(100% - 50px); padding: 8px; font-size: 0.95rem; flex: none; }
-  .del-row-btn { padding: 8px 10px; }
+  /* 瀏覽模式清單排版 */
+  .contact-list li { 
+    line-height: 1.6; 
+    word-break: break-word; 
+    margin-bottom: 12px; 
+    padding-bottom: 12px; 
+    border-bottom: 1px dashed rgba(255,255,255,0.15); 
+    font-size: 1.05rem;
+  }
+  .contact-list li:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0;}
   
-  .edit-actions { flex-direction: column; align-items: stretch; gap: 15px; }
+  /* 編輯模式排版優化 (解決擠壓破圖問題) */
+  .edit-mode { padding: 12px; background: rgba(0,0,0,0.25); border-radius: 8px;}
+  .edit-row { display: flex; align-items: stretch; gap: 8px; flex-wrap: nowrap; margin-bottom: 12px; }
+  .row-num { width: 25px; flex-shrink: 0; display: flex; align-items: center; font-size: 1.05rem; }
+  
+  /* 確保 input 可以隨著螢幕縮放，但不會換行 */
+  .edit-input { flex: 1; min-width: 0; padding: 10px; font-size: 1rem; border-radius: 6px; }
+  
+  /* 刪除按鈕維持固定大小 */
+  .del-row-btn { flex-shrink: 0; padding: 0 15px; display: flex; align-items: center; justify-content: center; }
+  
+  /* 操作按鈕排版 */
+  .edit-actions { flex-direction: column; align-items: stretch; gap: 12px; margin-top: 15px;}
+  .add-btn { width: 100%; padding: 12px; font-size: 1.05rem; }
   .action-right { display: flex; width: 100%; gap: 10px; }
-  .cancel-btn, .save-btn { flex: 1; text-align: center; justify-content: center;}
+  .cancel-btn, .save-btn { flex: 1; text-align: center; padding: 12px; font-size: 1.05rem;}
 }
 </style>
