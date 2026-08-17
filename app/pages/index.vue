@@ -14,7 +14,7 @@
 
     <div v-if="!isExamModeView" class="normal-home-content">
       
-      <!-- 家長須知 -->
+      <!-- 📢 家長須知 (僅褐名單外顯示) -->
       <div v-if="isNoticeBoardVisibleOnIndex && !isIpBrownlisted" class="blackboard top-board">
         <h2 class="board-title notice-title">📢 家長須知事項</h2>
         <div class="dashed-divider"></div>
@@ -39,8 +39,29 @@
         </div>
       </div>
 
-      <!-- 班級公佈欄 -->
-      <div v-if="isAnnouncementVisibleOnIndex && announcements.length > 0 && !isIpBrownlisted" class="corkboard announcement-board">
+      <!-- 📌 家長公佈欄 (新增：僅限褐名單外顯示) -->
+      <div v-if="isParentAnnouncementVisibleOnIndex && parentAnnouncements.length > 0 && !isIpBrownlisted" class="corkboard announcement-board">
+        <h2 class="board-title cork-title">📌 家長公佈欄</h2>
+        <div class="cork-divider"></div>
+        <div class="cork-cards-container">
+          <div v-for="ann in parentAnnouncements" :key="'p-ann-'+ann.id" class="cork-card">
+            <div class="pin">📍</div>
+            <div class="cork-card-header">
+              <h3 class="cork-card-title">{{ privacyFilter(ann.title) }}</h3>
+              <span class="cork-card-date">{{ formatDateTime(ann.date) }}</span>
+            </div>
+            <div class="cork-card-content" v-html="formatNL(ann.content)"></div>
+            <div v-if="ann.links && ann.links.length > 0" class="cork-card-links">
+               <a v-for="(link, i) in ann.links" :key="i" :href="link.url" target="_blank" class="cork-link">
+                 🔗 {{ privacyFilter(link.name) }}
+               </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 📌 班級公佈欄 (修改：改為僅限褐名單內顯示) -->
+      <div v-if="isAnnouncementVisibleOnIndex && announcements.length > 0 && isIpBrownlisted" class="corkboard announcement-board">
         <h2 class="board-title cork-title">📌 班級公佈欄</h2>
         <div class="cork-divider"></div>
         <div class="cork-cards-container">
@@ -95,7 +116,6 @@
               <button v-if="indexButtonSettings.emergency" @click="openPwdModal('emergency')" class="btn btn-red">🚨 緊急通知</button>
               <NuxtLink v-if="indexButtonSettings.admin" to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
               
-              <!-- 💡 嚴格限制：僅限褐名單才能看見「顯示教室座位表」按鈕 -->
               <button v-if="isIpBrownlisted && seatingChart.isVisible && indexButtonSettings.seats" @click="showSeatingChartLocal = !showSeatingChartLocal" class="btn btn-indigo">
                 {{ showSeatingChartLocal ? '🙈 隱藏教室座位表' : '👀 顯示教室座位表' }}
               </button>
@@ -107,7 +127,6 @@
             </div>
           </div>
 
-          <!-- 💡 嚴格限制：僅限褐名單顯示點名表 -->
           <AttendanceGrid 
             v-if="isIpBrownlisted"
             :allStudents="allStudents"
@@ -200,6 +219,10 @@ const isHistoryVisibleOnIndex = ref(false)
 
 const isAnnouncementVisibleOnIndex = ref(true)
 const isNoticeBoardVisibleOnIndex = ref(true)
+
+// 💡 增加家長公佈欄的變數
+const isParentAnnouncementVisibleOnIndex = ref(true)
+const parentAnnouncements = ref([])
 
 const isIpWhitelisted = ref(false)
 const isIpBrownlisted = ref(false)
@@ -485,8 +508,15 @@ const fetchData = async () => {
   const { data: boardData } = await supabase.from('contact_books').select('contact_items').eq('record_date', todayISO).maybeSingle()
   contactBookItems.value = boardData?.contact_items || []
 
+  // 💡 增加讀取 parent_announcements_data 與其開關
   const { data: sysData } = await supabase.from('system_settings').select('*')
-    .in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings', 'announcements_data', 'class_schedule_data', 'exam_schedule_data', 'parent_notices_data', 'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible'])
+    .in('setting_key', [
+      'board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 
+      'contact_history_visible', 'index_button_settings', 'announcements_data', 
+      'class_schedule_data', 'exam_schedule_data', 'parent_notices_data', 
+      'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible',
+      'parent_announcements_data', 'parent_announcement_board_visible'
+    ])
   
   if (sysData) {
     const pwdSetting = sysData.find(s => s.setting_key === 'board_officer_passwords')
@@ -501,9 +531,17 @@ const fetchData = async () => {
     const annSetting = sysData.find(s => s.setting_key === 'announcements_data')
     if (annSetting && annSetting.setting_value) { announcements.value = (annSetting.setting_value || []).sort((a, b) => new Date(b.date) - new Date(a.date)) }
 
+    const pAnnSetting = sysData.find(s => s.setting_key === 'parent_announcements_data')
+    if (pAnnSetting && pAnnSetting.setting_value) { parentAnnouncements.value = (pAnnSetting.setting_value || []).sort((a, b) => new Date(b.date) - new Date(a.date)) }
+
     const annVisSetting = sysData.find(s => s.setting_key === 'announcement_board_visible')
     if (annVisSetting !== undefined && annVisSetting.setting_value !== null) {
       isAnnouncementVisibleOnIndex.value = annVisSetting.setting_value
+    }
+
+    const pAnnVisSetting = sysData.find(s => s.setting_key === 'parent_announcement_board_visible')
+    if (pAnnVisSetting !== undefined && pAnnVisSetting.setting_value !== null) {
+      isParentAnnouncementVisibleOnIndex.value = pAnnVisSetting.setting_value
     }
 
     const noticeVisSetting = sysData.find(s => s.setting_key === 'parent_notices_board_visible')
