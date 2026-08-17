@@ -39,7 +39,7 @@
         </div>
       </div>
 
-      <!-- 💡 加入 isAnnouncementVisibleOnIndex 判斷 -->
+      <!-- 班級公佈欄 -->
       <div v-if="isAnnouncementVisibleOnIndex && announcements.length > 0 && !isIpBrownlisted" class="corkboard announcement-board">
         <h2 class="board-title cork-title">📌 班級公佈欄</h2>
         <div class="cork-divider"></div>
@@ -95,9 +95,11 @@
               <button v-if="indexButtonSettings.emergency" @click="openPwdModal('emergency')" class="btn btn-red">🚨 緊急通知</button>
               <NuxtLink v-if="indexButtonSettings.admin" to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
               
-              <button v-if="seatingChart.isVisible && indexButtonSettings.seats" @click="showSeatingChartLocal = !showSeatingChartLocal" class="btn btn-indigo">
+              <!-- 💡 嚴格限制：僅限褐名單才能看見「顯示教室座位表」按鈕 -->
+              <button v-if="isIpBrownlisted && seatingChart.isVisible && indexButtonSettings.seats" @click="showSeatingChartLocal = !showSeatingChartLocal" class="btn btn-indigo">
                 {{ showSeatingChartLocal ? '🙈 隱藏教室座位表' : '👀 顯示教室座位表' }}
               </button>
+              
               <button v-if="hygieneData.isVisibleOnIndex && indexButtonSettings.hygiene" @click="showHygieneLocal = !showHygieneLocal" class="btn btn-sky">
                 {{ showHygieneLocal ? '🙈 隱藏衛生工作' : '🧹 顯示衛生工作' }}
               </button>
@@ -105,7 +107,9 @@
             </div>
           </div>
 
+          <!-- 💡 嚴格限制：僅限褐名單顯示點名表 -->
           <AttendanceGrid 
+            v-if="isIpBrownlisted"
             :allStudents="allStudents"
             :todayAttendances="todayAttendances"
             :expectedCount="expectedCount"
