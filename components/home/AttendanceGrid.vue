@@ -9,7 +9,13 @@
     </div>
 
     <div class="student-grid">
-      <div v-for="student in allStudents" :key="student.id" class="student-card" :class="getAttendanceClass(student.id)" @click="$emit('toggle-attendance', student)">
+      <div 
+        v-for="student in allStudents" 
+        :key="student.id" 
+        class="student-card" 
+        :class="getAttendanceClass(student.id)" 
+        @click="$emit('toggle-attendance', student)"
+      >
         <div class="student-seat">{{ student.seat_number }}</div>
         <div class="student-name">{{ privacyFilter(student.real_name) }}</div>
         <div class="student-status">{{ getAttendanceStatus(student.id) }}</div>
@@ -20,24 +26,21 @@
 
 <script setup>
 const props = defineProps({
-  allStudents: Array,
-  todayAttendances: Array,
-  expectedCount: Number,
-  presentCount: Number,
-  leaveCount: Number,
-  lateCount: Number,
-  absentCount: Number,
-  privacyFilter: Function
+  allStudents: { type: Array, required: true },
+  todayAttendances: { type: Array, required: true },
+  expectedCount: { type: Number, required: true },
+  presentCount: { type: Number, required: true },
+  leaveCount: { type: Number, required: true },
+  lateCount: { type: Number, required: true },
+  absentCount: { type: Number, required: true },
+  privacyFilter: { type: Function, required: true }
 })
 
 defineEmits(['toggle-attendance'])
 
-const getAttendanceRecord = (studentId) => {
-  return props.todayAttendances.find(a => a.student_id === studentId)
-}
-
 const getAttendanceStatus = (studentId) => {
-  return getAttendanceRecord(studentId)?.status || '未到'
+  const record = props.todayAttendances.find(a => a.student_id === studentId)
+  return record ? record.status : '未到'
 }
 
 const getAttendanceClass = (studentId) => {
@@ -75,6 +78,10 @@ const getAttendanceClass = (studentId) => {
 .late-card { background: #e0e7ff; color: #3730a3; border: 2px solid transparent; }
 .late-card .student-name { color: #312e81; }
 
-@media (max-width: 1024px) { .student-grid { grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 768px) { .student-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 1024px) {
+  .student-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 768px) {
+  .student-grid { grid-template-columns: repeat(2, 1fr); }
+}
 </style>
