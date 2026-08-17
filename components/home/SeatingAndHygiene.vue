@@ -46,11 +46,29 @@
               <tr><td colspan="2" v-html="formatNL(hygieneData.morning.window)"></td><td v-html="formatNL(hygieneData.morning.window_names)"></td><td v-html="formatNL(hygieneData.morning.window_work)"></td></tr>
               <tr><td colspan="2" v-html="formatNL(hygieneData.morning.hallway)"></td><td v-html="formatNL(hygieneData.morning.hallway_names)"></td><td v-html="formatNL(hygieneData.morning.hallway_work)"></td></tr>
               <tr><td colspan="2" v-html="formatNL(hygieneData.morning.trash)"></td><td v-html="formatNL(hygieneData.morning.trash_names)"></td><td v-html="formatNL(hygieneData.morning.trash_work)"></td></tr>
+              
               <tr class="header-row"><th>外掃區</th><th>打掃區域</th><th>成員名單</th><th>工作內容</th></tr>
-              <tr><td rowspan="4" v-html="formatNL(hygieneData.morning.out_area)"></td><td v-html="formatNL(hygieneData.morning.out_hygiene)"></td><td v-html="formatNL(hygieneData.morning.out_hygiene_names)"></td><td v-html="formatNL(hygieneData.morning.out_hygiene_work)"></td></tr>
-              <tr><td rowspan="3" v-html="formatNL(hygieneData.morning.out_sweep1)"></td><td v-html="formatNL(hygieneData.morning.out_sweep1_names)"></td><td rowspan="3" v-html="formatNL(hygieneData.morning.out_sweep_work)"></td></tr>
-              <tr><td v-html="formatNL(hygieneData.morning.out_sweep2_names)"></td></tr>
-              <tr><td v-html="formatNL(hygieneData.morning.out_sweep3_names)"></td></tr>
+              
+              <!-- 💡 判斷：如果是舊版資料 (尚未設定動態陣列)，維持舊的死板 4 列 -->
+              <template v-if="!hygieneData.morning.out_dynamic_areas || hygieneData.morning.out_dynamic_areas.length === 0">
+                <tr><td rowspan="4" v-html="formatNL(hygieneData.morning.out_area)"></td><td v-html="formatNL(hygieneData.morning.out_hygiene)"></td><td v-html="formatNL(hygieneData.morning.out_hygiene_names)"></td><td v-html="formatNL(hygieneData.morning.out_hygiene_work)"></td></tr>
+                <tr><td rowspan="3" v-html="formatNL(hygieneData.morning.out_sweep1)"></td><td v-html="formatNL(hygieneData.morning.out_sweep1_names)"></td><td rowspan="3" v-html="formatNL(hygieneData.morning.out_sweep_work)"></td></tr>
+                <tr><td v-html="formatNL(hygieneData.morning.out_sweep2_names)"></td></tr>
+                <tr><td v-html="formatNL(hygieneData.morning.out_sweep3_names)"></td></tr>
+              </template>
+              
+              <!-- 💡 判斷：如果是新版資料 (後台已新增動態陣列)，則跑無限迴圈 -->
+              <template v-else>
+                <tr v-for="(item, idx) in hygieneData.morning.out_dynamic_areas" :key="'out-'+idx">
+                  <!-- 第一列需要跨越所有的列來顯示大標題 -->
+                  <td v-if="idx === 0" :rowspan="hygieneData.morning.out_dynamic_areas.length" v-html="formatNL(hygieneData.morning.out_area)"></td>
+                  
+                  <td v-html="formatNL(item.area)"></td>
+                  <td v-html="formatNL(item.names)"></td>
+                  <td v-html="formatNL(item.work)"></td>
+                </tr>
+              </template>
+
             </tbody>
           </table>
           <div class="footer-note" v-html="formatNL(hygieneData.morning.note)"></div>
