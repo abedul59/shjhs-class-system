@@ -14,7 +14,7 @@
 
     <div v-if="!isExamModeView" class="normal-home-content">
       
-      <!-- 💡 加入 isAnnouncementVisibleOnIndex 判斷 -->
+      <!-- 班級公佈欄 -->
       <div v-if="isAnnouncementVisibleOnIndex && announcements.length > 0 && !isIpBrownlisted" class="corkboard announcement-board">
         <h2 class="board-title cork-title">📌 班級公佈欄</h2>
         <div class="cork-divider"></div>
@@ -105,7 +105,9 @@
             </div>
           </div>
 
+          <!-- 💡 座號和遲到點名系統：加入 v-if 僅限褐名單顯示 -->
           <AttendanceGrid 
+            v-if="isIpBrownlisted"
             :allStudents="allStudents"
             :todayAttendances="todayAttendances"
             :expectedCount="expectedCount"
@@ -180,6 +182,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 
+// 💡 確保使用正確的根目錄路徑 `~~/components/home/...`
 import ExamDashboard from '~~/components/home/ExamDashboard.vue'
 import AttendanceGrid from '~~/components/home/AttendanceGrid.vue'
 import ContactBook from '~~/components/home/ContactBook.vue'
@@ -194,8 +197,9 @@ const showHygieneLocal = ref(false)
 const isNoticeExpanded = ref(false)
 const isHistoryVisibleOnIndex = ref(false)
 
-// 💡 控制公佈欄顯示的變數
+// 控制公佈欄與須知顯示的變數
 const isAnnouncementVisibleOnIndex = ref(true)
+const isNoticeBoardVisibleOnIndex = ref(true) 
 
 const isIpWhitelisted = ref(false)
 const isIpBrownlisted = ref(false)
@@ -481,9 +485,21 @@ const fetchData = async () => {
   const { data: boardData } = await supabase.from('contact_books').select('contact_items').eq('record_date', todayISO).maybeSingle()
   contactBookItems.value = boardData?.contact_items || []
 
-  // 💡 增加讀取 announcement_board_visible
   const { data: sysData } = await supabase.from('system_settings').select('*')
-    .in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings', 'announcements_data', 'class_schedule_data', 'exam_schedule_data', 'parent_notices_data', 'class_notes_data', 'announcement_board_visible'])
+    .in('setting_key', [
+      'board_officer_passwords', 
+      'seating_chart_data', 
+      'hygiene_management_data', 
+      'contact_history_visible', 
+      'index_button_settings', 
+      'announcements_data', 
+      'class_schedule_data', 
+      'exam_schedule_data', 
+      'parent_notices_data', 
+      'class_notes_data', 
+      'announcement_board_visible',
+      'parent_notices_board_visible'
+    ])
   
   if (sysData) {
     const pwdSetting = sysData.find(s => s.setting_key === 'board_officer_passwords')
@@ -498,7 +514,6 @@ const fetchData = async () => {
     const annSetting = sysData.find(s => s.setting_key === 'announcements_data')
     if (annSetting && annSetting.setting_value) { announcements.value = (annSetting.setting_value || []).sort((a, b) => new Date(b.date) - new Date(a.date)) }
 
-    // 💡 獲取公佈欄首頁顯示狀態
     const annVisSetting = sysData.find(s => s.setting_key === 'announcement_board_visible')
     if (annVisSetting !== undefined && annVisSetting.setting_value !== null) {
       isAnnouncementVisibleOnIndex.value = annVisSetting.setting_value
@@ -519,6 +534,11 @@ const fetchData = async () => {
         return startOk && endOk
       }).map(n => n.content) 
     } else { parentNotices.value = [] }
+
+    const noticeVisSetting = sysData.find(s => s.setting_key === 'parent_notices_board_visible')
+    if (noticeVisSetting !== undefined && noticeVisSetting.setting_value !== null) {
+      isNoticeBoardVisibleOnIndex.value = noticeVisSetting.setting_value
+    }
 
     const classNotesSetting = sysData.find(s => s.setting_key === 'class_notes_data')
     if (classNotesSetting && classNotesSetting.setting_value) {
