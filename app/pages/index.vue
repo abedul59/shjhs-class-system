@@ -39,7 +39,7 @@
         </div>
       </div>
 
-      <!-- 📌 家長公佈欄 (新增：僅限褐名單外顯示) -->
+      <!-- 📌 家長公佈欄 (僅限褐名單外顯示) -->
       <div v-if="isParentAnnouncementVisibleOnIndex && parentAnnouncements.length > 0 && !isIpBrownlisted" class="corkboard announcement-board">
         <h2 class="board-title cork-title">📌 家長公佈欄</h2>
         <div class="cork-divider"></div>
@@ -60,22 +60,30 @@
         </div>
       </div>
 
-      <!-- 📌 班級公佈欄 (修改：改為僅限褐名單內顯示) -->
+      <!-- 📌 班級公佈欄 (僅限褐名單內顯示，且預設摺疊) -->
       <div v-if="isAnnouncementVisibleOnIndex && announcements.length > 0 && isIpBrownlisted" class="corkboard announcement-board">
-        <h2 class="board-title cork-title">📌 班級公佈欄</h2>
-        <div class="cork-divider"></div>
-        <div class="cork-cards-container">
-          <div v-for="ann in announcements" :key="ann.id" class="cork-card">
-            <div class="pin">📍</div>
-            <div class="cork-card-header">
-              <h3 class="cork-card-title">{{ privacyFilter(ann.title) }}</h3>
-              <span class="cork-card-date">{{ formatDateTime(ann.date) }}</span>
-            </div>
-            <div class="cork-card-content" v-html="formatNL(ann.content)"></div>
-            <div v-if="ann.links && ann.links.length > 0" class="cork-card-links">
-               <a v-for="(link, i) in ann.links" :key="i" :href="link.url" target="_blank" class="cork-link">
-                 🔗 {{ privacyFilter(link.name) }}
-               </a>
+        
+        <!-- 💡 點擊切換顯示/隱藏的標題列 -->
+        <div class="board-header-clickable" @click="isClassAnnExpanded = !isClassAnnExpanded">
+          <h2 class="board-title cork-title">📌 班級公佈欄</h2>
+          <span class="toggle-icon">{{ isClassAnnExpanded ? '▲ 點擊收起' : '▼ 點擊展開全部' }}</span>
+        </div>
+        
+        <div v-show="isClassAnnExpanded">
+          <div class="cork-divider"></div>
+          <div class="cork-cards-container">
+            <div v-for="ann in announcements" :key="ann.id" class="cork-card">
+              <div class="pin">📍</div>
+              <div class="cork-card-header">
+                <h3 class="cork-card-title">{{ privacyFilter(ann.title) }}</h3>
+                <span class="cork-card-date">{{ formatDateTime(ann.date) }}</span>
+              </div>
+              <div class="cork-card-content" v-html="formatNL(ann.content)"></div>
+              <div v-if="ann.links && ann.links.length > 0" class="cork-card-links">
+                 <a v-for="(link, i) in ann.links" :key="i" :href="link.url" target="_blank" class="cork-link">
+                   🔗 {{ privacyFilter(link.name) }}
+                 </a>
+              </div>
             </div>
           </div>
         </div>
@@ -217,18 +225,19 @@ const showHygieneLocal = ref(false)
 const isNoticeExpanded = ref(false)
 const isHistoryVisibleOnIndex = ref(false)
 
+// 💡 預設為 false 隱藏班級公佈欄內容
+const isClassAnnExpanded = ref(false)
+
 const isAnnouncementVisibleOnIndex = ref(true)
 const isNoticeBoardVisibleOnIndex = ref(true)
-
-// 💡 增加家長公佈欄的變數
 const isParentAnnouncementVisibleOnIndex = ref(true)
-const parentAnnouncements = ref([])
 
 const isIpWhitelisted = ref(false)
 const isIpBrownlisted = ref(false)
 const currentIpStr = ref('')
 
 const announcements = ref([])
+const parentAnnouncements = ref([])
 const scheduleData = ref(null)
 
 const isExamModeView = ref(false)
@@ -508,7 +517,6 @@ const fetchData = async () => {
   const { data: boardData } = await supabase.from('contact_books').select('contact_items').eq('record_date', todayISO).maybeSingle()
   contactBookItems.value = boardData?.contact_items || []
 
-  // 💡 增加讀取 parent_announcements_data 與其開關
   const { data: sysData } = await supabase.from('system_settings').select('*')
     .in('setting_key', [
       'board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 
@@ -642,7 +650,13 @@ const saveClassNoteItems = async () => {
 .is-exam-mode { padding: 0; background: var(--ex-bg); overflow: hidden; }
 
 .corkboard { background-color: #d1a36a; background-image: url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.12"/></svg>'); border: 10px solid #754d29; border-radius: 8px; padding: 20px 25px; box-shadow: 0 6px 12px rgba(0,0,0,0.15), inset 0 0 10px rgba(0,0,0,0.3); }
-.cork-title { color: #4a2b18; text-shadow: 1px 1px 0px rgba(255,255,255,0.3); font-size: 1.4rem; }
+
+/* 💡 新增的摺疊點擊標題 CSS */
+.board-header-clickable { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; padding: 5px; border-radius: 8px; transition: 0.2s;}
+.board-header-clickable:hover { background: rgba(255,255,255,0.1); }
+.toggle-icon { font-weight: bold; color: #78350f; font-size: 0.95rem; background: rgba(255,255,255,0.4); padding: 5px 12px; border-radius: 20px; }
+
+.cork-title { color: #4a2b18; text-shadow: 1px 1px 0px rgba(255,255,255,0.3); font-size: 1.4rem; margin: 0; }
 .cork-divider { border-bottom: 2px dashed #92400e; margin: 15px 0; opacity: 0.5; }
 .cork-cards-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
 .cork-card { background: #fef9c3; border-radius: 2px 2px 10px 2px; padding: 15px 20px; box-shadow: 2px 4px 6px rgba(0,0,0,0.15); position: relative; }
