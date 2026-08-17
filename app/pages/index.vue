@@ -14,26 +14,7 @@
 
     <div v-if="!isExamModeView" class="normal-home-content">
       
-      <!-- 班級公佈欄 -->
-      <div v-if="isAnnouncementVisibleOnIndex && announcements.length > 0 && !isIpBrownlisted" class="corkboard announcement-board">
-        <h2 class="board-title cork-title">📌 班級公佈欄</h2>
-        <div class="cork-divider"></div>
-        <div class="cork-cards-container">
-          <div v-for="ann in announcements" :key="ann.id" class="cork-card">
-            <div class="pin">📍</div>
-            <div class="cork-card-header">
-              <h3 class="cork-card-title">{{ privacyFilter(ann.title) }}</h3>
-              <span class="cork-card-date">{{ formatDateTime(ann.date) }}</span>
-            </div>
-            <div class="cork-card-content" v-html="formatNL(ann.content)"></div>
-            <div v-if="ann.links && ann.links.length > 0" class="cork-card-links">
-               <a v-for="(link, i) in ann.links" :key="i" :href="link.url" target="_blank" class="cork-link">
-                 🔗 {{ privacyFilter(link.name) }}
-               </a>
-            </div>
-          </div>
-        </div>
-      </div>
+
 
       <!-- 家長須知 -->
       <div class="blackboard top-board">
@@ -57,6 +38,28 @@
           <button @click="isNoticeExpanded = !isNoticeExpanded" class="btn-expand">
             {{ isNoticeExpanded ? '▲ 收起內容' : '▼ 展開完整須知' }}
           </button>
+        </div>
+      </div>
+
+
+      <!-- 班級公佈欄 -->
+      <div v-if="isAnnouncementVisibleOnIndex && announcements.length > 0 && !isIpBrownlisted" class="corkboard announcement-board">
+        <h2 class="board-title cork-title">📌 班級公佈欄</h2>
+        <div class="cork-divider"></div>
+        <div class="cork-cards-container">
+          <div v-for="ann in announcements" :key="ann.id" class="cork-card">
+            <div class="pin">📍</div>
+            <div class="cork-card-header">
+              <h3 class="cork-card-title">{{ privacyFilter(ann.title) }}</h3>
+              <span class="cork-card-date">{{ formatDateTime(ann.date) }}</span>
+            </div>
+            <div class="cork-card-content" v-html="formatNL(ann.content)"></div>
+            <div v-if="ann.links && ann.links.length > 0" class="cork-card-links">
+               <a v-for="(link, i) in ann.links" :key="i" :href="link.url" target="_blank" class="cork-link">
+                 🔗 {{ privacyFilter(link.name) }}
+               </a>
+            </div>
+          </div>
         </div>
       </div>
 
