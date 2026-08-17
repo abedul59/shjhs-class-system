@@ -2,6 +2,15 @@
   <div class="admin-board-container">
     <div class="table-header"><h3>📢 家長須知管理中心</h3></div>
 
+    <!-- 💡 新增：首頁顯示狀態開關 -->
+    <div class="visibility-control-box">
+      <label class="toggle-label">
+        <input type="checkbox" v-model="isVisibleOnIndex" @change="toggleVisibility" />
+        ✅ 允許在首頁顯示「家長須知事項」區塊 (前台已設定為僅限學校 IP 外可見)
+      </label>
+      <span v-if="isSavingVis" class="saving-text">⏳ 狀態儲存中...</span>
+    </div>
+
     <div class="board-editor-container">
       <div class="view-tabs">
         <button :class="['tab-btn', { active: activeTab === 'manage' }]" @click="activeTab = 'manage'">📝 發布與管理</button>
@@ -180,6 +189,10 @@ const activeTab = ref('manage')
 const isLoading = ref(true)
 const isSaving = ref(false)
 
+// 💡 新增：首頁顯示狀態的變數與儲存邏輯
+const isVisibleOnIndex = ref(true)
+const isSavingVis = ref(false)
+
 const d = new Date()
 const todayISO = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 const todayDisplay = d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })
@@ -212,7 +225,6 @@ const fetchData = async () => {
   isLoading.value = true
   const { data: boardData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'parent_notices_data').maybeSingle()
   if (boardData?.setting_value) { 
-    // 💡 確保讀取時按照 ID (時間戳) 由小到大排序
     notices.value = (boardData.setting_value || []).sort((a, b) => Number(a.id) - Number(b.id))
   }
   
@@ -221,6 +233,13 @@ const fetchData = async () => {
     noticeEmailSubjectTemplate.value = tmplData.subject
     noticeEmailContentTemplate.value = tmplData.content.replace(/<br\s*\/?>/ig, '\n').replace(/<[^>]+>/g, '') 
   }
+
+  // 💡 讀取：首頁顯示開關狀態
+  const { data: visData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'parent_notices_board_visible').maybeSingle()
+  if (visData && visData.setting_value !== null) {
+    isVisibleOnIndex.value = visData.setting_value
+  }
+
   isLoading.value = false
 }
 
@@ -228,6 +247,22 @@ onMounted(async () => {
   await fetchData()
   await fetchHistory()
 })
+
+// 💡 儲存：首頁顯示狀態開關
+const toggleVisibility = async () => {
+  isSavingVis.value = true
+  try {
+    await supabase.from('system_settings').upsert({
+      setting_key: 'parent_notices_board_visible',
+      setting_value: isVisibleOnIndex.value
+    }, { onConflict: 'setting_key' })
+  } catch (err) {
+    alert('狀態更新失敗：' + err.message)
+    isVisibleOnIndex.value = !isVisibleOnIndex.value // 發生錯誤時恢復原狀
+  } finally {
+    isSavingVis.value = false
+  }
+}
 
 const isActiveToday = (startDate, endDate) => {
   const startOk = !startDate || startDate <= todayISO
@@ -248,7 +283,6 @@ const stripHtmlToPlainText = (html) => {
   return txt.value.replace(/\n\s*\n/g, '\n\n').trim() 
 }
 
-// 💡 推播信件會自動按照 notices 陣列順序生成
 const activeNoticesPlainText = computed(() => {
   const active = notices.value.filter(n => isActiveToday(n.startDate, n.endDate))
   if (active.length === 0) return '(今日尚無生效的須知事項)'
@@ -281,7 +315,6 @@ const addNotice = async () => {
     const idx = updatedNotices.findIndex(n => n.id === editingNoticeId.value)
     if (idx !== -1) updatedNotices[idx] = { ...newNotice.value, id: editingNoticeId.value }
   } else {
-    // 💡 修正：使用 push 加到最後面，確保越早發布的在越上面
     updatedNotices.push({
       id: Date.now().toString(),
       content: newNotice.value.content,
@@ -290,7 +323,6 @@ const addNotice = async () => {
     })
   }
   
-  // 💡 儲存前確保排序正確
   updatedNotices.sort((a, b) => Number(a.id) - Number(b.id))
   
   try {
@@ -431,7 +463,6 @@ const importJSON = (event) => {
         merged = [...notices.value, ...imported]
       }
       
-      // 💡 匯入後確保排序
       merged.sort((a, b) => Number(a.id) - Number(b.id))
 
       await supabase.from('system_settings').upsert({ setting_key: 'parent_notices_data', setting_value: merged }, { onConflict: 'setting_key' })
@@ -449,6 +480,12 @@ const importJSON = (event) => {
 .admin-board-container { font-family: sans-serif; padding-bottom: 30px;}
 .table-header { border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; } 
 .table-header h3 { margin: 0; color: #334155; font-size: 1.4rem;}
+
+/* 💡 新增開關樣式 */
+.visibility-control-box { background: white; padding: 15px 25px; border-radius: 8px; border: 1px solid #cbd5e1; margin-bottom: 20px; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);}
+.toggle-label { font-weight: bold; font-size: 1.1rem; color: #1e293b; cursor: pointer; display: flex; align-items: center; gap: 10px;}
+.toggle-label input { transform: scale(1.3); cursor: pointer;}
+.saving-text { color: #f59e0b; font-weight: bold; font-size: 0.95rem; }
 
 .view-tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; flex-wrap: wrap;}
 .tab-btn { background: transparent; border: none; padding: 10px 20px; font-size: 1.1rem; font-weight: bold; color: #64748b; cursor: pointer; border-radius: 8px 8px 0 0; transition: 0.2s;}
@@ -507,7 +544,6 @@ const importJSON = (event) => {
 .del-row-btn { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; font-size: 1rem;}
 .del-row-btn:hover { background: #fecaca; }
 
-/* 信件推播區塊 */
 .email-editor-section { background: white; padding: 25px; border-radius: 8px; border: 1px solid #e2e8f0; }
 .editor-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;}
 .editor-header h4 { margin: 0; font-size: 1.2rem; color: #1e293b; }
@@ -523,7 +559,6 @@ const importJSON = (event) => {
 .preview-body { font-size: 1.05rem; color: #451a03; line-height: 1.6; white-space: pre-wrap; font-family: monospace;}
 .email-btn { background: #f59e0b; color: white; border: none; padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 1.15rem;}
 
-/* 歷史查詢區塊 */
 .history-calendar-container { background: white; padding: 25px; border-radius: 8px; border: 1px solid #e2e8f0; }
 .query-box { margin-bottom: 20px; background: #f1f5f9; padding: 20px; border-radius: 8px; border: 1px dashed #cbd5e1;}
 .query-header { display: flex; align-items: center; gap: 15px; flex-wrap: wrap;}
@@ -539,53 +574,45 @@ const importJSON = (event) => {
 .edit-actions-row { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px dashed #cbd5e1;}
 .save-btn { background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 
-/* =======================================
-   💡 強化的手機排版 (Mobile Optimizations)
-   ======================================= */
 @media (max-width: 768px) {
   .admin-board-container { padding-bottom: 20px; }
   .table-header h3 { font-size: 1.25rem; }
   
-  /* 頁籤全寬且堆疊 */
+  /* 💡 手機版：開關排版 */
+  .visibility-control-box { padding: 15px; flex-direction: column; align-items: flex-start; gap: 10px; }
+
   .view-tabs { flex-direction: column; gap: 8px; border-bottom: none; }
   .tab-btn { width: 100%; border-radius: 8px; padding: 12px; font-size: 1.05rem; border: 1px solid #cbd5e1; background: white; }
   .tab-btn.active { border: 2px solid #3b82f6; background: #eff6ff; }
 
-  /* 縮減外框內距，挪出螢幕空間 */
   .board-editor-container { padding: 10px; border: none; background: transparent; }
   .editor-panel, .notices-list-section, .email-editor-section, .history-calendar-container { 
     padding: 15px; 
   }
 
-  /* 表單與日期輸入框全寬展開 */
   .date-row { flex-direction: column; align-items: stretch; gap: 12px; padding: 12px; }
   .date-group { min-width: 100%; }
   
-  /* 按鈕全寬展開 */
   .form-actions { display: flex; flex-direction: column; width: 100%; margin-top: 10px; gap: 10px;}
   .auto-width-btn { width: 100%; text-align: center; margin-top: 0; padding: 12px;}
   .cancel-btn { padding: 12px; }
 
-  /* 匯出匯入按鈕 */
   .list-header-flex { flex-direction: column; align-items: stretch; gap: 12px; }
   .io-actions { display: flex; width: 100%; gap: 10px; }
   .io-btn { flex: 1; text-align: center; padding: 10px; }
 
-  /* 列表項目排版 */
   .notice-item { flex-direction: column; padding: 15px; gap: 15px; }
   .notice-content { min-width: 100%; }
   .notice-dates { display: block; font-size: 0.9rem; line-height: 1.8; padding: 12px; border-radius: 8px;}
   .item-actions { width: 100%; flex-direction: row; gap: 10px; }
   .item-actions button { flex: 1; padding: 12px; font-size: 1rem; }
 
-  /* 推播設定區 */
   .editor-header { flex-direction: column; align-items: stretch; gap: 12px;}
   .save-template-btn.small-btn { width: 100%; padding: 12px; font-size: 1.05rem; }
   .email-btn { padding: 15px; font-size: 1.1rem; }
   .plain-text-preview { padding: 15px; }
   .preview-subject, .preview-body { font-size: 1rem; }
 
-  /* 歷史查詢區 */
   .query-header { flex-direction: column; align-items: stretch; gap: 10px; }
   .date-picker { width: 100%; }
 
