@@ -81,7 +81,6 @@
                 <th width="200">考試科目</th>
                 <th>開始時間</th>
                 <th>結束時間</th>
-                <!-- 💡 新增：是否為正式考試 -->
                 <th width="120">正式考試<br><span style="font-size:0.8rem;font-weight:normal">(啟用倒數)</span></th>
                 <th width="80">操作</th>
               </tr>
@@ -95,7 +94,6 @@
                 <td><input type="text" v-model="period.subject" class="form-control text-center" placeholder="例：國文" /></td>
                 <td><input type="time" v-model="period.startTime" class="form-control time-ctrl" /></td>
                 <td><input type="time" v-model="period.endTime" class="form-control time-ctrl" /></td>
-                <!-- 💡 新增：勾選框綁定 -->
                 <td>
                   <label class="checkbox-label">
                     <input type="checkbox" v-model="period.isExam" class="big-checkbox" />
@@ -105,6 +103,33 @@
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- 💡 新增：大考提醒事項編輯區 -->
+        <div class="notes-container">
+          <div class="periods-header">
+            <h3>📝 考前提醒事項 (將顯示於看板右下角)</h3>
+            <div class="io-actions">
+              <button @click="saveNotesTemplate" class="btn-outline">💾 暫存為範本</button>
+              <button @click="loadNotesTemplate" class="btn-outline">📥 載入範本</button>
+              <button @click="exportNotes('json')" class="btn-outline">📤 匯出 JSON</button>
+              <button @click="exportNotes('csv')" class="btn-outline">📤 匯出 CSV</button>
+              <label class="btn-outline" style="cursor: pointer;">
+                📥 匯入檔案
+                <input type="file" accept=".json,.csv" style="display:none" @change="importNotes" />
+              </label>
+            </div>
+          </div>
+          
+          <div class="notes-list">
+            <div v-for="(note, idx) in examData.notes" :key="'note-'+idx" class="note-edit-row">
+              <span class="note-idx">{{ idx + 1 }}.</span>
+              <input type="text" v-model="examData.notes[idx]" class="form-control" placeholder="輸入提醒事項... (例：手機請關機並放至教室前後)" />
+              <button @click="removeNote(idx)" class="btn-delete">🗑️</button>
+            </div>
+            <div v-if="examData.notes.length === 0" class="empty-msg" style="text-align: left; padding: 10px 0 !important;">目前無提醒事項。</div>
+            <button @click="addNote" class="btn-add mt-10">➕ 新增提醒事項</button>
+          </div>
         </div>
       </div>
 
@@ -156,7 +181,6 @@
                     <div class="status-label">✏️ 目前進行</div>
                     <div class="status-subject">{{ previewStatus.current.subject }}</div>
                     
-                    <!-- 💡 更新：根據 isExam 決定是否顯示倒數計時 -->
                     <div v-if="previewStatus.current.isExam" class="countdown-wrapper">
                       <div class="countdown-label">距離本節結束還有</div>
                       <div class="exam-countdown" :class="{ 'text-danger': previewCountdownMinutes < 5 }">
@@ -175,6 +199,15 @@
                     </div>
                   </div>
                 </div>
+
+                <!-- 💡 新增：大考提醒事項展示區 -->
+                <div class="exam-notes-display" v-if="examData.notes && examData.notes.length > 0">
+                  <h4 class="notes-title">⚠️ 考前提醒</h4>
+                  <ul class="notes-list-preview">
+                    <li v-for="(note, idx) in examData.notes" :key="'p-note-'+idx">{{ note }}</li>
+                  </ul>
+                </div>
+
               </div>
             </div>
           </div>
@@ -218,7 +251,8 @@ const defaultExamData = {
     { subject: '國文', startTime: '08:20', endTime: '09:05', isExam: true },
     { subject: '溫書', startTime: '09:15', endTime: '10:00', isExam: false },
     { subject: '數學', startTime: '10:10', endTime: '10:55', isExam: true }
-  ]
+  ],
+  notes: [] // 💡 新增筆記預設結構
 }
 
 const examData = ref(JSON.parse(JSON.stringify(defaultExamData)))
@@ -343,6 +377,7 @@ const fetchExamData = async () => {
   const { data } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'exam_schedule_data').maybeSingle()
   if (data?.setting_value) {
     examData.value = { ...defaultExamData, ...data.setting_value }
+    if (!examData.value.notes) examData.value.notes = [] // 保證陣列存在
   } else {
     examData.value = JSON.parse(JSON.stringify(defaultExamData))
   }
@@ -354,6 +389,100 @@ const addPeriod = () => {
 
 const removePeriod = (index) => {
   examData.value.periods.splice(index, 1)
+}
+
+// 💡 提醒事項操作邏輯
+const addNote = () => {
+  if (!examData.value.notes) examData.value.notes = []
+  examData.value.notes.push('')
+}
+
+const removeNote = (index) => {
+  examData.value.notes.splice(index, 1)
+}
+
+const saveNotesTemplate = () => {
+  localStorage.setItem('exam_notes_template', JSON.stringify(examData.value.notes || []))
+  alert('✅ 提醒事項已成功暫存至瀏覽器本機範本！')
+}
+
+const loadNotesTemplate = () => {
+  const tmpl = localStorage.getItem('exam_notes_template')
+  if (tmpl) {
+    examData.value.notes = JSON.parse(tmpl)
+    alert('✅ 本機範本載入成功！')
+  } else {
+    alert('❌ 找不到暫存的範本資料。')
+  }
+}
+
+const exportNotes = (format) => {
+  const notes = examData.value.notes || []
+  let content = ''
+  let mime = ''
+  let filename = ''
+
+  if (format === 'json') {
+    content = JSON.stringify(notes, null, 2)
+    mime = 'application/json'
+    filename = 'exam_notes.json'
+  } else if (format === 'csv') {
+    content = "提醒事項\n" + notes.map(n => `"${String(n).replace(/"/g, '""')}"`).join('\n')
+    mime = 'text/csv;charset=utf-8;'
+    filename = 'exam_notes.csv'
+  }
+
+  const blob = new Blob([format === 'csv' ? '\uFEFF' + content : content], { type: mime })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const importNotes = (e) => {
+  const file = e.target.files[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = (event) => {
+    const text = event.target.result
+    if (file.name.endsWith('.json')) {
+      try {
+        const parsed = JSON.parse(text)
+        if (Array.isArray(parsed)) {
+          examData.value.notes = parsed
+          alert('✅ JSON 範本匯入成功！')
+        } else {
+          alert('❌ JSON 格式不正確 (內容必須為陣列)。')
+        }
+      } catch(err) {
+        alert('❌ JSON 解析失敗。')
+      }
+    } else if (file.name.endsWith('.csv')) {
+      try {
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l)
+        if (lines[0] && lines[0].includes('提醒事項')) lines.shift()
+        
+        const parsed = lines.map(l => {
+          let str = l
+          if (str.startsWith('"') && str.endsWith('"')) {
+            str = str.slice(1, -1).replace(/""/g, '"')
+          }
+          return str
+        }).filter(l => l)
+
+        examData.value.notes = parsed
+        alert('✅ CSV 範本匯入成功！')
+      } catch(err) {
+        alert('❌ CSV 解析失敗。')
+      }
+    } else {
+      alert('❌ 不支援的檔案格式，請匯入 JSON 或 CSV。')
+    }
+    e.target.value = '' 
+  }
+  reader.readAsText(file)
 }
 
 const saveExamData = async () => {
@@ -410,19 +539,28 @@ const saveExamData = async () => {
 .title-input:focus { background: white; border-color: #dc2626; outline: none; }
 
 .periods-container { margin-top: 30px; }
-.periods-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 15px; }
+.periods-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;}
 .periods-header h3 { margin: 0; color: #334155; }
 .btn-add { background: #3b82f6; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
 
 .periods-table { width: 100%; border-collapse: collapse; text-align: center; }
 .periods-table th, .periods-table td { border: 1px solid #e2e8f0; padding: 12px; }
 .periods-table th { background: #f8fafc; color: #475569; }
-.empty-msg { color: #94a3b8; font-style: italic; padding: 20px !important; }
+.empty-msg { color: #94a3b8; font-style: italic; padding: 20px !important; text-align: center;}
 .time-ctrl { font-family: monospace; font-size: 1.05rem; text-align: center; }
 .checkbox-label { display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; cursor: pointer;}
 .big-checkbox { transform: scale(1.8); cursor: pointer; }
 .btn-delete { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; }
 .btn-delete:hover { background: #fecaca; }
+
+/* 💡 提醒事項 CSS */
+.notes-container { margin-top: 30px; border-top: 2px dashed #e2e8f0; padding-top: 20px; }
+.io-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-outline { background: white; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; color: #475569; font-weight: bold; transition: 0.2s; }
+.btn-outline:hover { background: #f8fafc; border-color: #94a3b8; }
+.note-edit-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.note-idx { font-weight: bold; color: #64748b; width: 25px; text-align: right; }
+.mt-10 { margin-top: 10px; }
 
 .preview-section-wrapper { background: #1e293b; padding: 25px; border-radius: 12px; margin-top: 30px; }
 .preview-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;}
@@ -461,7 +599,7 @@ const saveExamData = async () => {
 .font-mono { font-family: monospace; }
 .font-bold { font-weight: bold; letter-spacing: 1px; }
 
-.exam-right-panel { flex: 1; max-width: 700px; background: var(--ex-panel-bg); border-radius: 20px; padding: 40px; text-align: center; border: 1px solid var(--ex-border); box-shadow: 0 10px 30px rgba(0,0,0,0.3); display: flex; flex-direction: column; justify-content: center; align-items: center;}
+.exam-right-panel { flex: 1; max-width: 700px; background: var(--ex-panel-bg); border-radius: 20px; padding: 40px; text-align: center; border: 1px solid var(--ex-border); box-shadow: 0 10px 30px rgba(0,0,0,0.3); display: flex; flex-direction: column; justify-content: flex-start; align-items: center;}
 .clock-label { font-size: 1.5rem; color: var(--ex-text); margin-bottom: 10px; opacity: 0.8;}
 .exam-clock { font-size: 6rem; font-weight: bold; font-family: monospace; color: var(--ex-clock); margin-bottom: 30px; line-height: 1; }
 
@@ -482,4 +620,10 @@ const saveExamData = async () => {
 .status-text.break .status-next { margin-top: 20px; font-size: 2rem; color: var(--ex-text); }
 .status-text.break .highlight { color: var(--ex-success); font-size: 3rem; margin: 15px 0; display: block;}
 .next-time { font-size: 1.5rem; color: var(--ex-text); font-family: monospace; opacity: 0.8;}
+
+/* 💡 預覽區提醒事項 CSS */
+.exam-notes-display { margin-top: 30px; background: rgba(255,255,255,0.05); border: 2px dashed var(--ex-border); border-radius: 12px; padding: 20px; text-align: left; width: 100%;}
+.notes-title { font-size: 1.8rem; margin: 0 0 15px 0; color: var(--ex-danger); border-bottom: 1px dashed var(--ex-border); padding-bottom: 10px;}
+.notes-list-preview { margin: 0; padding-left: 30px; font-size: 1.5rem; line-height: 1.6; color: var(--ex-text); }
+.notes-list-preview li { margin-bottom: 8px; }
 </style>
