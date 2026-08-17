@@ -18,20 +18,20 @@
         <div class="header-buttons">
 
           <button @click="currentTab = 'announcements'" :class="{ active: currentTab === 'announcements' }">📌 班級公佈欄</button>
-          <button @click="currentTab = 'classNotes'" :class="{ active: currentTab === 'classNotes' }">⚡ 今日班級注意事項管理</button>
-          <button @click="currentTab = 'contact'" :class="{ active: currentTab === 'contact' }">⭐ 聯絡簿管理</button>
+          <button @click="currentTab = 'classNotes'" :class="{ active: currentTab === 'classNotes' }">⚡ 今日和歷史班級注意事項管理</button>
+          <button @click="currentTab = 'contact'" :class="{ active: currentTab === 'contact' }">⭐ 今日和歷史聯絡簿管理</button>
           <button @click="currentTab = 'board'" :class="{ active: currentTab === 'board' }">📢 家長須知事項推播</button>          
           <button @click="currentTab = 'parentAnnouncements'" :class="{ active: currentTab === 'parentAnnouncements' }">📌 家長公佈欄</button>
 
-          <button @click="currentTab = 'messages'" :class="{ active: currentTab === 'messages' }">💬 私訊管理</button>
-          <button @click="currentTab = 'attendance'" :class="{ active: currentTab === 'attendance' }">⏰ 遲到管理</button>
+          <button @click="currentTab = 'messages'" :class="{ active: currentTab === 'messages' }">💬 家長和學生私訊管理</button>
+          <button @click="currentTab = 'attendance'" :class="{ active: currentTab === 'attendance' }">⏰ 學生遲到管理</button>
           <button @click="currentTab = 'homework'" :class="{ active: currentTab === 'homework' }">📚 作業繳交推播與科任密碼設定</button>
-          <button @click="currentTab = 'students'" :class="{ active: currentTab === 'students' }">👩‍🎓 學生名單管理</button>
-          <button @click="currentTab = 'security'" :class="{ active: currentTab === 'security' }">🛡️ 安全與 IP</button>
-          <button @click="currentTab = 'visitors'" :class="{ active: currentTab === 'visitors' }">👁️ 訪客紀錄</button>
-          <button @click="currentTab = 'audit'" :class="{ active: currentTab === 'audit' }">🕵️ 系統操作稽核</button>
-          <button @click="currentTab = 'communication'" :class="{ active: currentTab === 'communication' }">📨 家長推播紀錄</button>
-          <button @click="currentTab = 'officers'" :class="{ active: currentTab === 'officers' }">🔐 職位密碼管理</button>
+          <button @click="currentTab = 'students'" :class="{ active: currentTab === 'students' }">👩‍🎓 學生資料名單管理</button>
+          <button @click="currentTab = 'security'" :class="{ active: currentTab === 'security' }">🛡️ 安全與 IP鎖定</button>
+          <button @click="currentTab = 'visitors'" :class="{ active: currentTab === 'visitors' }">👁️ 所有網站訪客紀錄</button>
+          <button @click="currentTab = 'audit'" :class="{ active: currentTab === 'audit' }">🕵️ 系統權限操作稽核</button>
+          <button @click="currentTab = 'communication'" :class="{ active: currentTab === 'communication' }">📨 家長須知推播紀錄</button>
+          <button @click="currentTab = 'officers'" :class="{ active: currentTab === 'officers' }">🔐 幹部職位密碼管理</button>
           
           <button @click="currentTab = 'settings'" :class="{ active: currentTab === 'settings' }">⚙️ 系統密碼設定</button>
           <button @click="currentTab = 'backup'" :class="{ active: currentTab === 'backup' }">📦 系統備份</button>
