@@ -55,6 +55,7 @@
           </tr>
         </thead>
         <tbody>
+          <!-- 若剛按了新增，空白列會有獨特的標示背景色 -->
           <tr v-for="student in adminStudents" :key="student.id" :class="{'new-row-highlight': String(student.id).startsWith('temp_')}">
             <td><input type="number" v-model="student.seat_number" class="edit-input num-input"/></td>
             <td><input type="text" v-model="student.student_number" class="edit-input" placeholder="例: 1150175"/></td>
@@ -117,15 +118,14 @@ const applySort = () => {
   fetchData()
 }
 
-// 💡 修正：先在畫面上產生空白列，讓使用者自行填寫，避免立刻寫入資料庫觸發 not-null 錯誤
+// 產生空白列讓使用者填寫
 const addNewStudent = () => {
   const maxSeat = adminStudents.value.length > 0 
-    ? Math.max(...adminStudents.value.map(s => s.seat_number || 0)) 
+    ? Math.max(...adminStudents.value.map(s => parseInt(s.seat_number) || 0)) 
     : 0
 
-  // unshift 會把空白列加到陣列最前面（畫面最上方），方便立刻填寫
   adminStudents.value.unshift({
-    id: 'temp_' + Date.now(), // 給予一個暫時的 ID
+    id: 'temp_' + Date.now(),
     seat_number: maxSeat + 1,
     student_number: '',
     real_name: '',
@@ -139,50 +139,59 @@ const addNewStudent = () => {
     p3_rel: '', p3_tel: '', p3_mail: ''
   })
 
-  alert('✨ 已在清單最上方新增一筆空白列，請填寫完整後點擊右側的「💾」進行儲存！')
+  alert('✨ 已在清單最上方新增一筆空白列，請填妥學號、座號等資料後點擊「💾」進行儲存！')
 }
 
-// 💡 儲存邏輯：判斷是「新增」還是「更新」
+// 💡 徹底修復版的儲存邏輯
 const saveStudent = async (student, showAlert = true) => {
-  // 如果沒有填寫學號，阻擋儲存
-  if (!student.student_number || student.student_number.trim() === '') {
-    alert('❌ 學號為必填欄位！請填寫學號後再儲存。')
-    throw new Error('Missing student_number')
+  // 1. 基礎防呆：學號與座號絕對不可為空
+  const sNum = String(student.student_number || '').trim()
+  if (!sNum) {
+    if (showAlert) alert('❌ 學號為必填欄位！請填寫學號後再儲存。')
+    throw new Error('缺少學號')
+  }
+  if (!student.seat_number) {
+    if (showAlert) alert('❌ 座號為必填欄位！請填寫座號後再儲存。')
+    throw new Error('缺少座號')
   }
 
   try {
     const isNew = String(student.id).startsWith('temp_')
     
-    // 整理要寫入 students 表格的資料 (給予空字串防呆，避免 null 錯誤)
+    // 2. 嚴謹建構 Payload，絕不遺漏任何 DB required 欄位
     const studentPayload = {
-      seat_number: student.seat_number, 
-      student_number: student.student_number,
-      real_name: student.real_name || '', 
-      hidden_name: student.hidden_name || '', 
-      elementary_school: student.elementary_school || '',
-      elementary_class: student.elementary_class || null,
-      birthday: student.birthday || '',
-      id_last_5: student.id_last_5 || '',
-      school_name: '新化國中', // 預設值
-      enroll_year: 115,        // 預設值
-      class_name: '7'          // 預設值
+      seat_number: parseInt(student.seat_number, 10), 
+      student_number: sNum,
+      student_id: sNum,  // 🚀 關鍵修復：這裡補回了 student_id，不再報錯
+      real_name: String(student.real_name || '').trim(), 
+      hidden_name: String(student.hidden_name || '').trim(), 
+      elementary_school: String(student.elementary_school || '').trim(),
+      elementary_class: student.elementary_class ? parseInt(student.elementary_class, 10) : null,
+      birthday: String(student.birthday || '').trim(),
+      id_last_5: String(student.id_last_5 || '').trim()
+    }
+
+    // 3. 全新學生補足預設的系統必填欄位
+    if (isNew) {
+      studentPayload.school_name = '新化國中'
+      studentPayload.enroll_year = 115
+      studentPayload.class_name = '7'
     }
 
     let currentStudentId = student.id
 
+    // 4. 寫入或更新 Students 表格
     if (isNew) {
-      // 這是全新的學生，執行 Insert
       const { data, error } = await supabase.from('students').insert(studentPayload).select().single()
       if (error) throw error
-      currentStudentId = data.id // 獲取資料庫真正產生的 ID
-      student.id = currentStudentId // 更新畫面上的暫時 ID
+      currentStudentId = data.id 
+      student.id = currentStudentId // 更新畫面 ID
     } else {
-      // 現有的學生，執行 Update
       const { error } = await supabase.from('students').update(studentPayload).eq('id', currentStudentId)
       if (error) throw error
     }
     
-    // 處理家長資料
+    // 5. 處理 Parents 表格綁定
     await supabase.from('parents').delete().eq('student_id', currentStudentId)
     const parentsToInsert = []
     if (student.p1_rel || student.p1_tel || student.p1_mail) parentsToInsert.push({ student_id: currentStudentId, relationship: student.p1_rel, phone: student.p1_tel, email: student.p1_mail })
@@ -194,36 +203,47 @@ const saveStudent = async (student, showAlert = true) => {
       if (pErr) throw pErr
     }
     
-    if (showAlert) {
-      alert(`✅ ${student.real_name || student.student_number} 資料儲存成功！`)
-    }
+    if (showAlert) alert(`✅ ${student.real_name || student.student_number} 資料儲存成功！`)
+      
   } catch(e) { 
-    if (showAlert) alert(`❌ 儲存失敗：${e.message}`) 
+    if (showAlert) alert(`❌ 儲存失敗 (${student.real_name || student.student_number})：${e.message}`) 
     throw e 
   }
 }
 
+// 💡 強化版的全體儲存機制 (收集錯誤，不中斷成功者)
 const saveAllStudents = async () => {
   if (!confirm('⚠️ 確定要儲存畫面上所有的修改嗎？這將會更新全體資料。')) return
   isSavingAll.value = true
+  let errorMessages = []
+  
   try {
     for (const student of adminStudents.value) {
-      // 若是全新空白列但完全沒填學號，就先跳過不儲存
-      if (String(student.id).startsWith('temp_') && (!student.student_number || student.student_number.trim() === '')) {
+      // 略過完全沒填學號的新增空白列
+      if (String(student.id).startsWith('temp_') && (!student.student_number || String(student.student_number).trim() === '')) {
         continue;
       }
-      await saveStudent(student, false)
+      
+      try {
+        await saveStudent(student, false)
+      } catch (err) {
+        errorMessages.push(`[${student.real_name || student.student_number || '未知名稱'}] ${err.message}`)
+      }
     }
-    alert('✅ 全體資料儲存成功！')
+    
+    if (errorMessages.length === 0) {
+      alert('✅ 全體資料儲存成功！')
+    } else {
+      alert(`⚠️ 儲存完畢，但有 ${errorMessages.length} 筆資料異常：\n\n${errorMessages.join('\n')}\n\n請檢查這些學生是否有遺漏必填欄位。`)
+    }
+    
     await fetchData()
-  } catch (err) {
-    alert('❌ 全體儲存過程中發生部分錯誤，請檢查是否有未填妥必填欄位的資料。')
   } finally {
     isSavingAll.value = false
   }
 }
 
-// 💡 刪除邏輯：若是暫時新增的空白列，只需從畫面移除即可
+// 刪除邏輯
 const deleteStudent = async (id, name) => { 
   if (String(id).startsWith('temp_')) {
     adminStudents.value = adminStudents.value.filter(s => s.id !== id)
@@ -276,7 +296,7 @@ const exportStudents = (type) => {
     return
   }
 
-  // 過濾掉還沒存入資料庫的暫存資料
+  // 匯出時略過未儲存的暫存空白列
   const dataToExport = adminStudents.value.filter(s => !String(s.id).startsWith('temp_'))
 
   if (type === 'json') {
@@ -290,7 +310,7 @@ const exportStudents = (type) => {
     URL.revokeObjectURL(url)
   } else if (type === 'csv') {
     if(dataToExport.length === 0) return;
-    const headers = Object.keys(dataToExport[0]).filter(k => k !== 'id') // 可以選擇過濾掉不必要的欄位
+    const headers = Object.keys(dataToExport[0]).filter(k => k !== 'id') 
     
     let csvContent = '\uFEFF' + headers.join(',') + '\n'
     
@@ -422,7 +442,7 @@ const processImport = async () => {
 .student-edit-table th, .student-edit-table td { padding: 8px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
 .student-edit-table th { background-color: #f8fafc; color: #64748b; font-weight: bold; position: sticky; top: 0; z-index: 10; text-align: left; }
 
-/* 新增的空白列會有淺黃色背景提示 */
+/* 💡 新增的空白列會有淺黃色背景提示 */
 .new-row-highlight td { background-color: #fefce8; }
 
 .edit-input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; width: 100%; transition: border-color 0.2s;}
