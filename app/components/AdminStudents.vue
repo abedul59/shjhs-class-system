@@ -116,8 +116,15 @@ const applySort = () => {
   fetchData()
 }
 
+// 💡 修正：動態計算出班上的下一個座號，避免觸發 not-null constraint 錯誤
 const addNewStudent = async () => {
   const tempNum = `T${Math.floor(Math.random() * 10000)}` 
+  
+  // 計算目前最大的座號
+  const maxSeat = adminStudents.value.length > 0 
+    ? Math.max(...adminStudents.value.map(s => s.seat_number || 0)) 
+    : 0
+
   try {
     const { error } = await supabase.from('students').insert({
       student_number: tempNum,
@@ -125,7 +132,8 @@ const addNewStudent = async () => {
       school_name: '新化國中',
       enroll_year: 115,
       class_name: '7',
-      real_name: '新學生'
+      real_name: '新學生',
+      seat_number: maxSeat + 1  // 🚀 加上座號
     })
     
     if (error) throw error
@@ -222,7 +230,6 @@ const deleteAllStudents = async () => {
   }
 }
 
-// 💡 實作：匯出功能 (JSON & CSV)
 const exportStudents = (type) => {
   if (adminStudents.value.length === 0) {
     alert('⚠️ 目前沒有學生資料可供匯出。')
@@ -239,17 +246,13 @@ const exportStudents = (type) => {
     link.click()
     URL.revokeObjectURL(url)
   } else if (type === 'csv') {
-    // 取得所有物件的第一個鍵值陣列作為標題列
     const headers = Object.keys(adminStudents.value[0])
-    
-    // 加入 BOM 標記，解決 Excel 開啟 CSV 時中文變亂碼的問題
     let csvContent = '\uFEFF' + headers.join(',') + '\n'
     
     adminStudents.value.forEach(student => {
       const row = headers.map(header => {
         let val = student[header]
         if (val === null || val === undefined) val = ''
-        // 若內容包含雙引號，則轉義；且將所有內容用雙引號包覆，確保包含逗號或換行字元的字串不會破壞格式
         val = String(val).replace(/"/g, '""')
         return `"${val}"`
       })
