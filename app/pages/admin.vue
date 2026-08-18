@@ -13,11 +13,12 @@
       <header class="admin-header">
         <h2>📊 班級數據中心 (導師專用)</h2>
         <div class="header-buttons">
-          <button @click="currentTab = 'announcements'" :class="{ active: currentTab === 'announcements' }">📌 班級公佈欄</button>
-          <button @click="currentTab = 'classNotes'" :class="{ active: currentTab === 'classNotes' }">⚡ 今日和歷史班級注意事項管理</button>
-          <button @click="currentTab = 'contact'" :class="{ active: currentTab === 'contact' }">⭐ 今日和歷史聯絡簿管理</button>
           <button @click="currentTab = 'board'" :class="{ active: currentTab === 'board' }">📢 家長須知事項推播</button>          
           <button @click="currentTab = 'parentAnnouncements'" :class="{ active: currentTab === 'parentAnnouncements' }">📌 家長公佈欄</button>
+          
+          <button @click="currentTab = 'announcements'" :class="{ active: currentTab === 'announcements' }">📌 班級公佈欄</button>
+          <button @click="currentTab = 'classNotes'" :class="{ active: currentTab === 'classNotes' }">⚡ 今日班級注意事項管理</button>
+          <button @click="currentTab = 'contact'" :class="{ active: currentTab === 'contact' }">⭐ 今日聯絡簿管理</button>
 
           <button @click="currentTab = 'messages'" :class="{ active: currentTab === 'messages' }">💬 家長和學生私訊管理</button>
           <button @click="currentTab = 'attendance'" :class="{ active: currentTab === 'attendance' }">⏰ 學生遲到管理</button>
@@ -44,6 +45,7 @@
         <AdminClassNotes v-if="currentTab === 'classNotes'" />
         <AdminContact v-if="currentTab === 'contact'" />
         <AdminBoard v-if="currentTab === 'board'" />
+        <AdminParentAnnouncements v-if="currentTab === 'parentAnnouncements'" />
         <AdminAnnouncements v-if="currentTab === 'announcements'" />
         <AdminMessages v-if="currentTab === 'messages'" />
         <AdminStudents v-if="currentTab === 'students'" />
