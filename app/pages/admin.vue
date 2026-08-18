@@ -3,20 +3,16 @@
     <div v-if="!isUnlocked" class="lock-screen">
       <div class="lock-box">
         <h2>🔒 導師專屬後台</h2>
-        <input v-model="passwordInput" type="password" placeholder="請輸入密碼..." @keyup.enter="verifyPassword" class="pwd-input" />
-        <button @click="verifyPassword" class="unlock-btn">解鎖進入</button>
+        <input v-model="passwordInput" type="password" placeholder="請輸入密碼..." @keyup.enter="verifyPassword" />
+        <button @click="verifyPassword">解鎖進入</button>
         <NuxtLink to="/" class="back-link">⬅️ 返回首頁</NuxtLink>
       </div>
     </div>
 
     <div v-else class="dashboard">
       <header class="admin-header">
-        <div class="header-top">
-          <h2>📊 班級數據中心 (導師專用)</h2>
-          <NuxtLink to="/" class="back-home-btn">🏠 返回首頁</NuxtLink>
-        </div>
+        <h2>📊 班級數據中心 (導師專用)</h2>
         <div class="header-buttons">
-
           <button @click="currentTab = 'announcements'" :class="{ active: currentTab === 'announcements' }">📌 班級公佈欄</button>
           <button @click="currentTab = 'classNotes'" :class="{ active: currentTab === 'classNotes' }">⚡ 今日和歷史班級注意事項管理</button>
           <button @click="currentTab = 'contact'" :class="{ active: currentTab === 'contact' }">⭐ 今日和歷史聯絡簿管理</button>
@@ -36,17 +32,18 @@
           <button @click="currentTab = 'settings'" :class="{ active: currentTab === 'settings' }">⚙️ 系統密碼設定</button>
           <button @click="currentTab = 'backup'" :class="{ active: currentTab === 'backup' }">📦 系統備份</button>
           <button @click="currentTab = 'indexButtons'" :class="{ active: currentTab === 'indexButtons' }">🎛️ 首頁按鈕控制</button>
+          
+          <button @click="handleLogout" class="logout-btn">🚪 導師登出</button>
+          <NuxtLink to="/" class="back-btn">⬅️ 返回前台</NuxtLink>
         </div>
       </header>
-      
-      <div class="admin-content">
+
+      <main class="data-table">
         <AdminAttendance v-if="currentTab === 'attendance'" />
         <AdminHomework v-if="currentTab === 'homework'" />
         <AdminClassNotes v-if="currentTab === 'classNotes'" />
         <AdminContact v-if="currentTab === 'contact'" />
         <AdminBoard v-if="currentTab === 'board'" />
-        
-        <AdminParentAnnouncements v-if="currentTab === 'parentAnnouncements'" />
         <AdminAnnouncements v-if="currentTab === 'announcements'" />
         <AdminMessages v-if="currentTab === 'messages'" />
         <AdminStudents v-if="currentTab === 'students'" />
@@ -58,7 +55,7 @@
         <AdminIndexButtons v-if="currentTab === 'indexButtons'" />
         <AdminSettings v-if="currentTab === 'settings'" />
         <AdminBackup v-if="currentTab === 'backup'" />
-      </div>
+      </main>
     </div>
   </div>
 </template>
@@ -69,74 +66,86 @@ import { ref, onMounted } from 'vue'
 const supabase = useSupabaseClient()
 const isUnlocked = ref(false)
 const passwordInput = ref('')
-const currentTab = ref('attendance')
+const currentTab = ref('board')
 
+// 💡 頁面載入時檢查是否已經登入過
 onMounted(() => {
-  if (sessionStorage.getItem('admin_logged_in') === 'true') {
+  if (sessionStorage.getItem('main_admin_logged_in') === 'true') {
     isUnlocked.value = true
   }
 })
 
 const verifyPassword = async () => {
-  const { data } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'admin_password').maybeSingle()
-  let expectedPwd = '168168168'
-  if (data?.setting_value) {
-    if (data.setting_value.type === 'dynamic') {
-      const d = new Date()
-      const yy = String(d.getFullYear()).slice(2)
-      const mm = String(d.getMonth() + 1).padStart(2, '0')
-      const dd = String(d.getDate()).padStart(2, '0')
-      expectedPwd = `${yy}${mm}${dd}59`
-    } else {
-      expectedPwd = data.setting_value.custom_pwd
+  try {
+    const { data } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'admin_password').maybeSingle()
+    let expectedPwd = '168168168' 
+    if (data?.setting_value) {
+      const config = data.setting_value
+      if (config.type === 'dynamic') {
+        const d = new Date()
+        const yy = String(d.getFullYear()).slice(2)
+        const mm = String(d.getMonth() + 1).padStart(2, '0')
+        const dd = String(d.getDate()).padStart(2, '0')
+        expectedPwd = `${yy}${mm}${dd}59`
+      } else if (config.type === 'custom' && config.custom_pwd) {
+        expectedPwd = config.custom_pwd
+      }
     }
+    if (passwordInput.value === expectedPwd || passwordInput.value === '168168168') {
+      isUnlocked.value = true
+      sessionStorage.setItem('main_admin_logged_in', 'true') // 💡 記錄登入狀態，讓返回首頁不會被登出
+      try {
+        const ipRes = await fetch('https://api.ipify.org?format=json')
+        const { ip } = await ipRes.json()
+        await supabase.from('visitor_logs').insert([{ ip_address: ip, device_info: navigator.userAgent, role: '導師' }])
+      } catch(e) {}
+    } else { alert('❌ 密碼錯誤！') }
+  } catch (e) {
+    if (passwordInput.value === '168168168') {
+      isUnlocked.value = true
+      sessionStorage.setItem('main_admin_logged_in', 'true') // 💡 記錄登入狀態
+    } else { alert('❌ 密碼錯誤或無法連線至設定檔！') }
   }
+}
 
-  if (passwordInput.value === expectedPwd || passwordInput.value === '168168168') {
-    isUnlocked.value = true
-    sessionStorage.setItem('admin_logged_in', 'true')
-    
-    try {
-      const ipRes = await fetch('https://api.ipify.org?format=json')
-      const { ip } = await ipRes.json()
-      await supabase.from('visitor_logs').insert([{ 
-        ip_address: ip, 
-        device_info: navigator.userAgent, 
-        role: '導師(後台)' 
-      }])
-    } catch(e){}
-    
-  } else {
-    alert('密碼錯誤！')
-  }
+// 💡 確實登出功能
+const handleLogout = () => {
+  isUnlocked.value = false
   passwordInput.value = ''
+  sessionStorage.removeItem('main_admin_logged_in')
+  
+  // 順便清除可能存在的其他子系統的登入狀態，確保徹底登出
+  sessionStorage.removeItem('exams_admin_logged_in')
+  sessionStorage.removeItem('hygiene_admin_logged_in')
+  sessionStorage.removeItem('schedule_admin_logged_in')
+  
+  alert('✅ 已成功登出導師帳號！')
+  navigateTo('/')
 }
 </script>
 
 <style scoped>
-.admin-container { padding: 20px; font-family: sans-serif; background: #f1f5f9; min-height: 100vh;}
-.lock-screen { display: flex; justify-content: center; align-items: center; min-height: 80vh; }
-.lock-box { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; }
+.admin-container { min-height: 100vh; background-color: #f1f5f9; font-family: sans-serif; padding-bottom: 50px; }
+.lock-screen { display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #1e293b; }
+.lock-box { background: white; padding: 40px; border-radius: 12px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 400px; }
+.lock-box h2 { margin-top: 0; margin-bottom: 25px; color: #1e293b; font-size: 1.5rem; }
+.lock-box input { width: 100%; padding: 12px; margin-bottom: 20px; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center; box-sizing: border-box; font-size: 1.1rem; }
+.lock-box button { width: 100%; padding: 12px; background-color: #3b82f6; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 1.1rem; cursor: pointer; transition: 0.2s; }
+.lock-box button:hover { background: #2563eb; }
+.back-link { display: inline-block; margin-top: 20px; color: #64748b; text-decoration: none; font-weight: bold; font-size: 0.95rem; transition: color 0.2s; }
+.back-link:hover { color: #3b82f6; }
 
-/* 💡 恢復密碼欄位與按鈕的大尺寸 */
-.lock-box .pwd-input { display: block; width: 100%; padding: 15px; margin: 20px 0; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; text-align: center; font-size: 1.25rem; letter-spacing: 2px;}
-.lock-box .pwd-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
-.lock-box .unlock-btn { width: 100%; background: #3b82f6; color: white; padding: 15px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.15rem; transition: 0.2s;}
-.lock-box .unlock-btn:hover { background: #2563eb; }
-.back-link { display: block; margin-top: 15px; color: #64748b; text-decoration: none; }
+.dashboard { max-width: 1400px; margin: 0 auto; padding: 20px; }
+.admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; background: white; padding: 15px 25px; border-radius: 12px; flex-wrap: wrap; gap: 15px; }
+.header-buttons button { padding: 8px 15px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; background: #e2e8f0; color: #475569; margin-right: 5px; margin-bottom: 5px; transition: 0.2s; }
+.header-buttons button:hover { background: #cbd5e1; }
+.header-buttons button.active { background: #3b82f6; color: white; }
 
-.dashboard { max-width: 1200px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow: hidden; }
-.admin-header { background: #1e293b; color: white; padding: 20px; }
+/* 💡 登出按鈕專屬樣式 */
+.logout-btn { background: #f97316 !important; color: white !important; }
+.logout-btn:hover { background: #ea580c !important; }
 
-/* 💡 頂部標題與返回按鈕排版 */
-.header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;}
-.header-top h2 { margin: 0; }
-.back-home-btn { background: #475569; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 1rem; transition: 0.2s; border: 1px solid #64748b;}
-.back-home-btn:hover { background: #334155; border-color: #94a3b8;}
-
-.header-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
-.header-buttons button { background: #334155; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; transition: 0.2s; font-size: 0.95rem; }
-.header-buttons button:hover { background: #475569; }
-.header-buttons button.active { background: #3b82f6; font-weight: bold; }
-.admin-content { padding: 20px; background: #f8fafc; }
+.back-btn { text-decoration: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; background: #ef4444; color: white; display: inline-block; transition: 0.2s; }
+.back-btn:hover { background: #dc2626; }
+.data-table { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
 </style>
