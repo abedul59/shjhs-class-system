@@ -55,12 +55,12 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="student in adminStudents" :key="student.id">
+          <tr v-for="student in adminStudents" :key="student.id" :class="{'new-row-highlight': String(student.id).startsWith('temp_')}">
             <td><input type="number" v-model="student.seat_number" class="edit-input num-input"/></td>
             <td><input type="text" v-model="student.student_number" class="edit-input" placeholder="例: 1150175"/></td>
-            <td><input type="text" v-model="student.real_name" class="edit-input"/></td>
-            <td><input type="text" v-model="student.hidden_name" class="edit-input"/></td>
-            <td><input type="text" v-model="student.elementary_school" class="edit-input" placeholder="例: 臺南市大新"/></td>
+            <td><input type="text" v-model="student.real_name" class="edit-input" placeholder="姓名"/></td>
+            <td><input type="text" v-model="student.hidden_name" class="edit-input" placeholder="隱藏名"/></td>
+            <td><input type="text" v-model="student.elementary_school" class="edit-input" placeholder="例: 大新"/></td>
             <td><input type="number" v-model="student.elementary_class" class="edit-input num-input" placeholder="班級"/></td>
             <td><input type="text" v-model="student.birthday" class="edit-input" placeholder="YYYYMMDD"/></td>
             <td><input type="text" v-model="student.id_last_5" class="edit-input num-input" placeholder="後五碼"/></td>
@@ -75,8 +75,8 @@
             <td><input type="tel" v-model="student.p3_tel" class="edit-input small-input" placeholder="電話"/></td>
             <td><input type="email" v-model="student.p3_mail" class="edit-input email-input" placeholder="信箱"/></td>
             <td class="action-cell">
-              <button @click="saveStudent(student)" class="save-row-btn">💾</button>
-              <button @click="deleteStudent(student.id, student.real_name)" class="del-row-btn">🗑️</button>
+              <button @click="saveStudent(student)" class="save-row-btn" title="儲存">💾</button>
+              <button @click="deleteStudent(student.id, student.real_name)" class="del-row-btn" title="刪除">🗑️</button>
             </td>
           </tr>
         </tbody>
@@ -110,66 +110,95 @@ const fetchData = async () => {
     }
   })
 }
+
 onMounted(() => fetchData())
 
 const applySort = () => {
   fetchData()
 }
 
-// 💡 修正：動態計算出班上的下一個座號，避免觸發 not-null constraint 錯誤
-const addNewStudent = async () => {
-  const tempNum = `T${Math.floor(Math.random() * 10000)}` 
-  
-  // 計算目前最大的座號
+// 💡 修正：先在畫面上產生空白列，讓使用者自行填寫，避免立刻寫入資料庫觸發 not-null 錯誤
+const addNewStudent = () => {
   const maxSeat = adminStudents.value.length > 0 
     ? Math.max(...adminStudents.value.map(s => s.seat_number || 0)) 
     : 0
 
-  try {
-    const { error } = await supabase.from('students').insert({
-      student_number: tempNum,
-      student_id: tempNum, 
-      school_name: '新化國中',
-      enroll_year: 115,
-      class_name: '7',
-      real_name: '新學生',
-      seat_number: maxSeat + 1  // 🚀 加上座號
-    })
-    
-    if (error) throw error
-    alert('✅ 已新增一筆空白學生資料，請修改完成後點擊儲存！')
-    await fetchData()
-  } catch (err) {
-    alert(`❌ 新增失敗：${err.message}`)
-  }
+  // unshift 會把空白列加到陣列最前面（畫面最上方），方便立刻填寫
+  adminStudents.value.unshift({
+    id: 'temp_' + Date.now(), // 給予一個暫時的 ID
+    seat_number: maxSeat + 1,
+    student_number: '',
+    real_name: '',
+    hidden_name: '',
+    elementary_school: '',
+    elementary_class: null,
+    birthday: '',
+    id_last_5: '',
+    p1_rel: '', p1_tel: '', p1_mail: '',
+    p2_rel: '', p2_tel: '', p2_mail: '',
+    p3_rel: '', p3_tel: '', p3_mail: ''
+  })
+
+  alert('✨ 已在清單最上方新增一筆空白列，請填寫完整後點擊右側的「💾」進行儲存！')
 }
 
+// 💡 儲存邏輯：判斷是「新增」還是「更新」
 const saveStudent = async (student, showAlert = true) => {
+  // 如果沒有填寫學號，阻擋儲存
+  if (!student.student_number || student.student_number.trim() === '') {
+    alert('❌ 學號為必填欄位！請填寫學號後再儲存。')
+    throw new Error('Missing student_number')
+  }
+
   try {
-    await supabase.from('students').update({ 
+    const isNew = String(student.id).startsWith('temp_')
+    
+    // 整理要寫入 students 表格的資料 (給予空字串防呆，避免 null 錯誤)
+    const studentPayload = {
       seat_number: student.seat_number, 
       student_number: student.student_number,
-      real_name: student.real_name, 
-      hidden_name: student.hidden_name, 
-      elementary_school: student.elementary_school,
-      elementary_class: student.elementary_class,
-      birthday: student.birthday,
-      id_last_5: student.id_last_5 
-    }).eq('id', student.id)
+      real_name: student.real_name || '', 
+      hidden_name: student.hidden_name || '', 
+      elementary_school: student.elementary_school || '',
+      elementary_class: student.elementary_class || null,
+      birthday: student.birthday || '',
+      id_last_5: student.id_last_5 || '',
+      school_name: '新化國中', // 預設值
+      enroll_year: 115,        // 預設值
+      class_name: '7'          // 預設值
+    }
+
+    let currentStudentId = student.id
+
+    if (isNew) {
+      // 這是全新的學生，執行 Insert
+      const { data, error } = await supabase.from('students').insert(studentPayload).select().single()
+      if (error) throw error
+      currentStudentId = data.id // 獲取資料庫真正產生的 ID
+      student.id = currentStudentId // 更新畫面上的暫時 ID
+    } else {
+      // 現有的學生，執行 Update
+      const { error } = await supabase.from('students').update(studentPayload).eq('id', currentStudentId)
+      if (error) throw error
+    }
     
-    await supabase.from('parents').delete().eq('student_id', student.id)
+    // 處理家長資料
+    await supabase.from('parents').delete().eq('student_id', currentStudentId)
     const parentsToInsert = []
-    if (student.p1_rel || student.p1_tel || student.p1_mail) parentsToInsert.push({ student_id: student.id, relationship: student.p1_rel, phone: student.p1_tel, email: student.p1_mail })
-    if (student.p2_rel || student.p2_tel || student.p2_mail) parentsToInsert.push({ student_id: student.id, relationship: student.p2_rel, phone: student.p2_tel, email: student.p2_mail })
-    if (student.p3_rel || student.p3_tel || student.p3_mail) parentsToInsert.push({ student_id: student.id, relationship: student.p3_rel, phone: student.p3_tel, email: student.p3_mail })
-    if (parentsToInsert.length > 0) await supabase.from('parents').insert(parentsToInsert)
+    if (student.p1_rel || student.p1_tel || student.p1_mail) parentsToInsert.push({ student_id: currentStudentId, relationship: student.p1_rel, phone: student.p1_tel, email: student.p1_mail })
+    if (student.p2_rel || student.p2_tel || student.p2_mail) parentsToInsert.push({ student_id: currentStudentId, relationship: student.p2_rel, phone: student.p2_tel, email: student.p2_mail })
+    if (student.p3_rel || student.p3_tel || student.p3_mail) parentsToInsert.push({ student_id: currentStudentId, relationship: student.p3_rel, phone: student.p3_tel, email: student.p3_mail })
+    
+    if (parentsToInsert.length > 0) {
+      const { error: pErr } = await supabase.from('parents').insert(parentsToInsert)
+      if (pErr) throw pErr
+    }
     
     if (showAlert) {
       alert(`✅ ${student.real_name || student.student_number} 資料儲存成功！`)
-      await fetchData()
     }
   } catch(e) { 
-    if (showAlert) alert('❌ 儲存失敗，請檢查資料是否有誤。') 
+    if (showAlert) alert(`❌ 儲存失敗：${e.message}`) 
     throw e 
   }
 }
@@ -179,18 +208,28 @@ const saveAllStudents = async () => {
   isSavingAll.value = true
   try {
     for (const student of adminStudents.value) {
+      // 若是全新空白列但完全沒填學號，就先跳過不儲存
+      if (String(student.id).startsWith('temp_') && (!student.student_number || student.student_number.trim() === '')) {
+        continue;
+      }
       await saveStudent(student, false)
     }
     alert('✅ 全體資料儲存成功！')
     await fetchData()
   } catch (err) {
-    alert('❌ 全體儲存過程中發生部分錯誤，請檢查。')
+    alert('❌ 全體儲存過程中發生部分錯誤，請檢查是否有未填妥必填欄位的資料。')
   } finally {
     isSavingAll.value = false
   }
 }
 
+// 💡 刪除邏輯：若是暫時新增的空白列，只需從畫面移除即可
 const deleteStudent = async (id, name) => { 
+  if (String(id).startsWith('temp_')) {
+    adminStudents.value = adminStudents.value.filter(s => s.id !== id)
+    return
+  }
+
   if (confirm(`⚠️ 確定要刪除學生 ${name || '此學生'} 嗎？這將會一併刪除他的家長綁定與聯絡紀錄！`)) { 
     try {
       await supabase.from('communication_logs').delete().eq('student_id', id); 
@@ -230,14 +269,18 @@ const deleteAllStudents = async () => {
   }
 }
 
+// 匯出 JSON & CSV 功能
 const exportStudents = (type) => {
   if (adminStudents.value.length === 0) {
     alert('⚠️ 目前沒有學生資料可供匯出。')
     return
   }
 
+  // 過濾掉還沒存入資料庫的暫存資料
+  const dataToExport = adminStudents.value.filter(s => !String(s.id).startsWith('temp_'))
+
   if (type === 'json') {
-    const dataStr = JSON.stringify(adminStudents.value, null, 2)
+    const dataStr = JSON.stringify(dataToExport, null, 2)
     const blob = new Blob([dataStr], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -246,10 +289,12 @@ const exportStudents = (type) => {
     link.click()
     URL.revokeObjectURL(url)
   } else if (type === 'csv') {
-    const headers = Object.keys(adminStudents.value[0])
+    if(dataToExport.length === 0) return;
+    const headers = Object.keys(dataToExport[0]).filter(k => k !== 'id') // 可以選擇過濾掉不必要的欄位
+    
     let csvContent = '\uFEFF' + headers.join(',') + '\n'
     
-    adminStudents.value.forEach(student => {
+    dataToExport.forEach(student => {
       const row = headers.map(header => {
         let val = student[header]
         if (val === null || val === undefined) val = ''
@@ -376,11 +421,18 @@ const processImport = async () => {
 .student-edit-table { min-width: 2100px; border-collapse: separate; border-spacing: 0; background: white; font-size: 0.95rem; }
 .student-edit-table th, .student-edit-table td { padding: 8px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
 .student-edit-table th { background-color: #f8fafc; color: #64748b; font-weight: bold; position: sticky; top: 0; z-index: 10; text-align: left; }
-.edit-input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; width: 100%; }
+
+/* 新增的空白列會有淺黃色背景提示 */
+.new-row-highlight td { background-color: #fefce8; }
+
+.edit-input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; width: 100%; transition: border-color 0.2s;}
+.edit-input:focus { border-color: #3b82f6; outline: none; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
 .num-input { width: 100%; min-width: 60px; text-align: center; } 
 .small-input { width: 100%; }
 .email-input { font-family: monospace; font-size: 0.8rem; }
 .action-cell { display: flex; gap: 5px; justify-content: center; }
-.save-row-btn { background: #3b82f6; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
-.del-row-btn { background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+.save-row-btn { background: #3b82f6; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 1rem;}
+.save-row-btn:hover { background: #2563eb; }
+.del-row-btn { background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 1rem;}
+.del-row-btn:hover { background: #dc2626; }
 </style>
