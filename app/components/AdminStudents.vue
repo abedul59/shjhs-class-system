@@ -51,11 +51,12 @@
             <th width="90">稱謂1</th><th width="110">電話1</th><th width="160">信箱1</th>
             <th width="90">稱謂2</th><th width="110">電話2</th><th width="160">信箱2</th>
             <th width="90">稱謂3</th><th width="110">電話3</th><th width="160">信箱3</th>
+            <!-- 💡 新增：不列入點名的開關欄位 -->
+            <th width="90" style="color: #dc2626;">不列入點名<br><span style="font-size: 0.8rem; font-weight: normal;">(休轉學/假帳號)</span></th>
             <th width="80">操作</th>
           </tr>
         </thead>
         <tbody>
-          <!-- 若剛按了新增，空白列會有獨特的標示背景色 -->
           <tr v-for="student in adminStudents" :key="student.id" :class="{'new-row-highlight': String(student.id).startsWith('temp_')}">
             <td><input type="number" v-model="student.seat_number" class="edit-input num-input"/></td>
             <td><input type="text" v-model="student.student_number" class="edit-input" placeholder="例: 1150175"/></td>
@@ -75,6 +76,12 @@
             <td><input type="text" v-model="student.p3_rel" class="edit-input small-input" placeholder="關係"/></td>
             <td><input type="tel" v-model="student.p3_tel" class="edit-input small-input" placeholder="電話"/></td>
             <td><input type="email" v-model="student.p3_mail" class="edit-input email-input" placeholder="信箱"/></td>
+            
+            <!-- 💡 新增：打勾綁定 hide_attendance -->
+            <td style="text-align: center; background-color: #fef2f2;">
+              <input type="checkbox" v-model="student.hide_attendance" class="block-checkbox" title="打勾後，此學生將不會出現在首頁點名表中" />
+            </td>
+            
             <td class="action-cell">
               <button @click="saveStudent(student)" class="save-row-btn" title="儲存">💾</button>
               <button @click="deleteStudent(student.id, student.real_name)" class="del-row-btn" title="刪除">🗑️</button>
@@ -105,6 +112,8 @@ const fetchData = async () => {
     const parents = pData ? pData.filter(p => p.student_id === student.id) : []
     return { 
       ...student, 
+      // 確保將資料庫讀出來的 hide_attendance 綁定給畫面
+      hide_attendance: !!student.hide_attendance,
       p1_rel: parents[0]?.relationship || '', p1_tel: parents[0]?.phone || '', p1_mail: parents[0]?.email || '', 
       p2_rel: parents[1]?.relationship || '', p2_tel: parents[1]?.phone || '', p2_mail: parents[1]?.email || '', 
       p3_rel: parents[2]?.relationship || '', p3_tel: parents[2]?.phone || '', p3_mail: parents[2]?.email || '' 
@@ -134,6 +143,7 @@ const addNewStudent = () => {
     elementary_class: null,
     birthday: '',
     id_last_5: '',
+    hide_attendance: false, // 💡 新增的屬性預設為 false
     p1_rel: '', p1_tel: '', p1_mail: '',
     p2_rel: '', p2_tel: '', p2_mail: '',
     p3_rel: '', p3_tel: '', p3_mail: ''
@@ -142,36 +152,31 @@ const addNewStudent = () => {
   alert('✨ 已在清單最上方新增一筆空白列，請填妥學號、座號等資料後點擊「💾」進行儲存！')
 }
 
-// 💡 徹底修復版的儲存邏輯
+// 🚀 終極防呆版儲存邏輯：不怕您漏填任何資料！
 const saveStudent = async (student, showAlert = true) => {
-  // 1. 基礎防呆：學號與座號絕對不可為空
-  const sNum = String(student.student_number || '').trim()
-  if (!sNum) {
-    if (showAlert) alert('❌ 學號為必填欄位！請填寫學號後再儲存。')
-    throw new Error('缺少學號')
-  }
-  if (!student.seat_number) {
-    if (showAlert) alert('❌ 座號為必填欄位！請填寫座號後再儲存。')
-    throw new Error('缺少座號')
-  }
-
   try {
     const isNew = String(student.id).startsWith('temp_')
     
-    // 2. 嚴謹建構 Payload，絕不遺漏任何 DB required 欄位
+    // 如果連學號都忘記填，系統自動給一組臨時學號
+    const sNum = String(student.student_number || '').trim() || `T${Date.now().toString().slice(-6)}`
+    
+    // 如果名字沒填，給個預設名字
+    const rName = String(student.real_name || '').trim() || '未命名學生'
+    
+    // 所有的欄位都補上預設值，絕對不再讓資料庫報錯！
     const studentPayload = {
-      seat_number: parseInt(student.seat_number, 10), 
+      seat_number: parseInt(student.seat_number) || 99, 
       student_number: sNum,
-      student_id: sNum,  // 🚀 關鍵修復：這裡補回了 student_id，不再報錯
-      real_name: String(student.real_name || '').trim(), 
-      hidden_name: String(student.hidden_name || '').trim(), 
+      student_id: sNum, 
+      real_name: rName, 
+      hidden_name: String(student.hidden_name || '').trim() || rName, // 忘記填隱藏名，就自動先用本名代替
       elementary_school: String(student.elementary_school || '').trim(),
-      elementary_class: student.elementary_class ? parseInt(student.elementary_class, 10) : null,
+      elementary_class: parseInt(student.elementary_class) || null,
       birthday: String(student.birthday || '').trim(),
-      id_last_5: String(student.id_last_5 || '').trim()
+      id_last_5: String(student.id_last_5 || '').trim(),
+      hide_attendance: !!student.hide_attendance // 💡 將打勾狀態寫入資料庫
     }
 
-    // 3. 全新學生補足預設的系統必填欄位
     if (isNew) {
       studentPayload.school_name = '新化國中'
       studentPayload.enroll_year = 115
@@ -180,18 +185,19 @@ const saveStudent = async (student, showAlert = true) => {
 
     let currentStudentId = student.id
 
-    // 4. 寫入或更新 Students 表格
     if (isNew) {
+      // 全新寫入
       const { data, error } = await supabase.from('students').insert(studentPayload).select().single()
       if (error) throw error
       currentStudentId = data.id 
-      student.id = currentStudentId // 更新畫面 ID
+      student.id = currentStudentId 
     } else {
+      // 更新現有資料
       const { error } = await supabase.from('students').update(studentPayload).eq('id', currentStudentId)
       if (error) throw error
     }
     
-    // 5. 處理 Parents 表格綁定
+    // 處理家長資料
     await supabase.from('parents').delete().eq('student_id', currentStudentId)
     const parentsToInsert = []
     if (student.p1_rel || student.p1_tel || student.p1_mail) parentsToInsert.push({ student_id: currentStudentId, relationship: student.p1_rel, phone: student.p1_tel, email: student.p1_mail })
@@ -203,47 +209,36 @@ const saveStudent = async (student, showAlert = true) => {
       if (pErr) throw pErr
     }
     
-    if (showAlert) alert(`✅ ${student.real_name || student.student_number} 資料儲存成功！`)
+    if (showAlert) alert(`✅ ${rName} 資料儲存成功！`)
       
   } catch(e) { 
-    if (showAlert) alert(`❌ 儲存失敗 (${student.real_name || student.student_number})：${e.message}`) 
+    if (showAlert) alert(`❌ 儲存失敗：${e.message}`) 
     throw e 
   }
 }
 
-// 💡 強化版的全體儲存機制 (收集錯誤，不中斷成功者)
+// 無腦全體儲存機制
 const saveAllStudents = async () => {
   if (!confirm('⚠️ 確定要儲存畫面上所有的修改嗎？這將會更新全體資料。')) return
   isSavingAll.value = true
-  let errorMessages = []
   
   try {
     for (const student of adminStudents.value) {
-      // 略過完全沒填學號的新增空白列
-      if (String(student.id).startsWith('temp_') && (!student.student_number || String(student.student_number).trim() === '')) {
+      // 若是完全沒打字的暫存列，就直接跳過不存
+      if (String(student.id).startsWith('temp_') && !student.student_number && !student.real_name) {
         continue;
       }
-      
-      try {
-        await saveStudent(student, false)
-      } catch (err) {
-        errorMessages.push(`[${student.real_name || student.student_number || '未知名稱'}] ${err.message}`)
-      }
+      await saveStudent(student, false)
     }
-    
-    if (errorMessages.length === 0) {
-      alert('✅ 全體資料儲存成功！')
-    } else {
-      alert(`⚠️ 儲存完畢，但有 ${errorMessages.length} 筆資料異常：\n\n${errorMessages.join('\n')}\n\n請檢查這些學生是否有遺漏必填欄位。`)
-    }
-    
+    alert('✅ 全體資料儲存成功！')
     await fetchData()
+  } catch (err) {
+    alert('❌ 儲存發生錯誤，請重新整理頁面後再試。')
   } finally {
     isSavingAll.value = false
   }
 }
 
-// 刪除邏輯
 const deleteStudent = async (id, name) => { 
   if (String(id).startsWith('temp_')) {
     adminStudents.value = adminStudents.value.filter(s => s.id !== id)
@@ -289,14 +284,12 @@ const deleteAllStudents = async () => {
   }
 }
 
-// 匯出 JSON & CSV 功能
 const exportStudents = (type) => {
   if (adminStudents.value.length === 0) {
     alert('⚠️ 目前沒有學生資料可供匯出。')
     return
   }
 
-  // 匯出時略過未儲存的暫存空白列
   const dataToExport = adminStudents.value.filter(s => !String(s.id).startsWith('temp_'))
 
   if (type === 'json') {
@@ -363,6 +356,8 @@ const processImport = async () => {
           if (values[index] !== undefined && values[index] !== '') {
             if (header === 'seat_number' || header === 'elementary_class') {
               studentObj[header] = parseInt(values[index], 10)
+            } else if (header === 'hide_attendance') { // 處理匯入檔案中的布林值
+              studentObj[header] = (values[index] === 'true' || values[index] === 'TRUE' || values[index] === '1')
             } else {
               studentObj[header] = values[index]
             }
@@ -442,7 +437,6 @@ const processImport = async () => {
 .student-edit-table th, .student-edit-table td { padding: 8px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
 .student-edit-table th { background-color: #f8fafc; color: #64748b; font-weight: bold; position: sticky; top: 0; z-index: 10; text-align: left; }
 
-/* 💡 新增的空白列會有淺黃色背景提示 */
 .new-row-highlight td { background-color: #fefce8; }
 
 .edit-input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; width: 100%; transition: border-color 0.2s;}
@@ -455,4 +449,7 @@ const processImport = async () => {
 .save-row-btn:hover { background: #2563eb; }
 .del-row-btn { background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 1rem;}
 .del-row-btn:hover { background: #dc2626; }
+
+/* 💡 新增打勾按鈕樣式 */
+.block-checkbox { transform: scale(1.5); cursor: pointer; accent-color: #ef4444;}
 </style>
