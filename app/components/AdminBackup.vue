@@ -60,6 +60,7 @@ const processMessage = ref('')
 const processStatus = ref('') // 'success' 或 'error'
 
 // 定義系統中所有需要備份的核心資料表
+// 定義系統中所有需要備份的核心資料表
 const coreTables = [
   'students', 
   'parents', 
@@ -69,7 +70,11 @@ const coreTables = [
   'system_settings', 
   'assignments',
   'private_messages',
-  'ip_rules'
+  'ip_rules',
+  // 👇 以下是近期擴充功能所新增的資料表，請補上：
+  'email_templates',
+  'visitor_logs',
+  'communication_logs'
 ]
 
 const showMessage = (msg, status = 'success') => {
