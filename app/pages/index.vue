@@ -63,7 +63,6 @@
       <!-- 📌 班級公佈欄 (僅限褐名單內顯示，且預設摺疊) -->
       <div v-if="isAnnouncementVisibleOnIndex && announcements.length > 0 && isIpBrownlisted" class="corkboard announcement-board">
         
-        <!-- 💡 點擊切換顯示/隱藏的標題列 -->
         <div class="board-header-clickable" @click="isClassAnnExpanded = !isClassAnnExpanded">
           <h2 class="board-title cork-title">📌 班級公佈欄</h2>
           <span class="toggle-icon">{{ isClassAnnExpanded ? '▲ 點擊收起' : '▼ 點擊展開全部' }}</span>
@@ -225,7 +224,6 @@ const showHygieneLocal = ref(false)
 const isNoticeExpanded = ref(false)
 const isHistoryVisibleOnIndex = ref(false)
 
-// 💡 預設為 false 隱藏班級公佈欄內容
 const isClassAnnExpanded = ref(false)
 
 const isAnnouncementVisibleOnIndex = ref(true)
@@ -598,7 +596,11 @@ const fetchData = async () => {
   }
 
   const { data: sData } = await supabase.from('students').select('*').order('seat_number')
-  if (sData) allStudents.value = sData
+  
+  // 💡 核心新增：過濾掉有打勾「不列入點名 (hide_attendance)」的學生
+  if (sData) {
+    allStudents.value = sData.filter(s => !s.hide_attendance)
+  }
 
   const { data: attData } = await supabase.from('attendances').select('*').eq('record_date', todayISO)
   if (attData) todayAttendances.value = attData
@@ -651,7 +653,6 @@ const saveClassNoteItems = async () => {
 
 .corkboard { background-color: #d1a36a; background-image: url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.12"/></svg>'); border: 10px solid #754d29; border-radius: 8px; padding: 20px 25px; box-shadow: 0 6px 12px rgba(0,0,0,0.15), inset 0 0 10px rgba(0,0,0,0.3); }
 
-/* 💡 新增的摺疊點擊標題 CSS */
 .board-header-clickable { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; padding: 5px; border-radius: 8px; transition: 0.2s;}
 .board-header-clickable:hover { background: rgba(255,255,255,0.1); }
 .toggle-icon { font-weight: bold; color: #78350f; font-size: 0.95rem; background: rgba(255,255,255,0.4); padding: 5px 12px; border-radius: 20px; }
