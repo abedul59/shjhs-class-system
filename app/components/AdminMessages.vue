@@ -40,6 +40,7 @@
       <div class="chat-container" id="adminChatContainer">
         <div v-if="filteredMessages.length === 0" class="empty">此頻道目前尚無通訊紀錄</div>
         
+        <!-- 💡 聊天氣泡迴圈 -->
         <div v-for="msg in filteredMessages" :key="msg.id" 
              class="chat-row" :class="{'row-right': msg.sender_role === '導師', 'row-left': msg.sender_role !== '導師'}">
              
@@ -50,6 +51,7 @@
               <span class="time">{{ formatTime(msg.created_at) }}</span>
             </div>
 
+            <!-- ✏️ 編輯模式 -->
             <div v-if="editingMsgId === msg.id" class="edit-box">
               <textarea v-model="editContentTemp" class="edit-textarea" rows="3"></textarea>
               <div class="edit-actions">
@@ -58,10 +60,12 @@
               </div>
             </div>
 
+            <!-- 👁️ 顯示模式 -->
             <div v-else>
               <div class="msg-content">{{ msg.content }}</div>
               
-              <div v-if="msg.sender_role === '導師'" class="teacher-actions">
+              <!-- 💡 移除限制：現在導師可以編輯與刪除「所有」的留言 -->
+              <div class="msg-actions">
                 <button @click="startEdit(msg)" class="action-icon" title="編輯這則訊息">✏️</button>
                 <button @click="deleteMsg(msg.id)" class="action-icon" title="刪除這則訊息">🗑️</button>
               </div>
@@ -109,27 +113,25 @@ const filteredMessages = computed(() => {
   return allMessages.value.filter(m => m.student_id === targetId && m.chat_type === targetType)
 })
 
-// 💡 取得每個頻道的未讀/訊息數量標示，讓導師能注意到新訊息
+// 取得每個頻道的未讀數量標示
 const getMsgBadge = (studentId, type) => {
   const msgs = allMessages.value.filter(m => m.student_id === studentId && m.chat_type === type)
   if (msgs.length === 0) return ''
   
-  // 檢查是否有未讀訊息 (這裡假設最後一則是家長或學生發的，就標示為新訊息，或者直接標示總數)
-  const lastMsg = msgs[msgs.length - 1]
-  if (lastMsg.sender_role !== '導師' && !lastMsg.is_read_by_admin) {
-    return '🔴 (有新訊息)'
+  const unreadMsgs = msgs.filter(m => m.sender_role !== '導師' && m.is_read_by_teacher === false)
+  if (unreadMsgs.length > 0) {
+    return '🔴 (有未讀)'
   }
   return `(共 ${msgs.length} 則)`
 }
 
-// 💡 美化：根據發送者與身份給予不同的背景色
+// 根據發送者給予不同的背景色
 const getBubbleClass = (role, type) => {
-  if (role === '導師') return 'teacher-msg' // 導師：綠色
-  if (type === '家長') return 'parent-msg'   // 家長：黃色
-  return 'student-msg'                        // 學生：水藍色
+  if (role === '導師') return 'teacher-msg' 
+  if (type === '家長') return 'parent-msg'   
+  return 'student-msg'                        
 }
 
-// 💡 時間格式化
 const formatTime = (isoString) => {
   if (!isoString) return ''
   const d = new Date(isoString)
@@ -145,7 +147,8 @@ const sendReply = async () => {
     student_id: targetId, 
     chat_type: targetType, 
     sender_role: '導師', 
-    content: replyContent.value 
+    content: replyContent.value,
+    is_read_by_teacher: true // 自己發送的當然視為已讀
   })
   
   replyContent.value = ''
@@ -182,19 +185,20 @@ const deleteMsg = async (id) => {
   }
 }
 
+// 💡 修正已讀狀態標記：精確更新 is_read_by_teacher 欄位
 const markCurrentThreadAsRead = async () => {
   if (!activeChatThread.value) return
   const [targetId, targetType] = activeChatThread.value.split('_')
   
-  // 將該頻道內尚未已讀的家長/學生訊息標記為已讀 (若資料庫有這個欄位)
   try {
     await supabase.from('private_messages')
-      .update({ is_read_by_admin: true })
+      .update({ is_read_by_teacher: true }) // 將正確的欄位標記為 true
       .eq('student_id', targetId)
       .eq('chat_type', targetType)
       .neq('sender_role', '導師')
-      .eq('is_read_by_admin', false)
-  } catch(e) {} // 忽略如果欄位不存在的錯誤
+  } catch(e) {
+    console.error('標記已讀狀態失敗:', e)
+  }
   
   await fetchData()
   scrollToBottom()
@@ -208,7 +212,7 @@ const scrollToBottom = () => {
 }
 
 // ==========================================
-// 💡 JSON & CSV 匯出/匯入功能 (完整還原)
+// 💡 JSON & CSV 匯出/匯入功能
 // ==========================================
 const exportData = (format) => {
   if (allMessages.value.length === 0) return alert('目前沒有任何訊息可以匯出！')
@@ -224,7 +228,7 @@ const exportData = (format) => {
   } else if (format === 'csv') {
     const headers = ['id', 'student_id', 'chat_type', 'sender_role', 'content', 'created_at']
     const rows = allMessages.value.map(m => headers.map(h => `"${String(m[h] || '').replace(/"/g, '""')}"`).join(','))
-    content = "\uFEFF" + headers.join(',') + '\n' + rows.join('\n') // 加入 BOM 防止 Excel 中文亂碼
+    content = "\uFEFF" + headers.join(',') + '\n' + rows.join('\n') 
     mime = 'text/csv;charset=utf-8;'
     filename = 'private_messages_backup.csv'
   }
@@ -272,7 +276,6 @@ const importData = (e) => {
       }
       
       if (importedData.length > 0 && confirm(`準備匯入 ${importedData.length} 筆訊息，建議先匯出備份，確定繼續嗎？`)) {
-        // 因為訊息較多，使用 upsert 避免 ID 衝突
         await supabase.from('private_messages').upsert(importedData)
         await fetchData()
         alert('✅ 匯入成功！')
@@ -280,7 +283,7 @@ const importData = (e) => {
     } catch(err) {
       alert('❌ 匯入失敗：檔案格式不正確或資料庫拒絕。' + err.message)
     }
-    e.target.value = '' // 清除選擇
+    e.target.value = '' 
   }
   reader.readAsText(file)
 }
@@ -305,41 +308,35 @@ const importData = (e) => {
 
 .chat-window { margin-top: 20px; border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; background: #f1f5f9; }
 
-/* 💡 美化後的對話視窗 */
 .chat-container { height: 500px; overflow-y: auto; padding: 25px; display: flex; flex-direction: column; gap: 20px; background-color: #f1f5f9; }
 .empty { text-align: center; color: #94a3b8; padding: 30px !important; font-style: italic;}
 
-/* 每一行的佈局 (靠左或靠右) */
 .chat-row { display: flex; width: 100%; }
 .row-left { justify-content: flex-start; }
 .row-right { justify-content: flex-end; }
 
-/* 💡 對話氣泡樣式 */
 .chat-bubble { max-width: 65%; padding: 15px; border-radius: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); position: relative; }
 .msg-info { font-size: 0.85rem; margin-bottom: 8px; color: #64748b; display: flex; justify-content: space-between; gap: 20px; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 5px; }
 .sender { font-weight: bold; }
 .time { opacity: 0.8; }
 .msg-content { font-size: 1.1rem; color: #1e293b; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
 
-/* 💡 各角色的專屬背景色 */
 .teacher-msg { background: #dcfce7; border-bottom-right-radius: 4px; border: 1px solid #bbf7d0; } /* 綠色 */
 .parent-msg { background: #fef3c7; border-bottom-left-radius: 4px; border: 1px solid #fde68a; } /* 黃色 */
 .student-msg { background: #e0e7ff; border-bottom-left-radius: 4px; border: 1px solid #c7d2fe; } /* 水藍色 */
 
-/* 老師專屬的編輯/刪除按鈕區塊 */
-.teacher-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px; opacity: 0.6; transition: opacity 0.2s; }
-.chat-bubble:hover .teacher-actions { opacity: 1; }
+/* 💡 所有氣泡都可以有編輯與刪除的操作按鈕 */
+.msg-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px; opacity: 0.6; transition: opacity 0.2s; }
+.chat-bubble:hover .msg-actions { opacity: 1; }
 .action-icon { background: rgba(255,255,255,0.5); border: none; cursor: pointer; border-radius: 4px; padding: 4px 6px; font-size: 0.9rem; transition: background 0.2s;}
 .action-icon:hover { background: rgba(255,255,255,1); }
 
-/* 編輯輸入框樣式 */
 .edit-box { margin-top: 5px; }
 .edit-textarea { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px dashed #10b981; font-family: inherit; font-size: 1.05rem; resize: vertical; margin-bottom: 8px;}
 .edit-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .cancel-btn { background: white; color: #64748b; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem;}
 .save-btn { background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: bold;}
 
-/* 底部發送區 */
 .reply-box { display: flex; padding: 15px; background: white; border-top: 1px solid #cbd5e1; gap: 15px; align-items: stretch; }
 .reply-box input { flex: 1; padding: 15px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1.1rem; transition: 0.2s;}
 .reply-box input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
