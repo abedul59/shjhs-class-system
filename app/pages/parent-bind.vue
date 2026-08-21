@@ -3,7 +3,7 @@
     <div class="bind-card">
       <div class="card-header">
         <h2>👨‍👩‍👧 家長系統通知綁定</h2>
-        <p>請選擇您的孩子並完成身分驗證，以便接收通知。</p>
+        <p>請選擇您的孩子並完成身分驗證，以便接收通知。<br>（若email已提供給導師，則導師會為您完成綁定。）</p>
       </div>
 
       <form @submit.prevent="submitBinding" class="bind-form">
