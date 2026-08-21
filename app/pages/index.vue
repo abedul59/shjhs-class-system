@@ -2,7 +2,7 @@
   <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
     
     <ExamDashboard 
-      v-if="isExamModeView" 
+      v-if="isExamModeView && isIpBrownlisted" 
       :examData="examData" 
       :examStatus="examStatus"
       :currentTime="currentTime"
@@ -14,8 +14,8 @@
 
     <div v-if="!isExamModeView" class="normal-home-content">
       
-      <!-- 📢 家長須知 -->
-      <div v-if="isNoticeBoardVisibleOnIndex" class="blackboard top-board">
+      <!-- 📢 家長須知 (僅褐名單外顯示) -->
+      <div v-if="isNoticeBoardVisibleOnIndex && !isIpBrownlisted" class="blackboard top-board">
         <h2 class="board-title notice-title">📢 家長須知事項</h2>
         <div class="dashed-divider"></div>
         
@@ -39,8 +39,8 @@
         </div>
       </div>
 
-      <!-- 📌 家長公佈欄 -->
-      <div v-if="isParentAnnouncementVisibleOnIndex && parentAnnouncements.length > 0" class="corkboard announcement-board">
+      <!-- 📌 家長公佈欄 (僅限褐名單外顯示) -->
+      <div v-if="isParentAnnouncementVisibleOnIndex && parentAnnouncements.length > 0 && !isIpBrownlisted" class="corkboard announcement-board">
         <h2 class="board-title cork-title">📌 家長公佈欄</h2>
         <div class="cork-divider"></div>
         <div class="cork-cards-container">
@@ -60,8 +60,9 @@
         </div>
       </div>
 
-      <!-- 📌 班級公佈欄 -->
-      <div v-if="isAnnouncementVisibleOnIndex && announcements.length > 0" class="corkboard announcement-board">
+      <!-- 📌 班級公佈欄 (僅限褐名單內顯示，且預設摺疊) -->
+      <div v-if="isAnnouncementVisibleOnIndex && announcements.length > 0 && isIpBrownlisted" class="corkboard announcement-board">
+        
         <div class="board-header-clickable" @click="isClassAnnExpanded = !isClassAnnExpanded">
           <h2 class="board-title cork-title">📌 班級公佈欄</h2>
           <span class="toggle-icon">{{ isClassAnnExpanded ? '▲ 點擊收起' : '▼ 點擊展開全部' }}</span>
@@ -92,7 +93,7 @@
           <div class="control-card">
             <div class="clock-display">🕒 {{ currentTime }}</div>
             
-            <!-- 💡 移除了 isIpBrownlisted 限制，只要有未讀就會顯示 -->
+            <!-- 💡 新增：未讀私訊通知 (僅褐名單導師可見，點擊直接前往後台) -->
             <NuxtLink v-if="unreadMsgCount > 0" to="/admin" class="unread-alert">
               <span class="bell-shake">🔔</span> 系統提示：您有 {{ unreadMsgCount }} 則未讀私訊！
             </NuxtLink>
@@ -110,8 +111,7 @@
               </div>
             </div>
 
-            <!-- 💡 移除了 isIpBrownlisted 限制 -->
-            <button v-if="examData.isExamModeEnabled && examData.periods && examData.periods.length > 0" @click="isExamModeView = true" class="btn-enter-exam">
+            <button v-if="isIpBrownlisted && examData.isExamModeEnabled && examData.periods && examData.periods.length > 0" @click="isExamModeView = true" class="btn-enter-exam">
               🎓 切換至大考看板模式
             </button>
 
@@ -128,8 +128,7 @@
               <button v-if="indexButtonSettings.emergency" @click="openPwdModal('emergency')" class="btn btn-red">🚨 緊急通知</button>
               <NuxtLink v-if="indexButtonSettings.admin" to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
               
-              <!-- 💡 移除了 isIpBrownlisted 限制 -->
-              <button v-if="seatingChart.isVisible && indexButtonSettings.seats" @click="showSeatingChartLocal = !showSeatingChartLocal" class="btn btn-indigo">
+              <button v-if="isIpBrownlisted && seatingChart.isVisible && indexButtonSettings.seats" @click="showSeatingChartLocal = !showSeatingChartLocal" class="btn btn-indigo">
                 {{ showSeatingChartLocal ? '🙈 隱藏教室座位表' : '👀 顯示教室座位表' }}
               </button>
               
@@ -140,8 +139,8 @@
             </div>
           </div>
 
-          <!-- 💡 移除了 isIpBrownlisted 限制 -->
           <AttendanceGrid 
+            v-if="isIpBrownlisted"
             :allStudents="allStudents"
             :todayAttendances="todayAttendances"
             :expectedCount="expectedCount"
@@ -196,6 +195,7 @@
       />
     </div> 
 
+    <!-- 密碼彈窗 -->
     <div v-if="showPwdModal" class="modal-overlay" @click.self="closePwdModal">
       <div class="pwd-modal-content">
         <h3>{{ pwdModalTitle }}</h3>
@@ -236,8 +236,10 @@ const isNoticeBoardVisibleOnIndex = ref(true)
 const isParentAnnouncementVisibleOnIndex = ref(true)
 
 const isIpWhitelisted = ref(false)
+const isIpBrownlisted = ref(false)
 const currentIpStr = ref('')
 
+// 💡 儲存未讀私訊的數量
 const unreadMsgCount = ref(0)
 
 const announcements = ref([])
@@ -266,7 +268,7 @@ const examThemes = {
 const defaultHygieneData = {
   isVisibleOnIndex: false,
   morning: {
-    title: '704 班 教室和外掃區 早上掃地工作分配表', note: '', in_hygiene: '內衛生', in_hygiene_names: '季昀苓', in_hygiene_work: '',
+    title: '704 班 教室和外掃區 早上掃地工作分配表 2021/10/18 開始', note: '', in_hygiene: '內衛生', in_hygiene_names: '季昀苓', in_hygiene_work: '',
     board: '講台掃拖、講桌', board_names: '葉柏妍、許壹淳', board_work: '整理黑板', sweep: '教室地板掃地', sweep_names: '呂有陞\n田孟任\n林珈媗', sweep_mop_work: '',
     mop: '教室地板拖地', mop_names: '張歆悅\n葉佳妤', window: '擦窗戶', window_names: '楊佩綺、王翊潔', window_work: '', hallway: '教室走廊', hallway_names: '林科甫、徐亦佐', hallway_work: '',
     trash: '倒垃圾', trash_names: '王聰文\n王麟賢', trash_work: '', out_area: '北側人行道', out_hygiene: '外衛生', out_hygiene_names: '', out_hygiene_work: '', out_sweep1: '', out_sweep1_names: '', out_sweep_work: '', out_sweep2_names: '', out_sweep3_names: ''
@@ -295,6 +297,7 @@ const checkIpRules = async () => {
     const { data: rules } = await supabase.from('ip_rules').select('ip_range, rule_type')
     if (rules && rules.length > 0) {
       isIpWhitelisted.value = rules.filter(r => r.rule_type === '白名單').some(r => ip.startsWith(r.ip_range))
+      isIpBrownlisted.value = rules.filter(r => r.rule_type === '褐名單').some(r => ip.startsWith(r.ip_range))
     }
   } catch (e) { console.error('IP check failed', e) }
 }
@@ -609,16 +612,18 @@ const fetchData = async () => {
   const { data: attData } = await supabase.from('attendances').select('*').eq('record_date', todayISO)
   if (attData) todayAttendances.value = attData
 
-  // 💡 核心修正：取消褐名單限制，無條件直接查詢尚未已讀的私訊數量！
-  try {
-    const { count } = await supabase.from('private_messages')
-      .select('*', { count: 'exact', head: true })
-      .neq('sender_role', '導師')
-      .eq('is_read_by_admin', false)
-      
-    unreadMsgCount.value = count || 0
-  } catch (e) {
-    console.error('無法取得未讀私訊數量', e)
+  // 💡 核心新增：如果目前是導師所在的褐名單 IP，則查詢尚未已讀的私訊數量
+  if (isIpBrownlisted.value) {
+    try {
+      const { count } = await supabase.from('private_messages')
+        .select('*', { count: 'exact', head: true })
+        .neq('sender_role', '導師')
+        .eq('is_read_by_admin', false)
+        
+      unreadMsgCount.value = count || 0
+    } catch (e) {
+      console.error('無法取得未讀私訊數量', e)
+    }
   }
 }
 
@@ -713,6 +718,7 @@ const saveClassNoteItems = async () => {
 .control-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; text-align: center; }
 .clock-display { font-size: 2.2rem; font-weight: bold; color: #1e293b; margin-bottom: 10px; }
 
+/* 💡 新增未讀私訊提示與動畫樣式 */
 .unread-alert { display: block; background: #fee2e2; color: #dc2626; border: 2px dashed #f87171; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 1.1rem; text-decoration: none; margin-bottom: 15px; animation: pulse-alert 2s infinite; transition: 0.2s;}
 .unread-alert:hover { background: #fecaca; }
 .bell-shake { display: inline-block; animation: shake 1.5s infinite; }
