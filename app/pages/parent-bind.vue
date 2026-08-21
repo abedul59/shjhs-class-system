@@ -34,7 +34,7 @@
             </select>
           </div>
           <div class="form-group half-width">
-            <label>🔢 國小班級</label>
+            <label>🔢 國小班級（若甲班請輸入1，乙班請輸入2，以此類推。）</label>
             <input v-model="elementaryClass" type="number" placeholder="例: 4" required :disabled="isLoading" />
           </div>
         </div>
