@@ -5,7 +5,8 @@
         <div class="card-header">
           <h2>💬 班級私訊聊天室</h2>
           <div class="security-notice">
-            🔒 提醒家長：為維護資安與嚴格保護學生個資，請擇一方式進行身分驗證，完成後即可檢視與導師的對話紀錄。
+            🔒 提醒家長：為維護資安與嚴格保護學生個資，請擇一方式進行身分驗證，完成後即可檢視與導師的對話紀錄。<br>
+            （學生的身份證後4碼和生日尚未建構完成，請先用email綁定，再用email前五碼進入和導師私訊或請假。）
           </div>
         </div>
 
@@ -55,7 +56,7 @@
                 required 
                 :disabled="isLoading" 
               />
-              <p class="input-hint">例如您的信箱為 abcde.fgh@gmail.com，請輸入 <strong>abcde</strong> (任一家長皆可)</p>
+              <p class="input-hint">例如您的信箱為 abcde.fgh@gmail.com，請輸入 <strong>abcde</strong> (任一家長的email皆可)</p>
             </div>
           </template>
 
