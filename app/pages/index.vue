@@ -1,9 +1,8 @@
 <template>
   <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
     
-    <!-- 💡 加回 isIpBrownlisted 限制 -->
     <ExamDashboard 
-      v-if="isExamModeView && isIpBrownlisted" 
+      v-if="isExamModeView" 
       :examData="examData" 
       :examStatus="examStatus"
       :currentTime="currentTime"
@@ -15,8 +14,8 @@
 
     <div v-if="!isExamModeView" class="normal-home-content">
       
-      <!-- 📢 家長須知 (僅褐名單外顯示) -->
-      <div v-if="isNoticeBoardVisibleOnIndex && !isIpBrownlisted" class="blackboard top-board">
+      <!-- 📢 家長須知 -->
+      <div v-if="isNoticeBoardVisibleOnIndex" class="blackboard top-board">
         <h2 class="board-title notice-title">📢 家長須知事項</h2>
         <div class="dashed-divider"></div>
         
@@ -40,8 +39,8 @@
         </div>
       </div>
 
-      <!-- 📌 家長公佈欄 (僅限褐名單外顯示) -->
-      <div v-if="isParentAnnouncementVisibleOnIndex && parentAnnouncements.length > 0 && !isIpBrownlisted" class="corkboard announcement-board">
+      <!-- 📌 家長公佈欄 -->
+      <div v-if="isParentAnnouncementVisibleOnIndex && parentAnnouncements.length > 0" class="corkboard announcement-board">
         <h2 class="board-title cork-title">📌 家長公佈欄</h2>
         <div class="cork-divider"></div>
         <div class="cork-cards-container">
@@ -61,8 +60,8 @@
         </div>
       </div>
 
-      <!-- 📌 班級公佈欄 (💡 加回 isIpBrownlisted 限制) -->
-      <div v-if="isAnnouncementVisibleOnIndex && announcements.length > 0 && isIpBrownlisted" class="corkboard announcement-board">
+      <!-- 📌 班級公佈欄 -->
+      <div v-if="isAnnouncementVisibleOnIndex && announcements.length > 0" class="corkboard announcement-board">
         <div class="board-header-clickable" @click="isClassAnnExpanded = !isClassAnnExpanded">
           <h2 class="board-title cork-title">📌 班級公佈欄</h2>
           <span class="toggle-icon">{{ isClassAnnExpanded ? '▲ 點擊收起' : '▼ 點擊展開全部' }}</span>
@@ -93,7 +92,7 @@
           <div class="control-card">
             <div class="clock-display">🕒 {{ currentTime }}</div>
             
-            <!-- 💡 私訊通知 (唯一不限制褐名單的地方，讓您隨時能看到提醒) -->
+            <!-- 💡 無條件顯示的未讀私訊提示鈴鐺 -->
             <NuxtLink v-if="unreadMsgCount > 0" to="/admin" class="unread-alert">
               <span class="bell-shake">🔔</span> 系統提示：您有 {{ unreadMsgCount }} 則未讀私訊！
             </NuxtLink>
@@ -111,8 +110,7 @@
               </div>
             </div>
 
-            <!-- 💡 加回 isIpBrownlisted 限制 -->
-            <button v-if="isIpBrownlisted && examData.isExamModeEnabled && examData.periods && examData.periods.length > 0" @click="isExamModeView = true" class="btn-enter-exam">
+            <button v-if="examData.isExamModeEnabled && examData.periods && examData.periods.length > 0" @click="isExamModeView = true" class="btn-enter-exam">
               🎓 切換至大考看板模式
             </button>
 
@@ -129,8 +127,7 @@
               <button v-if="indexButtonSettings.emergency" @click="openPwdModal('emergency')" class="btn btn-red">🚨 緊急通知</button>
               <NuxtLink v-if="indexButtonSettings.admin" to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
               
-              <!-- 💡 加回 isIpBrownlisted 限制 -->
-              <button v-if="isIpBrownlisted && seatingChart.isVisible && indexButtonSettings.seats" @click="showSeatingChartLocal = !showSeatingChartLocal" class="btn btn-indigo">
+              <button v-if="seatingChart.isVisible && indexButtonSettings.seats" @click="showSeatingChartLocal = !showSeatingChartLocal" class="btn btn-indigo">
                 {{ showSeatingChartLocal ? '🙈 隱藏教室座位表' : '👀 顯示教室座位表' }}
               </button>
               
@@ -141,9 +138,7 @@
             </div>
           </div>
 
-          <!-- 💡 加回 isIpBrownlisted 限制 -->
           <AttendanceGrid 
-            v-if="isIpBrownlisted"
             :allStudents="allStudents"
             :todayAttendances="todayAttendances"
             :expectedCount="expectedCount"
@@ -614,14 +609,16 @@ const fetchData = async () => {
   const { data: attData } = await supabase.from('attendances').select('*').eq('record_date', todayISO)
   if (attData) todayAttendances.value = attData
 
-  // 💡 查詢尚未已讀的私訊數量 (不論 IP 隨時都會抓取並顯示)
+  // 💡 核心防呆修正：使用 select('*') 取出所有欄位並在前端過濾，徹底避免因為資料表欄位名稱出錯而崩潰！
   try {
-    const { count } = await supabase.from('private_messages')
-      .select('*', { count: 'exact', head: true })
+    const { data: msgData } = await supabase.from('private_messages')
+      .select('*')
       .neq('sender_role', '導師')
-      .eq('is_read_by_admin', false)
       
-    unreadMsgCount.value = count || 0
+    if (msgData) {
+      // 不管資料庫目前的狀態欄位是叫 is_read_by_teacher 還是 is_read_by_admin，都能順利計算未讀數量
+      unreadMsgCount.value = msgData.filter(m => m.is_read_by_teacher === false || m.is_read_by_admin === false).length
+    }
   } catch (e) {
     console.error('無法取得未讀私訊數量', e)
   }
