@@ -2,7 +2,7 @@
   <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
     
     <ExamDashboard 
-      v-if="isExamModeView" 
+      v-if="isExamModeView && isIpBrownlisted" 
       :examData="examData" 
       :examStatus="examStatus"
       :currentTime="currentTime"
@@ -14,8 +14,8 @@
 
     <div v-if="!isExamModeView" class="normal-home-content">
       
-      <!-- 📢 家長須知 -->
-      <div v-if="isNoticeBoardVisibleOnIndex" class="blackboard top-board">
+      <!-- 📢 家長須知 (僅褐名單外顯示) -->
+      <div v-if="isNoticeBoardVisibleOnIndex && !isIpBrownlisted" class="blackboard top-board">
         <h2 class="board-title notice-title">📢 家長須知事項</h2>
         <div class="dashed-divider"></div>
         
@@ -39,8 +39,8 @@
         </div>
       </div>
 
-      <!-- 📌 家長公佈欄 -->
-      <div v-if="isParentAnnouncementVisibleOnIndex && parentAnnouncements.length > 0" class="corkboard announcement-board">
+      <!-- 📌 家長公佈欄 (僅限褐名單外顯示) -->
+      <div v-if="isParentAnnouncementVisibleOnIndex && parentAnnouncements.length > 0 && !isIpBrownlisted" class="corkboard announcement-board">
         <h2 class="board-title cork-title">📌 家長公佈欄</h2>
         <div class="cork-divider"></div>
         <div class="cork-cards-container">
@@ -60,8 +60,8 @@
         </div>
       </div>
 
-      <!-- 📌 班級公佈欄 -->
-      <div v-if="isAnnouncementVisibleOnIndex && announcements.length > 0" class="corkboard announcement-board">
+      <!-- 📌 班級公佈欄 (僅限褐名單內顯示) -->
+      <div v-if="isAnnouncementVisibleOnIndex && announcements.length > 0 && isIpBrownlisted" class="corkboard announcement-board">
         <div class="board-header-clickable" @click="isClassAnnExpanded = !isClassAnnExpanded">
           <h2 class="board-title cork-title">📌 班級公佈欄</h2>
           <span class="toggle-icon">{{ isClassAnnExpanded ? '▲ 點擊收起' : '▼ 點擊展開全部' }}</span>
@@ -90,12 +90,14 @@
       <div class="main-split">
         <div class="left-panel">
           <div class="control-card">
-            <div class="clock-display">🕒 {{ currentTime }}</div>
             
-            <!-- 💡 無條件顯示的未讀私訊提示鈴鐺 -->
-            <NuxtLink v-if="unreadMsgCount > 0" to="/admin" class="unread-alert">
-              <span class="bell-shake">🔔</span> 系統提示：您有 {{ unreadMsgCount }} 則未讀私訊！
-            </NuxtLink>
+            <div class="clock-display">
+              🕒 {{ currentTime }}
+              <!-- 💡 簡潔的圖示通知 (無文字) -->
+              <NuxtLink v-if="unreadMsgCount > 0" to="/admin" class="icon-alert-bell" title="您有未讀私訊，點擊前往後台！">
+                🚨
+              </NuxtLink>
+            </div>
             
             <div v-if="scheduleDisplay" class="schedule-ticker">
               <div class="current-class">
@@ -110,7 +112,7 @@
               </div>
             </div>
 
-            <button v-if="examData.isExamModeEnabled && examData.periods && examData.periods.length > 0" @click="isExamModeView = true" class="btn-enter-exam">
+            <button v-if="isIpBrownlisted && examData.isExamModeEnabled && examData.periods && examData.periods.length > 0" @click="isExamModeView = true" class="btn-enter-exam">
               🎓 切換至大考看板模式
             </button>
 
@@ -127,7 +129,7 @@
               <button v-if="indexButtonSettings.emergency" @click="openPwdModal('emergency')" class="btn btn-red">🚨 緊急通知</button>
               <NuxtLink v-if="indexButtonSettings.admin" to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
               
-              <button v-if="seatingChart.isVisible && indexButtonSettings.seats" @click="showSeatingChartLocal = !showSeatingChartLocal" class="btn btn-indigo">
+              <button v-if="isIpBrownlisted && seatingChart.isVisible && indexButtonSettings.seats" @click="showSeatingChartLocal = !showSeatingChartLocal" class="btn btn-indigo">
                 {{ showSeatingChartLocal ? '🙈 隱藏教室座位表' : '👀 顯示教室座位表' }}
               </button>
               
@@ -139,6 +141,7 @@
           </div>
 
           <AttendanceGrid 
+            v-if="isIpBrownlisted"
             :allStudents="allStudents"
             :todayAttendances="todayAttendances"
             :expectedCount="expectedCount"
@@ -609,15 +612,19 @@ const fetchData = async () => {
   const { data: attData } = await supabase.from('attendances').select('*').eq('record_date', todayISO)
   if (attData) todayAttendances.value = attData
 
-  // 💡 核心防呆修正：使用 select('*') 取出所有欄位並在前端過濾，徹底避免因為資料表欄位名稱出錯而崩潰！
+  // 💡 查詢私訊數量
   try {
     const { data: msgData } = await supabase.from('private_messages')
       .select('*')
       .neq('sender_role', '導師')
-      
+
     if (msgData) {
-      // 不管資料庫目前的狀態欄位是叫 is_read_by_teacher 還是 is_read_by_admin，都能順利計算未讀數量
-      unreadMsgCount.value = msgData.filter(m => m.is_read_by_teacher === false || m.is_read_by_admin === false).length
+      // 找出家長與學生的未讀數量
+      const unreadParents = msgData.filter(m => m.chat_type === '家長' && (m.is_read_by_teacher === false || m.is_read_by_admin === false)).length
+      const unreadStudents = msgData.filter(m => m.chat_type === '學生' && (m.is_read_by_teacher === false || m.is_read_by_admin === false)).length
+      
+      // 💡 只有家長私訊不用褐名單，學生私訊需要褐名單才通知
+      unreadMsgCount.value = isIpBrownlisted.value ? (unreadParents + unreadStudents) : unreadParents
     }
   } catch (e) {
     console.error('無法取得未讀私訊數量', e)
@@ -713,12 +720,10 @@ const saveClassNoteItems = async () => {
 .main-split { display: flex; gap: 20px; align-items: flex-start; }
 .left-panel { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .control-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; text-align: center; }
-.clock-display { font-size: 2.2rem; font-weight: bold; color: #1e293b; margin-bottom: 10px; }
 
-.unread-alert { display: block; background: #fee2e2; color: #dc2626; border: 2px dashed #f87171; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 1.1rem; text-decoration: none; margin-bottom: 15px; animation: pulse-alert 2s infinite; transition: 0.2s;}
-.unread-alert:hover { background: #fecaca; }
-.bell-shake { display: inline-block; animation: shake 1.5s infinite; }
-@keyframes pulse-alert { 0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); } }
+/* 💡 將時鐘與鈴鐺放在同一行，並隱藏文字 */
+.clock-display { display: flex; align-items: center; justify-content: center; gap: 15px; font-size: 2.2rem; font-weight: bold; color: #1e293b; margin-bottom: 10px; }
+.icon-alert-bell { font-size: 2.2rem; text-decoration: none; animation: shake 1.5s infinite; filter: drop-shadow(0 2px 4px rgba(239,68,68,0.5)); cursor: pointer; }
 @keyframes shake { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-15deg); } 75% { transform: rotate(15deg); } }
 
 .schedule-ticker { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 10px 15px; margin-bottom: 20px; display: flex; justify-content: center; gap: 20px; align-items: center; flex-wrap: wrap; }
