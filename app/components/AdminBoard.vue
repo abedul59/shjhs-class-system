@@ -1,8 +1,7 @@
-<template>
+<template><template>
   <div class="admin-board-container">
     <div class="table-header"><h3>📢 家長須知管理中心</h3></div>
 
-    <!-- 💡 新增：首頁顯示狀態開關 -->
     <div class="visibility-control-box">
       <label class="toggle-label">
         <input type="checkbox" v-model="isVisibleOnIndex" @change="toggleVisibility" />
@@ -18,6 +17,7 @@
         <button :class="['tab-btn', { active: activeTab === 'history' }]" @click="activeTab = 'history'">📅 歷史紀錄查詢</button>
       </div>
 
+      <!-- ==================== 發布與管理 ==================== -->
       <div v-show="activeTab === 'manage'">
         <div class="editor-panel">
           <h4 class="section-title">
@@ -90,14 +90,19 @@
         </div>
       </div>
 
+      <!-- ==================== 📧 信件推播設定 (重大更新) ==================== -->
       <div v-show="activeTab === 'email'" class="email-editor-section">
+        
         <div class="editor-header">
-          <h4>📧 編輯與推播信件</h4>
+          <h4>📧 編輯信件範本</h4>
           <button @click="saveNoticeEmailTemplate" class="save-template-btn small-btn" :disabled="isSavingNoticeTemplate">
             {{ isSavingNoticeTemplate ? '儲存中...' : '💾 存為範本' }}
           </button>
         </div>
-        <p class="help-text">為避免信件被歸類為垃圾郵件或產生亂碼，系統已自動將內容轉換為「純文字格式」發送。<br>系統只會統整推播 <span class="active-tag">今日生效中</span> 的須知。</p>
+        <p class="help-text">
+          為降低被判定為垃圾郵件的機率，系統會強制以「純文字」格式發送。<br>
+          <span style="color:#b91c1c;">建議：若信件仍進入垃圾桶，請在家長群組提醒將導師信箱加入通訊錄。</span>
+        </p>
         
         <div class="form-group">
           <label>信件主旨：</label>
@@ -105,9 +110,10 @@
         </div>
         <div class="form-group">
           <label>信件內容：(變數: <span v-pre>{{須知清單}}</span>)</label>
-          <textarea v-model="noticeEmailContentTemplate" rows="5" class="edit-input textarea-input"></textarea>
+          <textarea v-model="noticeEmailContentTemplate" rows="6" class="edit-input textarea-input"></textarea>
         </div>
         
+        <!-- 💡 預覽區 -->
         <div class="email-preview-section">
           <h5>👀 純文字信件預覽 (家長實際看到的模樣)</h5>
           <div class="preview-box plain-text-preview">
@@ -116,11 +122,46 @@
           </div>
         </div>
 
-        <button @click="sendNoticeEmail" class="email-btn late-btn" style="margin-top: 20px;" :disabled="isSendingEmail">
-          {{ isSendingEmail ? '正在推播中...' : '📧 解鎖並推播目前生效須知給家長' }}
-        </button>
+        <hr class="cork-divider" style="margin: 30px 0;">
+
+        <!-- 💡 新增：寄件對象選擇器 -->
+        <div class="recipient-selector-section">
+          <div class="editor-header" style="border:none;">
+            <h4>👥 選擇推播對象</h4>
+            <div class="select-all-actions">
+              <button @click="selectAllRecipients(true)" class="btn-outline">✅ 全選</button>
+              <button @click="selectAllRecipients(false)" class="btn-outline">❌ 全不選</button>
+            </div>
+          </div>
+          
+          <div v-if="isLoadingEmails" class="loading-state" style="padding: 20px;">⏳ 正在載入聯絡人名單...</div>
+          <div v-else-if="availableRecipients.length === 0" class="empty-state" style="padding: 20px;">資料庫中找不到任何帶有 Email 的家長或學生資料。</div>
+          
+          <div v-else class="recipients-grid">
+            <label v-for="(person, idx) in availableRecipients" :key="'rcpt-'+idx" class="recipient-label" :class="{'is-selected': person.selected}">
+              <input type="checkbox" v-model="person.selected" class="large-checkbox" />
+              <div class="recipient-info">
+                <span class="r-name">{{ person.name }}</span>
+                <span class="r-role">{{ person.role }}</span>
+                <span class="r-email">{{ person.email }}</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- 執行推播按鈕 -->
+        <div class="send-action-bar">
+          <div class="send-summary">
+            即將發送給 <strong>{{ selectedRecipientsCount }}</strong> 個信箱
+          </div>
+          <button @click="sendNoticeEmail" class="email-btn late-btn" :disabled="isSendingEmail || selectedRecipientsCount === 0">
+            {{ isSendingEmail ? '正在安全推播中...' : '📧 解鎖並執行推播' }}
+          </button>
+        </div>
+
       </div>
 
+      <!-- ==================== 歷史紀錄查詢 ==================== -->
       <div v-show="activeTab === 'history'" class="history-calendar-container">
         <h4 class="section-title">📅 歷史須知紀錄查詢與編輯</h4>
         <div class="query-box">
@@ -189,7 +230,7 @@ const activeTab = ref('manage')
 const isLoading = ref(true)
 const isSaving = ref(false)
 
-// 💡 新增：首頁顯示狀態的變數與儲存邏輯
+// 首頁顯示狀態
 const isVisibleOnIndex = ref(true)
 const isSavingVis = ref(false)
 
@@ -209,7 +250,11 @@ const newNotice = ref({
 const isSendingEmail = ref(false)
 const isSavingNoticeTemplate = ref(false)
 const noticeEmailSubjectTemplate = ref('📢 班級須知推播 ({{今日日期}})')
-const noticeEmailContentTemplate = ref(`各位家長您好，今日班級重要須知推播如下：\n\n{{須知清單}}\n\n班級導師 敬上`)
+const noticeEmailContentTemplate = ref(`各位家長您好，今日班級重要須知推播如下：\n\n{{須知清單}}\n\n(若此信件進入垃圾郵件，請將導師信箱加入通訊錄或標示為非垃圾郵件)\n\n班級導師 敬上`)
+
+// 寄件對象名單狀態
+const availableRecipients = ref([])
+const isLoadingEmails = ref(true)
 
 const historyDate = ref(todayISO)
 const isHistoryLoading = ref(false)
@@ -223,18 +268,21 @@ const updateEditHistoryRichText = (event, index) => { editHistoryNotices.value[i
 
 const fetchData = async () => {
   isLoading.value = true
+  
+  // 載入須知資料
   const { data: boardData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'parent_notices_data').maybeSingle()
   if (boardData?.setting_value) { 
     notices.value = (boardData.setting_value || []).sort((a, b) => Number(a.id) - Number(b.id))
   }
   
+  // 載入信件範本
   const { data: tmplData } = await supabase.from('email_templates').select('*').eq('template_id', 'notice_board').maybeSingle()
   if (tmplData) { 
     noticeEmailSubjectTemplate.value = tmplData.subject
     noticeEmailContentTemplate.value = tmplData.content.replace(/<br\s*\/?>/ig, '\n').replace(/<[^>]+>/g, '') 
   }
 
-  // 💡 讀取：首頁顯示開關狀態
+  // 載入首頁顯示開關
   const { data: visData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'parent_notices_board_visible').maybeSingle()
   if (visData && visData.setting_value !== null) {
     isVisibleOnIndex.value = visData.setting_value
@@ -243,12 +291,70 @@ const fetchData = async () => {
   isLoading.value = false
 }
 
+// 載入寄件對象 (抓取家長與學生信箱)
+const fetchRecipients = async () => {
+  isLoadingEmails.value = true
+  let rawList = []
+
+  try {
+    // 抓取家長信箱
+    const { data: parents } = await supabase.from('parents').select('email, relationship, student_id, students(seat_number, real_name)')
+    if (parents) {
+      parents.forEach(p => {
+        if (p.email && String(p.email).includes('@')) {
+          const sName = p.students?.real_name || `未知學生(${p.student_id})`
+          const sNum = p.students?.seat_number ? `${p.students.seat_number}號 ` : ''
+          rawList.push({ email: p.email, name: `${sNum}${sName} 的家長`, role: p.relationship || '家長', selected: true }) // 家長預設打勾
+        }
+      })
+    }
+
+    // 抓取學生信箱
+    const { data: students } = await supabase.from('students').select('seat_number, real_name, email, parent_email, parent_mail, guardian_email')
+    if (students) {
+      students.forEach(s => {
+        const sEmail = s.parent_email || s.parent_mail || s.email || s.guardian_email
+        if (sEmail && String(sEmail).includes('@')) {
+          rawList.push({ email: sEmail, name: `${s.seat_number}號 ${s.real_name}`, role: '學生(或備用信箱)', selected: false }) // 學生預設不勾
+        }
+      })
+    }
+
+    // 過濾重複的信箱
+    const uniqueMap = new Map()
+    rawList.forEach(item => {
+      if (!uniqueMap.has(item.email)) uniqueMap.set(item.email, item)
+    })
+    
+    // 依座號排序
+    availableRecipients.value = Array.from(uniqueMap.values()).sort((a, b) => {
+      const numA = parseInt(a.name) || 999; const numB = parseInt(b.name) || 999;
+      return numA - numB
+    })
+    
+  } catch (err) {
+    console.error("載入聯絡人失敗", err)
+  } finally {
+    isLoadingEmails.value = false
+  }
+}
+
 onMounted(async () => {
   await fetchData()
   await fetchHistory()
+  await fetchRecipients() 
 })
 
-// 💡 儲存：首頁顯示狀態開關
+// 全選/全不選功能
+const selectAllRecipients = (val) => {
+  availableRecipients.value.forEach(p => p.selected = val)
+}
+
+// 計算目前選取的數量
+const selectedRecipientsCount = computed(() => {
+  return availableRecipients.value.filter(p => p.selected).length
+})
+
 const toggleVisibility = async () => {
   isSavingVis.value = true
   try {
@@ -258,7 +364,7 @@ const toggleVisibility = async () => {
     }, { onConflict: 'setting_key' })
   } catch (err) {
     alert('狀態更新失敗：' + err.message)
-    isVisibleOnIndex.value = !isVisibleOnIndex.value // 發生錯誤時恢復原狀
+    isVisibleOnIndex.value = !isVisibleOnIndex.value 
   } finally {
     isSavingVis.value = false
   }
@@ -349,6 +455,12 @@ const deleteNotice = async (id) => {
 }
 
 const sendNoticeEmail = async () => {
+  const targetEmails = availableRecipients.value.filter(p => p.selected).map(p => p.email)
+  
+  if (targetEmails.length === 0) {
+    return alert('❌ 請至少選擇一個收件人！')
+  }
+
   isSendingEmail.value = true
   try {
     const { data: pwdData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'admin_password').maybeSingle()
@@ -359,34 +471,35 @@ const sendNoticeEmail = async () => {
         expectedPwd = `${yy}${mm}${dd}59`
       } else { expectedPwd = pwdData.setting_value.custom_pwd }
     }
-    const inputPwd = prompt("🔒 請輸入導師密碼確認推播：")
+    const inputPwd = prompt(`🔒 準備發送給 ${targetEmails.length} 個信箱。\n請輸入導師密碼確認：`)
     if (inputPwd !== expectedPwd && inputPwd !== '168168168') {
       isSendingEmail.value = false; return alert('❌ 密碼錯誤，發送取消！')
     }
 
-    let emailList = []
-    const { data: parents, error: pErr } = await supabase.from('parents').select('email')
-    if (!pErr && parents) emailList.push(...parents.map(p => p.email))
-    
-    const { data: students, error: sErr } = await supabase.from('students').select('*')
-    if (!sErr && students) emailList.push(...students.map(s => s.parent_email || s.parent_mail || s.email || s.guardian_email))
-    
-    emailList = [...new Set(emailList.filter(e => e && String(e).includes('@')))]
-    
-    if (emailList.length === 0) { 
-      isSendingEmail.value = false
-      return alert('❌ 掃描失敗：在資料庫中未能找到任何帶有 @ 的家長信箱。') 
-    }
-    
     await fetch('/api/send-email', { 
       method: 'POST', 
       headers: { 'Content-Type': 'application/json' }, 
-      body: JSON.stringify({ bcc: emailList, subject: noticePreviewSubject.value, content: noticePreviewContent.value }) 
+      body: JSON.stringify({ 
+        bcc: targetEmails, 
+        subject: noticePreviewSubject.value, 
+        content: noticePreviewContent.value 
+      }) 
     })
     
-    await supabase.from('communication_logs').insert({ student_id: null, notification_type: '須知推播', sent_by: '導師', recipient_emails: '全班家長群發', message_content: noticePreviewContent.value })
-    alert(`✅ 已成功以「純文字防垃圾格式」推播給 ${emailList.length} 個家長信箱！`)
-  } catch(e) { alert("❌ 推播失敗: " + e.message) } finally { isSendingEmail.value = false }
+    await supabase.from('communication_logs').insert({ 
+      student_id: null, 
+      notification_type: '須知推播', 
+      sent_by: '導師', 
+      recipient_emails: `選定的 ${targetEmails.length} 個信箱`, 
+      message_content: noticePreviewContent.value 
+    })
+    
+    alert(`✅ 已成功推播至 ${targetEmails.length} 個家長/學生信箱！`)
+  } catch(e) { 
+    alert("❌ 推播失敗: " + e.message) 
+  } finally { 
+    isSendingEmail.value = false 
+  }
 }
 
 const saveNoticeEmailTemplate = async () => {
@@ -481,7 +594,6 @@ const importJSON = (event) => {
 .table-header { border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; } 
 .table-header h3 { margin: 0; color: #334155; font-size: 1.4rem;}
 
-/* 💡 新增開關樣式 */
 .visibility-control-box { background: white; padding: 15px 25px; border-radius: 8px; border: 1px solid #cbd5e1; margin-bottom: 20px; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);}
 .toggle-label { font-weight: bold; font-size: 1.1rem; color: #1e293b; cursor: pointer; display: flex; align-items: center; gap: 10px;}
 .toggle-label input { transform: scale(1.3); cursor: pointer;}
@@ -557,7 +669,27 @@ const importJSON = (event) => {
 .plain-text-preview { background: #fefce8; padding: 20px; border-radius: 6px; border: 1px solid #fde047; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);}
 .preview-subject { font-size: 1.05rem; color: #92400e; border-bottom: 1px dashed #fcd34d; padding-bottom: 10px; margin-bottom: 15px; font-weight: bold;}
 .preview-body { font-size: 1.05rem; color: #451a03; line-height: 1.6; white-space: pre-wrap; font-family: monospace;}
-.email-btn { background: #f59e0b; color: white; border: none; padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 1.15rem;}
+
+.recipient-selector-section { margin-top: 20px; }
+.select-all-actions { display: flex; gap: 10px; }
+.btn-outline { background: white; border: 1px solid #cbd5e1; color: #475569; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 0.9rem;}
+.btn-outline:hover { background: #f1f5f9; }
+.recipients-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; margin-top: 15px; max-height: 400px; overflow-y: auto; padding-right: 10px;}
+.recipient-label { display: flex; align-items: center; gap: 12px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 15px; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+.recipient-label:hover { border-color: #94a3b8; }
+.recipient-label.is-selected { background: #eff6ff; border-color: #3b82f6; }
+.large-checkbox { transform: scale(1.3); cursor: pointer; }
+.recipient-info { display: flex; flex-direction: column; gap: 2px; }
+.r-name { font-weight: bold; color: #1e293b; font-size: 1.05rem;}
+.r-role { font-size: 0.85rem; color: #64748b; }
+.r-email { font-family: monospace; font-size: 0.9rem; color: #0284c7; }
+
+.send-action-bar { margin-top: 30px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.send-summary { font-size: 1.1rem; color: #334155; }
+.send-summary strong { color: #dc2626; font-size: 1.3rem; }
+.email-btn { background: #f59e0b; color: white; border: none; padding: 15px 40px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; max-width: 400px; font-size: 1.2rem; transition: 0.2s;}
+.email-btn:hover:not(:disabled) { background: #d97706; }
+.email-btn:disabled { background: #cbd5e1; cursor: not-allowed; }
 
 .history-calendar-container { background: white; padding: 25px; border-radius: 8px; border: 1px solid #e2e8f0; }
 .query-box { margin-bottom: 20px; background: #f1f5f9; padding: 20px; border-radius: 8px; border: 1px dashed #cbd5e1;}
@@ -578,7 +710,6 @@ const importJSON = (event) => {
   .admin-board-container { padding-bottom: 20px; }
   .table-header h3 { font-size: 1.25rem; }
   
-  /* 💡 手機版：開關排版 */
   .visibility-control-box { padding: 15px; flex-direction: column; align-items: flex-start; gap: 10px; }
 
   .view-tabs { flex-direction: column; gap: 8px; border-bottom: none; }
@@ -609,7 +740,7 @@ const importJSON = (event) => {
 
   .editor-header { flex-direction: column; align-items: stretch; gap: 12px;}
   .save-template-btn.small-btn { width: 100%; padding: 12px; font-size: 1.05rem; }
-  .email-btn { padding: 15px; font-size: 1.1rem; }
+  .email-btn { max-width: 100%; padding: 15px; font-size: 1.1rem; }
   .plain-text-preview { padding: 15px; }
   .preview-subject, .preview-body { font-size: 1rem; }
 
