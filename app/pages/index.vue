@@ -94,7 +94,7 @@
             <div class="clock-display">🕒 {{ currentTime }}</div>
             
             <!-- 💡 新增：未讀私訊通知 (僅褐名單導師可見，點擊直接前往後台) -->
-            <NuxtLink v-if="isIpBrownlisted && unreadMsgCount > 0" to="/admin" class="unread-alert">
+            <NuxtLink v-if="unreadMsgCount > 0" to="/admin" class="unread-alert">
               <span class="bell-shake">🔔</span> 系統提示：您有 {{ unreadMsgCount }} 則未讀私訊！
             </NuxtLink>
             
