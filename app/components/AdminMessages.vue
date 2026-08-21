@@ -40,7 +40,6 @@
       <div class="chat-container" id="adminChatContainer">
         <div v-if="filteredMessages.length === 0" class="empty">此頻道目前尚無通訊紀錄</div>
         
-        <!-- 💡 聊天氣泡迴圈 -->
         <div v-for="msg in filteredMessages" :key="msg.id" 
              class="chat-row" :class="{'row-right': msg.sender_role === '導師', 'row-left': msg.sender_role !== '導師'}">
              
@@ -51,7 +50,7 @@
               <span class="time">{{ formatTime(msg.created_at) }}</span>
             </div>
 
-            <!-- ✏️ 編輯模式 -->
+            <!-- 編輯模式 -->
             <div v-if="editingMsgId === msg.id" class="edit-box">
               <textarea v-model="editContentTemp" class="edit-textarea" rows="3"></textarea>
               <div class="edit-actions">
@@ -60,11 +59,10 @@
               </div>
             </div>
 
-            <!-- 👁️ 顯示模式 -->
+            <!-- 顯示模式 -->
             <div v-else>
               <div class="msg-content">{{ msg.content }}</div>
               
-              <!-- 💡 移除限制：現在導師可以編輯與刪除「所有」的留言 -->
               <div class="msg-actions">
                 <button @click="startEdit(msg)" class="action-icon" title="編輯這則訊息">✏️</button>
                 <button @click="deleteMsg(msg.id)" class="action-icon" title="刪除這則訊息">🗑️</button>
@@ -93,7 +91,6 @@ const activeChatThread = ref('')
 const replyContent = ref('')
 const isSending = ref(false)
 
-// 編輯留言狀態
 const editingMsgId = ref(null)
 const editContentTemp = ref('')
 
@@ -113,19 +110,18 @@ const filteredMessages = computed(() => {
   return allMessages.value.filter(m => m.student_id === targetId && m.chat_type === targetType)
 })
 
-// 取得每個頻道的未讀數量標示
+// 💡 顯示精確的未讀幾則數量
 const getMsgBadge = (studentId, type) => {
   const msgs = allMessages.value.filter(m => m.student_id === studentId && m.chat_type === type)
   if (msgs.length === 0) return ''
   
   const unreadMsgs = msgs.filter(m => m.sender_role !== '導師' && m.is_read_by_teacher === false)
   if (unreadMsgs.length > 0) {
-    return '🔴 (有未讀)'
+    return `🔴 (未讀 ${unreadMsgs.length} 則)`
   }
   return `(共 ${msgs.length} 則)`
 }
 
-// 根據發送者給予不同的背景色
 const getBubbleClass = (role, type) => {
   if (role === '導師') return 'teacher-msg' 
   if (type === '家長') return 'parent-msg'   
@@ -148,7 +144,7 @@ const sendReply = async () => {
     chat_type: targetType, 
     sender_role: '導師', 
     content: replyContent.value,
-    is_read_by_teacher: true // 自己發送的當然視為已讀
+    is_read_by_teacher: true 
   })
   
   replyContent.value = ''
@@ -157,7 +153,6 @@ const sendReply = async () => {
   isSending.value = false
 }
 
-// 💡 編輯功能
 const startEdit = (msg) => {
   editingMsgId.value = msg.id
   editContentTemp.value = msg.content
@@ -170,14 +165,11 @@ const cancelEdit = () => {
 
 const saveEdit = async (id) => {
   if (!editContentTemp.value.trim()) return alert("留言不能為空！")
-  
   await supabase.from('private_messages').update({ content: editContentTemp.value }).eq('id', id)
-  
   cancelEdit()
   await fetchData()
 }
 
-// 💡 刪除功能
 const deleteMsg = async (id) => {
   if (confirm("確定要刪除這則訊息嗎？(刪除後無法復原)")) {
     await supabase.from('private_messages').delete().eq('id', id)
@@ -185,14 +177,13 @@ const deleteMsg = async (id) => {
   }
 }
 
-// 💡 修正已讀狀態標記：精確更新 is_read_by_teacher 欄位
 const markCurrentThreadAsRead = async () => {
   if (!activeChatThread.value) return
   const [targetId, targetType] = activeChatThread.value.split('_')
   
   try {
     await supabase.from('private_messages')
-      .update({ is_read_by_teacher: true }) // 將正確的欄位標記為 true
+      .update({ is_read_by_teacher: true })
       .eq('student_id', targetId)
       .eq('chat_type', targetType)
       .neq('sender_role', '導師')
@@ -211,12 +202,8 @@ const scrollToBottom = () => {
   })
 }
 
-// ==========================================
-// 💡 JSON & CSV 匯出/匯入功能
-// ==========================================
 const exportData = (format) => {
   if (allMessages.value.length === 0) return alert('目前沒有任何訊息可以匯出！')
-  
   let content = ''
   let mime = ''
   let filename = ''
@@ -291,59 +278,45 @@ const importData = (e) => {
 
 <style scoped>
 .admin-messages-panel { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; font-family: sans-serif; }
-
 .table-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;}
 .table-header h3 { margin: 0; color: #334155; font-size: 1.4rem; }
-
 .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .btn-outline { background: #f8fafc; color: #475569; border: 1px solid #cbd5e1; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 0.95rem; }
 .btn-outline:hover { background: #e2e8f0; color: #1e293b; }
-
 .chat-selector { margin-bottom: 15px; background: #f0f9ff; padding: 15px 20px; border-radius: 8px; border: 1px dashed #7dd3fc; display: flex; align-items: center; gap: 15px; flex-wrap: wrap;}
 .chat-selector label { font-weight: bold; color: #0284c7; font-size: 1.1rem; }
 .chat-selector select { padding: 10px 15px; font-size: 1.1rem; border-radius: 6px; width: 350px; border: 1px solid #7dd3fc; color: #0369a1; font-weight: bold; cursor: pointer; }
 .chat-selector select:focus { outline: none; box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2); }
-
 .empty-prompt { text-align: center; padding: 60px; color: #94a3b8; font-size: 1.2rem; background: #f8fafc; border-radius: 8px; border: 2px dashed #cbd5e1; margin-top: 20px; font-style: italic;}
-
 .chat-window { margin-top: 20px; border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; background: #f1f5f9; }
-
 .chat-container { height: 500px; overflow-y: auto; padding: 25px; display: flex; flex-direction: column; gap: 20px; background-color: #f1f5f9; }
 .empty { text-align: center; color: #94a3b8; padding: 30px !important; font-style: italic;}
-
 .chat-row { display: flex; width: 100%; }
 .row-left { justify-content: flex-start; }
 .row-right { justify-content: flex-end; }
-
 .chat-bubble { max-width: 65%; padding: 15px; border-radius: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); position: relative; }
 .msg-info { font-size: 0.85rem; margin-bottom: 8px; color: #64748b; display: flex; justify-content: space-between; gap: 20px; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 5px; }
 .sender { font-weight: bold; }
 .time { opacity: 0.8; }
 .msg-content { font-size: 1.1rem; color: #1e293b; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
-
-.teacher-msg { background: #dcfce7; border-bottom-right-radius: 4px; border: 1px solid #bbf7d0; } /* 綠色 */
-.parent-msg { background: #fef3c7; border-bottom-left-radius: 4px; border: 1px solid #fde68a; } /* 黃色 */
-.student-msg { background: #e0e7ff; border-bottom-left-radius: 4px; border: 1px solid #c7d2fe; } /* 水藍色 */
-
-/* 💡 所有氣泡都可以有編輯與刪除的操作按鈕 */
+.teacher-msg { background: #dcfce7; border-bottom-right-radius: 4px; border: 1px solid #bbf7d0; } 
+.parent-msg { background: #fef3c7; border-bottom-left-radius: 4px; border: 1px solid #fde68a; } 
+.student-msg { background: #e0e7ff; border-bottom-left-radius: 4px; border: 1px solid #c7d2fe; } 
 .msg-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px; opacity: 0.6; transition: opacity 0.2s; }
 .chat-bubble:hover .msg-actions { opacity: 1; }
 .action-icon { background: rgba(255,255,255,0.5); border: none; cursor: pointer; border-radius: 4px; padding: 4px 6px; font-size: 0.9rem; transition: background 0.2s;}
 .action-icon:hover { background: rgba(255,255,255,1); }
-
 .edit-box { margin-top: 5px; }
 .edit-textarea { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px dashed #10b981; font-family: inherit; font-size: 1.05rem; resize: vertical; margin-bottom: 8px;}
 .edit-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .cancel-btn { background: white; color: #64748b; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem;}
 .save-btn { background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: bold;}
-
 .reply-box { display: flex; padding: 15px; background: white; border-top: 1px solid #cbd5e1; gap: 15px; align-items: stretch; }
 .reply-box input { flex: 1; padding: 15px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1.1rem; transition: 0.2s;}
 .reply-box input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
 .send-reply-btn { background: #3b82f6; color: white; border: none; padding: 0 25px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1.1rem; transition: 0.2s; white-space: nowrap;}
 .send-reply-btn:hover:not(:disabled) { background: #2563eb; }
 .send-reply-btn:disabled { background: #94a3b8; cursor: not-allowed; }
-
 @media (max-width: 768px) {
   .admin-messages-panel { padding: 15px; }
   .chat-selector select { width: 100%; }
