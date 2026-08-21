@@ -1,4 +1,4 @@
-<template>
+<template><template>
   <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
     
     <ExamDashboard 
@@ -92,6 +92,11 @@
         <div class="left-panel">
           <div class="control-card">
             <div class="clock-display">🕒 {{ currentTime }}</div>
+            
+            <!-- 💡 新增：未讀私訊通知 (僅褐名單導師可見，點擊直接前往後台) -->
+            <NuxtLink v-if="isIpBrownlisted && unreadMsgCount > 0" to="/admin" class="unread-alert">
+              <span class="bell-shake">🔔</span> 系統提示：您有 {{ unreadMsgCount }} 則未讀私訊！
+            </NuxtLink>
             
             <div v-if="scheduleDisplay" class="schedule-ticker">
               <div class="current-class">
@@ -233,6 +238,9 @@ const isParentAnnouncementVisibleOnIndex = ref(true)
 const isIpWhitelisted = ref(false)
 const isIpBrownlisted = ref(false)
 const currentIpStr = ref('')
+
+// 💡 儲存未讀私訊的數量
+const unreadMsgCount = ref(0)
 
 const announcements = ref([])
 const parentAnnouncements = ref([])
@@ -597,13 +605,26 @@ const fetchData = async () => {
 
   const { data: sData } = await supabase.from('students').select('*').order('seat_number')
   
-  // 💡 核心新增：過濾掉有打勾「不列入點名 (hide_attendance)」的學生
   if (sData) {
     allStudents.value = sData.filter(s => !s.hide_attendance)
   }
 
   const { data: attData } = await supabase.from('attendances').select('*').eq('record_date', todayISO)
   if (attData) todayAttendances.value = attData
+
+  // 💡 核心新增：如果目前是導師所在的褐名單 IP，則查詢尚未已讀的私訊數量
+  if (isIpBrownlisted.value) {
+    try {
+      const { count } = await supabase.from('private_messages')
+        .select('*', { count: 'exact', head: true })
+        .neq('sender_role', '導師')
+        .eq('is_read_by_admin', false)
+        
+      unreadMsgCount.value = count || 0
+    } catch (e) {
+      console.error('無法取得未讀私訊數量', e)
+    }
+  }
 }
 
 onMounted(() => { 
@@ -696,6 +717,13 @@ const saveClassNoteItems = async () => {
 .left-panel { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .control-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; text-align: center; }
 .clock-display { font-size: 2.2rem; font-weight: bold; color: #1e293b; margin-bottom: 10px; }
+
+/* 💡 新增未讀私訊提示與動畫樣式 */
+.unread-alert { display: block; background: #fee2e2; color: #dc2626; border: 2px dashed #f87171; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 1.1rem; text-decoration: none; margin-bottom: 15px; animation: pulse-alert 2s infinite; transition: 0.2s;}
+.unread-alert:hover { background: #fecaca; }
+.bell-shake { display: inline-block; animation: shake 1.5s infinite; }
+@keyframes pulse-alert { 0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); } }
+@keyframes shake { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-15deg); } 75% { transform: rotate(15deg); } }
 
 .schedule-ticker { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 10px 15px; margin-bottom: 20px; display: flex; justify-content: center; gap: 20px; align-items: center; flex-wrap: wrap; }
 .subject-text { font-weight: bold; color: #047857;}
