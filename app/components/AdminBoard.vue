@@ -1,4 +1,4 @@
-<template><template>
+<template>
   <div class="admin-board-container">
     <div class="table-header"><h3>📢 家長須知管理中心</h3></div>
 
