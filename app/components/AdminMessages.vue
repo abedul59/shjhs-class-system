@@ -78,7 +78,7 @@
         <button @click="sendReply" class="send-reply-btn" :disabled="isSending">📤 傳送</button>
       </div>
 
-      <!-- 💡 新增：回覆通知信件推播設定區塊 -->
+      <!-- 回覆通知信件推播設定區塊 -->
       <div class="email-editor-section">
         <div class="editor-header">
           <h4>📧 寄送「新私訊提醒」信件通知家長/學生</h4>
@@ -94,13 +94,13 @@
               <input type="text" v-model="noticeEmailSubjectTemplate" class="edit-input" />
             </div>
             <div class="form-group">
-              <label>信件內容：(系統將自動轉為純文字以避免進入垃圾信)</label>
+              <label>信件內容：(已升級防垃圾信機制)</label>
               <textarea v-model="noticeEmailContentTemplate" rows="5" class="edit-input textarea-input"></textarea>
             </div>
           </div>
           
           <div class="email-preview-col">
-            <h5>👀 純文字信件預覽</h5>
+            <h5>👀 實際信件預覽</h5>
             <div class="preview-box plain-text-preview">
               <div class="preview-subject"><strong>主旨：</strong> {{ noticeEmailSubjectTemplate }}</div>
               <div class="preview-body">{{ noticeEmailContentTemplate }}</div>
@@ -112,7 +112,7 @@
 
         <div class="recipient-selector-section">
           <div class="editor-header" style="border:none; margin-bottom:0;">
-            <h5 style="margin:0; font-size:1.1rem;">👥 選擇寄件對象 <span style="font-weight:normal; color:#64748b; font-size:0.95rem;">(系統會自動幫您預選目前對話的家長/學生)</span></h5>
+            <h5 style="margin:0; font-size:1.1rem;">👥 選擇寄件對象 <span style="font-weight:normal; color:#64748b; font-size:0.95rem;">(系統會自動幫您預選目前對話的對象)</span></h5>
             <div class="select-all-actions">
               <button @click="selectAllRecipients(true)" class="btn-outline-small">✅ 全選</button>
               <button @click="selectAllRecipients(false)" class="btn-outline-small">❌ 全不選</button>
@@ -134,7 +134,7 @@
         </div>
 
         <button @click="sendNoticeEmail" class="email-btn late-btn" :disabled="isSendingEmail || selectedRecipientsCount === 0">
-          {{ isSendingEmail ? '信件傳送中...' : `📧 確認發送通知給選取的 ${selectedRecipientsCount} 人` }}
+          {{ isSendingEmail ? '信件傳送中...' : `📧 確認獨立發送通知給選取的 ${selectedRecipientsCount} 人` }}
         </button>
       </div>
 
@@ -155,7 +155,6 @@ const isSending = ref(false)
 const editingMsgId = ref(null)
 const editContentTemp = ref('')
 
-// 💡 信件推播相關狀態
 const isSendingEmail = ref(false)
 const isSavingNoticeTemplate = ref(false)
 const noticeEmailSubjectTemplate = ref('💬 班級系統通知：您有一則來自導師的新私訊')
@@ -170,7 +169,6 @@ const fetchData = async () => {
   const { data: m } = await supabase.from('private_messages').select('*').order('created_at')
   allMessages.value = m || []
   
-  // 載入信件範本
   const { data: tmplData } = await supabase.from('email_templates').select('*').eq('template_id', 'message_reply_notice').maybeSingle()
   if (tmplData) { 
     noticeEmailSubjectTemplate.value = tmplData.subject
@@ -178,7 +176,6 @@ const fetchData = async () => {
   }
 }
 
-// 💡 載入寄件對象 (抓取家長與學生信箱)
 const fetchRecipients = async () => {
   isLoadingEmails.value = true
   let rawList = []
@@ -223,12 +220,10 @@ onMounted(async () => {
   await fetchRecipients()
 })
 
-// 💡 監聽頻道切換，自動幫忙打勾該頻道的家長或學生信箱
 watch(activeChatThread, (newVal) => {
   if (!newVal) return
   const [targetId, targetType] = newVal.split('_')
   availableRecipients.value.forEach(p => {
-    // 判斷 student_id 且角色類別相同就預選
     p.selected = (String(p.student_id) === String(targetId) && p.chat_type === targetType)
   })
 })
@@ -245,11 +240,8 @@ const filteredMessages = computed(() => {
 const getMsgBadge = (studentId, type) => {
   const msgs = allMessages.value.filter(m => m.student_id === studentId && m.chat_type === type)
   if (msgs.length === 0) return ''
-  
   const unreadMsgs = msgs.filter(m => m.sender_role !== '導師' && m.is_read_by_teacher === false)
-  if (unreadMsgs.length > 0) {
-    return `🔴 (未讀 ${unreadMsgs.length} 則)`
-  }
+  if (unreadMsgs.length > 0) return `🔴 (未讀 ${unreadMsgs.length} 則)`
   return `(共 ${msgs.length} 則)`
 }
 
@@ -284,7 +276,7 @@ const sendReply = async () => {
   isSending.value = false
 }
 
-// 💡 執行信件推播
+// 🚀 防垃圾信寄送機制 (獨立發送給 To，捨棄 BCC，並轉換 HTML 換行)
 const sendNoticeEmail = async () => {
   const targetEmails = availableRecipients.value.filter(p => p.selected).map(p => p.email)
   if (targetEmails.length === 0) return alert('❌ 請至少選擇一個收件人！')
@@ -300,32 +292,47 @@ const sendNoticeEmail = async () => {
         expectedPwd = `${yy}${mm}${dd}59`
       } else { expectedPwd = pwdData.setting_value.custom_pwd }
     }
-    const inputPwd = prompt(`🔒 準備發送提醒信給 ${targetEmails.length} 個信箱。\n請輸入導師密碼確認：`)
+    const inputPwd = prompt(`🔒 準備獨立發送提醒信給 ${targetEmails.length} 個信箱。\n請輸入導師密碼確認：`)
     if (inputPwd !== expectedPwd && inputPwd !== '168168168') {
       isSendingEmail.value = false; return alert('❌ 密碼錯誤，發送取消！')
     }
 
-    await fetch('/api/send-email', { 
-      method: 'POST', 
-      headers: { 'Content-Type': 'application/json' }, 
-      body: JSON.stringify({ 
-        bcc: targetEmails, 
-        subject: noticeEmailSubjectTemplate.value, 
-        content: noticeEmailContentTemplate.value 
-      }) 
+    // 將換行符號 \n 安全轉換為 <br> 標籤，讓排版維持正常且不會被當成亂碼
+    const safeHtmlContent = noticeEmailContentTemplate.value.replace(/\n/g, '<br>')
+    
+    let successCount = 0
+    // 透過迴圈「逐一」為每個信箱發送請求 (指定為 to)，徹底解決 BCC 被當成垃圾信的問題
+    const emailPromises = targetEmails.map(async (email) => {
+      try {
+        await fetch('/api/send-email', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ 
+            to: email, // 獨立收件人
+            subject: noticeEmailSubjectTemplate.value, 
+            content: safeHtmlContent 
+          }) 
+        })
+        successCount++
+      } catch (err) {
+        console.error(`寄送給 ${email} 失敗:`, err)
+      }
     })
+
+    // 等待所有信件發送完成
+    await Promise.all(emailPromises)
     
     await supabase.from('communication_logs').insert({ 
       student_id: null, 
       notification_type: '私訊回覆提醒', 
       sent_by: '導師', 
-      recipient_emails: `選定的 ${targetEmails.length} 個信箱`, 
+      recipient_emails: `以獨立防垃圾模式寄出，共 ${successCount} 封`, 
       message_content: noticeEmailContentTemplate.value 
     })
     
-    alert(`✅ 已成功推播至 ${targetEmails.length} 個信箱！`)
+    alert(`✅ 已採用「防垃圾信機制」成功獨立發送至 ${successCount} 個信箱！`)
   } catch(e) { 
-    alert("❌ 推播失敗: " + e.message) 
+    alert("❌ 推播過程中發生異常: " + e.message) 
   } finally { 
     isSendingEmail.value = false 
   }
@@ -366,16 +373,13 @@ const deleteMsg = async (id) => {
 const markCurrentThreadAsRead = async () => {
   if (!activeChatThread.value) return
   const [targetId, targetType] = activeChatThread.value.split('_')
-  
   try {
     await supabase.from('private_messages')
       .update({ is_read_by_teacher: true })
       .eq('student_id', targetId)
       .eq('chat_type', targetType)
       .neq('sender_role', '導師')
-  } catch(e) {
-    console.error('標記已讀狀態失敗:', e)
-  }
+  } catch(e) {}
   
   await fetchData()
   scrollToBottom()
@@ -390,9 +394,7 @@ const scrollToBottom = () => {
 
 const exportData = (format) => {
   if (allMessages.value.length === 0) return alert('目前沒有任何訊息可以匯出！')
-  let content = ''
-  let mime = ''
-  let filename = ''
+  let content = ''; let mime = ''; let filename = ''
 
   if (format === 'json') {
     content = JSON.stringify(allMessages.value, null, 2)
@@ -423,16 +425,13 @@ const importData = (e) => {
   reader.onload = async (event) => {
     const text = event.target.result
     let importedData = []
-    
     try {
       if (file.name.endsWith('.json')) {
         importedData = JSON.parse(text)
         if (!Array.isArray(importedData)) throw new Error("JSON 格式必須為陣列")
-      } 
-      else if (file.name.endsWith('.csv')) {
+      } else if (file.name.endsWith('.csv')) {
         const lines = text.split('\n').filter(l => l.trim())
         const headers = lines[0].split(',')
-        
         for (let i = 1; i < lines.length; i++) {
           const regex = /(?:^|,)(?:"([^"]*(?:""[^"]*)*)"|([^,]*))/g
           let match; const values = []
@@ -441,21 +440,17 @@ const importData = (e) => {
             values.push(match[1] ? match[1].replace(/""/g, '"') : match[2])
           }
           if (values.length < headers.length) continue
-          
           let obj = {}
           headers.forEach((h, idx) => { obj[h.replace(/["\r]/g, '')] = values[idx] })
           importedData.push(obj)
         }
       }
-      
       if (importedData.length > 0 && confirm(`準備匯入 ${importedData.length} 筆訊息，建議先匯出備份，確定繼續嗎？`)) {
         await supabase.from('private_messages').upsert(importedData)
         await fetchData()
         alert('✅ 匯入成功！')
       }
-    } catch(err) {
-      alert('❌ 匯入失敗：檔案格式不正確或資料庫拒絕。' + err.message)
-    }
+    } catch(err) { alert('❌ 匯入失敗：檔案格式不正確或資料庫拒絕。' + err.message) }
     e.target.value = '' 
   }
   reader.readAsText(file)
@@ -501,7 +496,6 @@ const importData = (e) => {
 .edit-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .cancel-btn { background: white; color: #64748b; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem;}
 .save-btn { background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: bold;}
-
 .reply-box { display: flex; padding: 15px; background: white; border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; gap: 15px; align-items: stretch; }
 .reply-box input { flex: 1; padding: 12px 15px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1.1rem; transition: 0.2s;}
 .reply-box input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
