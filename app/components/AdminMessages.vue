@@ -78,7 +78,7 @@
         <button @click="sendReply" class="send-reply-btn" :disabled="isSending">📤 傳送私訊</button>
       </div>
 
-      <!-- 💡 回覆通知信件推播設定區塊 -->
+      <!-- 💡 專業信件推播設定區塊 -->
       <div class="email-editor-section">
         <div class="editor-header">
           <h4>📧 寄送「新私訊提醒」信件通知家長/學生</h4>
@@ -94,18 +94,15 @@
               <input type="text" v-model="noticeEmailSubjectTemplate" class="edit-input" />
             </div>
             <div class="form-group">
-              <label>信件內容：(純文字格式，避免進入垃圾信箱)</label>
-              <textarea v-model="noticeEmailContentTemplate" rows="5" class="edit-input textarea-input"></textarea>
+              <label>信件文字內容：(系統將自動為您加上專業排版框架)</label>
+              <textarea v-model="noticeEmailContentTemplate" rows="8" class="edit-input textarea-input"></textarea>
             </div>
           </div>
           
           <div class="email-preview-col">
-            <h5>👀 實際信件預覽</h5>
-            <div class="preview-box plain-text-preview">
-              <div class="preview-subject"><strong>主旨：</strong> {{ noticeEmailSubjectTemplate }}</div>
-              <!-- CSS white-space: pre-wrap 會自動正確呈現換行 -->
-              <div class="preview-body">{{ noticeEmailContentTemplate }}</div>
-            </div>
+            <h5>👀 高信任度信件預覽 (家長實際看到的樣子)</h5>
+            <!-- 💡 將預覽畫面改為渲染 HTML，讓您看到信件穿上衣服的樣子 -->
+            <div class="preview-box html-preview-container" v-html="finalEmailHtml"></div>
           </div>
         </div>
 
@@ -135,7 +132,7 @@
         </div>
 
         <button @click="sendNoticeEmail" class="email-btn late-btn" :disabled="isSendingEmail || selectedRecipientsCount === 0">
-          {{ isSendingEmail ? '正在安全間隔發送中，請勿關閉視窗...' : `📧 確認獨立發送通知給選取的 ${selectedRecipientsCount} 人` }}
+          {{ isSendingEmail ? '正在安全發送中，請勿關閉視窗...' : `📧 確認獨立發送通知給選取的 ${selectedRecipientsCount} 人` }}
         </button>
       </div>
 
@@ -159,9 +156,28 @@ const editContentTemp = ref('')
 const isSendingEmail = ref(false)
 const isSavingNoticeTemplate = ref(false)
 const noticeEmailSubjectTemplate = ref('💬 班級系統通知：您有一則來自導師的新私訊')
-const noticeEmailContentTemplate = ref(`家長/同學 您好，\n\n導師已在班級網站的私訊系統中回覆了您的訊息，請抽空登入班級網頁查看。\n\n(若此信件進入垃圾郵件，請將導師信箱加入通訊錄或標示為非垃圾郵件)\n\n班級導師 敬上`)
+const noticeEmailContentTemplate = ref(`家長/同學 您好，\n\n導師已在班級網站的私訊系統中回覆了您的訊息，煩請抽空登入班級網頁查看。\n\n班級導師 敬上`)
 const availableRecipients = ref([])
 const isLoadingEmails = ref(true)
+
+// 💡 核心防垃圾信設計：建構高信任度的 HTML 信件外觀
+const finalEmailHtml = computed(() => {
+  const contentWithBr = noticeEmailContentTemplate.value.replace(/\n/g, '<br>')
+  return `
+    <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+      <div style="background-color: #0ea5e9; color: white; padding: 18px 25px; font-size: 1.25rem; font-weight: bold; border-bottom: 3px solid #0284c7;">
+        ✉️ 班級系統重要通知
+      </div>
+      <div style="padding: 25px; color: #374151; line-height: 1.7; font-size: 1.05rem; background-color: #ffffff;">
+        ${contentWithBr}
+      </div>
+      <div style="background-color: #f9fafb; padding: 18px 25px; color: #6b7280; font-size: 0.85rem; border-top: 1px solid #e5e7eb; line-height: 1.5;">
+        ※ 此為系統自動發送之信件，請勿直接回覆。<br>
+        💡 <strong style="color: #4b5563;">溫馨提醒：</strong>若此信件被誤判為垃圾郵件，請點選「這不是垃圾信」或將寄件者加入聯絡人，以確保未來能正常接收。
+      </div>
+    </div>
+  `
+})
 
 const fetchData = async () => {
   const { data: s } = await supabase.from('students').select('*').order('seat_number')
@@ -173,8 +189,7 @@ const fetchData = async () => {
   const { data: tmplData } = await supabase.from('email_templates').select('*').eq('template_id', 'message_reply_notice').maybeSingle()
   if (tmplData) { 
     noticeEmailSubjectTemplate.value = tmplData.subject
-    // 💡 徹底移除 <br> 轉換邏輯，還原純文字
-    noticeEmailContentTemplate.value = tmplData.content.replace(/<br\s*\/?>/ig, '\n').replace(/<[^>]+>/g, '') 
+    noticeEmailContentTemplate.value = tmplData.content
   }
 }
 
@@ -278,7 +293,6 @@ const sendReply = async () => {
   isSending.value = false
 }
 
-// 🚀 終極防垃圾信機制 (一封一封獨立寄，並間隔 1 秒)
 const sendNoticeEmail = async () => {
   const targetEmails = availableRecipients.value.filter(p => p.selected).map(p => p.email)
   if (targetEmails.length === 0) return alert('❌ 請至少選擇一個收件人！')
@@ -294,32 +308,26 @@ const sendNoticeEmail = async () => {
         expectedPwd = `${yy}${mm}${dd}59`
       } else { expectedPwd = pwdData.setting_value.custom_pwd }
     }
-    const inputPwd = prompt(`🔒 準備獨立發送提醒信給 ${targetEmails.length} 個信箱。\n為避免信箱封鎖，系統會放慢寄送速度，請耐心等待。\n請輸入導師密碼確認：`)
+    const inputPwd = prompt(`🔒 準備獨立發送提醒信給 ${targetEmails.length} 個信箱。\n為避免信箱封鎖，系統已啟用高信任度框架並放慢發送速度。\n請輸入導師密碼確認：`)
     if (inputPwd !== expectedPwd && inputPwd !== '168168168') {
       isSendingEmail.value = false; return alert('❌ 密碼錯誤，發送取消！')
     }
 
     let successCount = 0
-    // 💡 保持原汁原味的純文字內容，絕對不再使用 replace(/\\n/g, '<br>')
-    const pureTextContent = noticeEmailContentTemplate.value
 
-    // 💡 放棄 BCC 群發，改用迴圈搭配 `to` 欄位一封一封寄出
     for (const email of targetEmails) {
       try {
         await fetch('/api/send-email', { 
           method: 'POST', 
           headers: { 'Content-Type': 'application/json' }, 
           body: JSON.stringify({ 
-            to: email, // 獨立收件人
+            to: email, 
             subject: noticeEmailSubjectTemplate.value, 
-            content: pureTextContent 
+            content: finalEmailHtml.value // 💡 傳送組裝好的高信任度 HTML 結構
           }) 
         })
         successCount++
-        
-        // 💡 寄完一封後，強制暫停 1 秒 (1000 毫秒)，避開大量寄信的機器人偵測
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        
+        await new Promise(resolve => setTimeout(resolve, 1000)) // 💡 強制暫停 1 秒
       } catch (err) {
         console.error(`寄送給 ${email} 失敗:`, err)
       }
@@ -329,11 +337,11 @@ const sendNoticeEmail = async () => {
       student_id: null, 
       notification_type: '私訊回覆提醒', 
       sent_by: '導師', 
-      recipient_emails: `以安全間隔模式獨立寄出，共 ${successCount} 封`, 
-      message_content: pureTextContent 
+      recipient_emails: `以高信任度框架獨立寄出，共 ${successCount} 封`, 
+      message_content: noticeEmailContentTemplate.value 
     })
     
-    alert(`✅ 已採用「防垃圾安全間隔模式」成功獨立發送至 ${successCount} 個信箱！`)
+    alert(`✅ 已採用「高信任度 HTML 框架」成功獨立發送至 ${successCount} 個信箱！\n若仍有家長反應進入垃圾信，請請家長點擊一次『這不是垃圾信』，系統就會永遠記住了。`)
   } catch(e) { 
     alert("❌ 推播過程中發生異常: " + e.message) 
   } finally { 
@@ -343,10 +351,9 @@ const sendNoticeEmail = async () => {
 
 const saveNoticeEmailTemplate = async () => {
   isSavingNoticeTemplate.value = true
-  // 直接儲存原本輸入的純文字字串，不再轉換 <br>
   const contentToSave = noticeEmailContentTemplate.value
   await supabase.from('email_templates').upsert({ template_id: 'message_reply_notice', subject: noticeEmailSubjectTemplate.value, content: contentToSave })
-  alert('✅ 推播信件範本已儲存！')
+  alert('✅ 推播信件文字範本已儲存！')
   isSavingNoticeTemplate.value = false
 }
 
@@ -521,9 +528,8 @@ const importData = (e) => {
 .edit-input { padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; width: 100%; font-size: 1rem;}
 .textarea-input { resize: vertical; font-family: inherit; line-height: 1.5; }
 
-.plain-text-preview { background: #fefce8; padding: 15px; border-radius: 6px; border: 1px solid #fde047; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); height: 100%; box-sizing: border-box;}
-.preview-subject { font-size: 1rem; color: #92400e; border-bottom: 1px dashed #fcd34d; padding-bottom: 10px; margin-bottom: 10px; font-weight: bold;}
-.preview-body { font-size: 1rem; color: #451a03; line-height: 1.6; white-space: pre-wrap; font-family: monospace;}
+/* 💡 將預覽區塊設定為無邊框，直接展示最終 HTML 的效果 */
+.html-preview-container { padding: 10px; background: transparent; }
 
 .cork-divider { border-top: 1px dashed #cbd5e1; border-bottom: none; margin: 25px 0; }
 
