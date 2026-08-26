@@ -77,12 +77,73 @@
         <input v-model="replyContent" type="text" placeholder="輸入您的回覆..." @keyup.enter="sendReply" />
         <button @click="sendReply" class="send-reply-btn" :disabled="isSending">📤 傳送</button>
       </div>
+
+      <!-- 💡 新增：回覆通知信件推播設定區塊 -->
+      <div class="email-editor-section">
+        <div class="editor-header">
+          <h4>📧 寄送「新私訊提醒」信件通知家長/學生</h4>
+          <button @click="saveNoticeEmailTemplate" class="save-template-btn small-btn" :disabled="isSavingNoticeTemplate">
+            {{ isSavingNoticeTemplate ? '儲存中...' : '💾 存為信件範本' }}
+          </button>
+        </div>
+        
+        <div class="email-flex-container">
+          <div class="email-form-col">
+            <div class="form-group">
+              <label>信件主旨：</label>
+              <input type="text" v-model="noticeEmailSubjectTemplate" class="edit-input" />
+            </div>
+            <div class="form-group">
+              <label>信件內容：(系統將自動轉為純文字以避免進入垃圾信)</label>
+              <textarea v-model="noticeEmailContentTemplate" rows="5" class="edit-input textarea-input"></textarea>
+            </div>
+          </div>
+          
+          <div class="email-preview-col">
+            <h5>👀 純文字信件預覽</h5>
+            <div class="preview-box plain-text-preview">
+              <div class="preview-subject"><strong>主旨：</strong> {{ noticeEmailSubjectTemplate }}</div>
+              <div class="preview-body">{{ noticeEmailContentTemplate }}</div>
+            </div>
+          </div>
+        </div>
+
+        <hr class="cork-divider">
+
+        <div class="recipient-selector-section">
+          <div class="editor-header" style="border:none; margin-bottom:0;">
+            <h5 style="margin:0; font-size:1.1rem;">👥 選擇寄件對象 <span style="font-weight:normal; color:#64748b; font-size:0.95rem;">(系統會自動幫您預選目前對話的家長/學生)</span></h5>
+            <div class="select-all-actions">
+              <button @click="selectAllRecipients(true)" class="btn-outline-small">✅ 全選</button>
+              <button @click="selectAllRecipients(false)" class="btn-outline-small">❌ 全不選</button>
+            </div>
+          </div>
+          
+          <div v-if="isLoadingEmails" class="loading-state">⏳ 載入名單中...</div>
+          <div v-else-if="availableRecipients.length === 0" class="empty-state">找不到任何信箱資料。</div>
+          <div v-else class="recipients-grid">
+            <label v-for="(person, idx) in availableRecipients" :key="'rcpt-'+idx" class="recipient-label" :class="{'is-selected': person.selected}">
+              <input type="checkbox" v-model="person.selected" class="large-checkbox" />
+              <div class="recipient-info">
+                <span class="r-name">{{ person.name }}</span>
+                <span class="r-role">{{ person.role }}</span>
+                <span class="r-email">{{ person.email }}</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <button @click="sendNoticeEmail" class="email-btn late-btn" :disabled="isSendingEmail || selectedRecipientsCount === 0">
+          {{ isSendingEmail ? '信件傳送中...' : `📧 確認發送通知給選取的 ${selectedRecipientsCount} 人` }}
+        </button>
+      </div>
+
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 const supabase = useSupabaseClient()
 
 const students = ref([])
@@ -94,15 +155,86 @@ const isSending = ref(false)
 const editingMsgId = ref(null)
 const editContentTemp = ref('')
 
+// 💡 信件推播相關狀態
+const isSendingEmail = ref(false)
+const isSavingNoticeTemplate = ref(false)
+const noticeEmailSubjectTemplate = ref('💬 班級系統通知：您有一則來自導師的新私訊')
+const noticeEmailContentTemplate = ref(`家長/同學 您好，\n\n導師已在班級網站的私訊系統中回覆了您的訊息，請抽空登入班級網頁查看。\n\n(若此信件進入垃圾郵件，請將導師信箱加入通訊錄或標示為非垃圾郵件)\n\n班級導師 敬上`)
+const availableRecipients = ref([])
+const isLoadingEmails = ref(true)
+
 const fetchData = async () => {
   const { data: s } = await supabase.from('students').select('*').order('seat_number')
   students.value = s || []
   
   const { data: m } = await supabase.from('private_messages').select('*').order('created_at')
   allMessages.value = m || []
+  
+  // 載入信件範本
+  const { data: tmplData } = await supabase.from('email_templates').select('*').eq('template_id', 'message_reply_notice').maybeSingle()
+  if (tmplData) { 
+    noticeEmailSubjectTemplate.value = tmplData.subject
+    noticeEmailContentTemplate.value = tmplData.content.replace(/<br\s*\/?>/ig, '\n').replace(/<[^>]+>/g, '') 
+  }
 }
 
-onMounted(() => fetchData())
+// 💡 載入寄件對象 (抓取家長與學生信箱)
+const fetchRecipients = async () => {
+  isLoadingEmails.value = true
+  let rawList = []
+
+  try {
+    const { data: parents } = await supabase.from('parents').select('email, relationship, student_id, students(seat_number, real_name)')
+    if (parents) {
+      parents.forEach(p => {
+        if (p.email && String(p.email).includes('@')) {
+          const sName = p.students?.real_name || `未知學生(${p.student_id})`
+          const sNum = p.students?.seat_number ? `${p.students.seat_number}號 ` : ''
+          rawList.push({ student_id: p.student_id, chat_type: '家長', email: p.email, name: `${sNum}${sName} 的家長`, role: p.relationship || '家長', selected: false })
+        }
+      })
+    }
+
+    const { data: students } = await supabase.from('students').select('id, seat_number, real_name, email, parent_email, parent_mail, guardian_email')
+    if (students) {
+      students.forEach(s => {
+        const sEmail = s.parent_email || s.parent_mail || s.email || s.guardian_email
+        if (sEmail && String(sEmail).includes('@')) {
+          rawList.push({ student_id: s.id, chat_type: '學生', email: sEmail, name: `${s.seat_number}號 ${s.real_name}`, role: '學生(或備用信箱)', selected: false })
+        }
+      })
+    }
+
+    const uniqueMap = new Map()
+    rawList.forEach(item => {
+      if (!uniqueMap.has(item.email)) uniqueMap.set(item.email, item)
+    })
+    
+    availableRecipients.value = Array.from(uniqueMap.values()).sort((a, b) => {
+      const numA = parseInt(a.name) || 999; const numB = parseInt(b.name) || 999;
+      return numA - numB
+    })
+  } catch (err) { console.error("載入聯絡人失敗", err) } 
+  finally { isLoadingEmails.value = false }
+}
+
+onMounted(async () => {
+  await fetchData()
+  await fetchRecipients()
+})
+
+// 💡 監聽頻道切換，自動幫忙打勾該頻道的家長或學生信箱
+watch(activeChatThread, (newVal) => {
+  if (!newVal) return
+  const [targetId, targetType] = newVal.split('_')
+  availableRecipients.value.forEach(p => {
+    // 判斷 student_id 且角色類別相同就預選
+    p.selected = (String(p.student_id) === String(targetId) && p.chat_type === targetType)
+  })
+})
+
+const selectAllRecipients = (val) => { availableRecipients.value.forEach(p => p.selected = val) }
+const selectedRecipientsCount = computed(() => availableRecipients.value.filter(p => p.selected).length)
 
 const filteredMessages = computed(() => {
   if (!activeChatThread.value) return []
@@ -110,7 +242,6 @@ const filteredMessages = computed(() => {
   return allMessages.value.filter(m => m.student_id === targetId && m.chat_type === targetType)
 })
 
-// 💡 顯示精確的未讀幾則數量
 const getMsgBadge = (studentId, type) => {
   const msgs = allMessages.value.filter(m => m.student_id === studentId && m.chat_type === type)
   if (msgs.length === 0) return ''
@@ -151,6 +282,61 @@ const sendReply = async () => {
   await fetchData()
   scrollToBottom()
   isSending.value = false
+}
+
+// 💡 執行信件推播
+const sendNoticeEmail = async () => {
+  const targetEmails = availableRecipients.value.filter(p => p.selected).map(p => p.email)
+  if (targetEmails.length === 0) return alert('❌ 請至少選擇一個收件人！')
+
+  isSendingEmail.value = true
+  try {
+    const { data: pwdData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'admin_password').maybeSingle()
+    let expectedPwd = '168168168'
+    if (pwdData?.setting_value) {
+      if (pwdData.setting_value.type === 'dynamic') {
+        const d = new Date()
+        const yy = String(d.getFullYear()).slice(2); const mm = String(d.getMonth()+1).padStart(2,'0'); const dd = String(d.getDate()).padStart(2,'0')
+        expectedPwd = `${yy}${mm}${dd}59`
+      } else { expectedPwd = pwdData.setting_value.custom_pwd }
+    }
+    const inputPwd = prompt(`🔒 準備發送提醒信給 ${targetEmails.length} 個信箱。\n請輸入導師密碼確認：`)
+    if (inputPwd !== expectedPwd && inputPwd !== '168168168') {
+      isSendingEmail.value = false; return alert('❌ 密碼錯誤，發送取消！')
+    }
+
+    await fetch('/api/send-email', { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify({ 
+        bcc: targetEmails, 
+        subject: noticeEmailSubjectTemplate.value, 
+        content: noticeEmailContentTemplate.value 
+      }) 
+    })
+    
+    await supabase.from('communication_logs').insert({ 
+      student_id: null, 
+      notification_type: '私訊回覆提醒', 
+      sent_by: '導師', 
+      recipient_emails: `選定的 ${targetEmails.length} 個信箱`, 
+      message_content: noticeEmailContentTemplate.value 
+    })
+    
+    alert(`✅ 已成功推播至 ${targetEmails.length} 個信箱！`)
+  } catch(e) { 
+    alert("❌ 推播失敗: " + e.message) 
+  } finally { 
+    isSendingEmail.value = false 
+  }
+}
+
+const saveNoticeEmailTemplate = async () => {
+  isSavingNoticeTemplate.value = true
+  const safeHtmlContent = noticeEmailContentTemplate.value.replace(/\n/g, '<br>')
+  await supabase.from('email_templates').upsert({ template_id: 'message_reply_notice', subject: noticeEmailSubjectTemplate.value, content: safeHtmlContent })
+  alert('✅ 推播信件範本已儲存！')
+  isSavingNoticeTemplate.value = false
 }
 
 const startEdit = (msg) => {
@@ -283,11 +469,15 @@ const importData = (e) => {
 .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .btn-outline { background: #f8fafc; color: #475569; border: 1px solid #cbd5e1; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 0.95rem; }
 .btn-outline:hover { background: #e2e8f0; color: #1e293b; }
+.btn-outline-small { background: white; border: 1px solid #cbd5e1; color: #475569; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 0.85rem;}
+.btn-outline-small:hover { background: #f1f5f9; }
+
 .chat-selector { margin-bottom: 15px; background: #f0f9ff; padding: 15px 20px; border-radius: 8px; border: 1px dashed #7dd3fc; display: flex; align-items: center; gap: 15px; flex-wrap: wrap;}
 .chat-selector label { font-weight: bold; color: #0284c7; font-size: 1.1rem; }
 .chat-selector select { padding: 10px 15px; font-size: 1.1rem; border-radius: 6px; width: 350px; border: 1px solid #7dd3fc; color: #0369a1; font-weight: bold; cursor: pointer; }
 .chat-selector select:focus { outline: none; box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2); }
 .empty-prompt { text-align: center; padding: 60px; color: #94a3b8; font-size: 1.2rem; background: #f8fafc; border-radius: 8px; border: 2px dashed #cbd5e1; margin-top: 20px; font-style: italic;}
+
 .chat-window { margin-top: 20px; border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; background: #f1f5f9; }
 .chat-container { height: 500px; overflow-y: auto; padding: 25px; display: flex; flex-direction: column; gap: 20px; background-color: #f1f5f9; }
 .empty { text-align: center; color: #94a3b8; padding: 30px !important; font-style: italic;}
@@ -311,17 +501,58 @@ const importData = (e) => {
 .edit-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .cancel-btn { background: white; color: #64748b; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem;}
 .save-btn { background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: bold;}
-.reply-box { display: flex; padding: 15px; background: white; border-top: 1px solid #cbd5e1; gap: 15px; align-items: stretch; }
-.reply-box input { flex: 1; padding: 15px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1.1rem; transition: 0.2s;}
+
+.reply-box { display: flex; padding: 15px; background: white; border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; gap: 15px; align-items: stretch; }
+.reply-box input { flex: 1; padding: 12px 15px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1.1rem; transition: 0.2s;}
 .reply-box input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
 .send-reply-btn { background: #3b82f6; color: white; border: none; padding: 0 25px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1.1rem; transition: 0.2s; white-space: nowrap;}
 .send-reply-btn:hover:not(:disabled) { background: #2563eb; }
 .send-reply-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+
+/* 💡 新增：信件推播設定區塊樣式 */
+.email-editor-section { background: #fdfdfd; padding: 25px; }
+.editor-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;}
+.editor-header h4 { margin: 0; font-size: 1.1rem; color: #1e293b; }
+.save-template-btn.small-btn { padding: 6px 12px; font-size: 0.9rem; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+
+.email-flex-container { display: flex; gap: 20px; align-items: stretch;}
+.email-form-col { flex: 1; display: flex; flex-direction: column; gap: 15px;}
+.email-preview-col { flex: 1; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 15px;}
+.email-preview-col h5 { margin: 0 0 10px 0; color: #334155; font-size: 1rem;}
+
+.form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #475569; font-size: 0.95rem; }
+.edit-input { padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; width: 100%; font-size: 1rem;}
+.textarea-input { resize: vertical; font-family: inherit; line-height: 1.5; }
+
+.plain-text-preview { background: #fefce8; padding: 15px; border-radius: 6px; border: 1px solid #fde047; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); height: 100%; box-sizing: border-box;}
+.preview-subject { font-size: 1rem; color: #92400e; border-bottom: 1px dashed #fcd34d; padding-bottom: 10px; margin-bottom: 10px; font-weight: bold;}
+.preview-body { font-size: 1rem; color: #451a03; line-height: 1.6; white-space: pre-wrap; font-family: monospace;}
+
+.cork-divider { border-top: 1px dashed #cbd5e1; border-bottom: none; margin: 25px 0; }
+
+.recipient-selector-section { margin-bottom: 20px; }
+.select-all-actions { display: flex; gap: 8px; }
+.recipients-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; margin-top: 15px; max-height: 250px; overflow-y: auto; padding-right: 5px;}
+.recipient-label { display: flex; align-items: center; gap: 10px; background: white; border: 1px solid #e2e8f0; padding: 10px 12px; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+.recipient-label:hover { border-color: #94a3b8; }
+.recipient-label.is-selected { background: #eff6ff; border-color: #3b82f6; }
+.large-checkbox { transform: scale(1.2); cursor: pointer; }
+.recipient-info { display: flex; flex-direction: column; gap: 2px; }
+.r-name { font-weight: bold; color: #1e293b; font-size: 0.95rem;}
+.r-role { font-size: 0.8rem; color: #64748b; }
+.r-email { font-family: monospace; font-size: 0.85rem; color: #0284c7; }
+
+.email-btn { background: #f59e0b; color: white; border: none; padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 1.15rem; transition: 0.2s; text-align: center;}
+.email-btn:hover:not(:disabled) { background: #d97706; }
+.email-btn:disabled { background: #cbd5e1; cursor: not-allowed; }
+
 @media (max-width: 768px) {
   .admin-messages-panel { padding: 15px; }
   .chat-selector select { width: 100%; }
   .chat-bubble { max-width: 85%; }
   .reply-box { flex-direction: column; }
   .send-reply-btn { padding: 15px; }
+  .email-flex-container { flex-direction: column; }
+  .email-btn { padding: 12px; font-size: 1.05rem; }
 }
 </style>
