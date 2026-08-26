@@ -75,10 +75,10 @@
       
       <div class="reply-box">
         <input v-model="replyContent" type="text" placeholder="輸入您的回覆..." @keyup.enter="sendReply" />
-        <button @click="sendReply" class="send-reply-btn" :disabled="isSending">📤 傳送</button>
+        <button @click="sendReply" class="send-reply-btn" :disabled="isSending">📤 傳送私訊</button>
       </div>
 
-      <!-- 回覆通知信件推播設定區塊 -->
+      <!-- 💡 回覆通知信件推播設定區塊 -->
       <div class="email-editor-section">
         <div class="editor-header">
           <h4>📧 寄送「新私訊提醒」信件通知家長/學生</h4>
@@ -94,7 +94,7 @@
               <input type="text" v-model="noticeEmailSubjectTemplate" class="edit-input" />
             </div>
             <div class="form-group">
-              <label>信件內容：</label>
+              <label>信件內容：(純文字格式，避免進入垃圾信箱)</label>
               <textarea v-model="noticeEmailContentTemplate" rows="5" class="edit-input textarea-input"></textarea>
             </div>
           </div>
@@ -103,7 +103,7 @@
             <h5>👀 實際信件預覽</h5>
             <div class="preview-box plain-text-preview">
               <div class="preview-subject"><strong>主旨：</strong> {{ noticeEmailSubjectTemplate }}</div>
-              <!-- 修正預覽畫面，正確呈現換行 -->
+              <!-- CSS white-space: pre-wrap 會自動正確呈現換行 -->
               <div class="preview-body">{{ noticeEmailContentTemplate }}</div>
             </div>
           </div>
@@ -173,7 +173,7 @@ const fetchData = async () => {
   const { data: tmplData } = await supabase.from('email_templates').select('*').eq('template_id', 'message_reply_notice').maybeSingle()
   if (tmplData) { 
     noticeEmailSubjectTemplate.value = tmplData.subject
-    // 💡 容錯處理：如果有舊的 <br> 就轉回 \n，確保不會再出現 <br> 亂碼
+    // 💡 徹底移除 <br> 轉換邏輯，還原純文字
     noticeEmailContentTemplate.value = tmplData.content.replace(/<br\s*\/?>/ig, '\n').replace(/<[^>]+>/g, '') 
   }
 }
@@ -278,7 +278,7 @@ const sendReply = async () => {
   isSending.value = false
 }
 
-// 🚀 防垃圾信寄送機制 (循序發送 + 安全間隔 + 純文字無 HTML)
+// 🚀 終極防垃圾信機制 (一封一封獨立寄，並間隔 1 秒)
 const sendNoticeEmail = async () => {
   const targetEmails = availableRecipients.value.filter(p => p.selected).map(p => p.email)
   if (targetEmails.length === 0) return alert('❌ 請至少選擇一個收件人！')
@@ -294,16 +294,16 @@ const sendNoticeEmail = async () => {
         expectedPwd = `${yy}${mm}${dd}59`
       } else { expectedPwd = pwdData.setting_value.custom_pwd }
     }
-    const inputPwd = prompt(`🔒 準備獨立發送提醒信給 ${targetEmails.length} 個信箱。\n請輸入導師密碼確認：`)
+    const inputPwd = prompt(`🔒 準備獨立發送提醒信給 ${targetEmails.length} 個信箱。\n為避免信箱封鎖，系統會放慢寄送速度，請耐心等待。\n請輸入導師密碼確認：`)
     if (inputPwd !== expectedPwd && inputPwd !== '168168168') {
       isSendingEmail.value = false; return alert('❌ 密碼錯誤，發送取消！')
     }
 
     let successCount = 0
-    // 💡 修正 1：移除 <br> 轉換，保證傳送給 API 的是最乾淨的純文字
+    // 💡 保持原汁原味的純文字內容，絕對不再使用 replace(/\\n/g, '<br>')
     const pureTextContent = noticeEmailContentTemplate.value
 
-    // 💡 修正 2：使用 for 迴圈「循序」發送，取代原本的「同時」發送
+    // 💡 放棄 BCC 群發，改用迴圈搭配 `to` 欄位一封一封寄出
     for (const email of targetEmails) {
       try {
         await fetch('/api/send-email', { 
@@ -317,8 +317,8 @@ const sendNoticeEmail = async () => {
         })
         successCount++
         
-        // 💡 修正 3：寄送完一封後，暫停 0.5 秒，完美模擬人工寄信速度，避開垃圾信過濾器
-        await new Promise(resolve => setTimeout(resolve, 500))
+        // 💡 寄完一封後，強制暫停 1 秒 (1000 毫秒)，避開大量寄信的機器人偵測
+        await new Promise(resolve => setTimeout(resolve, 1000))
         
       } catch (err) {
         console.error(`寄送給 ${email} 失敗:`, err)
@@ -329,7 +329,7 @@ const sendNoticeEmail = async () => {
       student_id: null, 
       notification_type: '私訊回覆提醒', 
       sent_by: '導師', 
-      recipient_emails: `以防垃圾安全間隔模式寄出，共 ${successCount} 封`, 
+      recipient_emails: `以安全間隔模式獨立寄出，共 ${successCount} 封`, 
       message_content: pureTextContent 
     })
     
@@ -343,7 +343,7 @@ const sendNoticeEmail = async () => {
 
 const saveNoticeEmailTemplate = async () => {
   isSavingNoticeTemplate.value = true
-  // 直接儲存原本輸入的字串，不再轉換 <br>
+  // 直接儲存原本輸入的純文字字串，不再轉換 <br>
   const contentToSave = noticeEmailContentTemplate.value
   await supabase.from('email_templates').upsert({ template_id: 'message_reply_notice', subject: noticeEmailSubjectTemplate.value, content: contentToSave })
   alert('✅ 推播信件範本已儲存！')
@@ -521,7 +521,6 @@ const importData = (e) => {
 .edit-input { padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; width: 100%; font-size: 1rem;}
 .textarea-input { resize: vertical; font-family: inherit; line-height: 1.5; }
 
-/* 💡 確保預覽框正常換行 */
 .plain-text-preview { background: #fefce8; padding: 15px; border-radius: 6px; border: 1px solid #fde047; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); height: 100%; box-sizing: border-box;}
 .preview-subject { font-size: 1rem; color: #92400e; border-bottom: 1px dashed #fcd34d; padding-bottom: 10px; margin-bottom: 10px; font-weight: bold;}
 .preview-body { font-size: 1rem; color: #451a03; line-height: 1.6; white-space: pre-wrap; font-family: monospace;}
