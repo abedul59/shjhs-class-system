@@ -8,8 +8,56 @@
       </div>
     </div>
     
+    <!-- 💡 移至最上方：點名表鎖定時間設定與測試模擬器 -->
+    <div class="lock-test-section">
+      <h4 class="section-title" style="color: #0f766e; border-bottom: 2px solid #99f6e4;">🔒 點名表自動鎖定設定與測試</h4>
+      
+      <div class="lock-settings-container">
+        <!-- 鎖定時間設定 -->
+        <div class="setting-box">
+          <h5>🕒 設定自動鎖定時間</h5>
+          <p class="help-text">超過此時間後，首頁的點名表將自動鎖定，必須輸入導師密碼才能修改。</p>
+          <div class="lock-time-input-group">
+            <input type="time" v-model="lockTime" class="time-input" />
+            <button @click="saveLockTime" class="save-lock-btn" :disabled="isSavingLockTime">
+              {{ isSavingLockTime ? '儲存中...' : '💾 儲存鎖定時間' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- 模擬測試區 -->
+        <div class="test-box">
+          <h5>🎮 前台點名邏輯模擬器</h5>
+          <p class="help-text">輸入假定的時間，測試看看前台點名表會不會被鎖定。</p>
+          <div class="test-inputs">
+            <div>
+              <label>假定日期：</label>
+              <input type="date" v-model="simDate" class="sim-input" />
+            </div>
+            <div>
+              <label>假定時間：</label>
+              <input type="time" v-model="simTime" class="sim-input" />
+            </div>
+          </div>
+          
+          <div class="test-actions">
+            <button @click="testLockLogic" class="test-click-btn">🖱️ 模擬點擊首頁學生卡片</button>
+            <label class="unlock-checkbox">
+              <input type="checkbox" v-model="isUnlockedSim" />
+              模擬「今日已輸入密碼解鎖過」的狀態
+            </label>
+          </div>
+
+          <div v-if="simResult" class="sim-result-box" :class="simResultType">
+            {{ simResult }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 原始出缺席統計面板 -->
     <div class="attendance-control-panel">
-      <!-- 💡 新增：五格出缺席統計區塊 (對應前台顏色) -->
+      <!-- 五格出缺席統計區塊 -->
       <div class="stats-row">
         <div class="stat-box stat-expected">應到: <strong>{{ expectedCount }}</strong></div>
         <div class="stat-box stat-present">已到: <strong>{{ presentCount }}</strong></div>
@@ -143,10 +191,25 @@ const selectedHistoryDate = ref('')
 const historyAttendances = ref({}) 
 const isSavingHistory = ref(false)
 
+// 💡 鎖定時間與模擬器狀態
+const lockTime = ref('08:10')
+const isSavingLockTime = ref(false)
+const simDate = ref(todayISO)
+const simTime = ref('08:15')
+const simResult = ref('')
+const simResultType = ref('')
+const isUnlockedSim = ref(false)
+
 const fetchData = async () => {
   const { data: tmpl } = await supabase.from('email_templates').select('*').eq('template_id', 'late_notice').maybeSingle()
   if (tmpl) { emailSubjectTemplate.value = tmpl.subject; emailContentTemplate.value = tmpl.content }
   
+  // 💡 讀取鎖定時間
+  const { data: lockData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'attendance_lock_time').maybeSingle()
+  if (lockData && lockData.setting_value) {
+    lockTime.value = lockData.setting_value
+  }
+
   const { data: sData } = await supabase.from('students').select('*').order('seat_number')
   const { data: pData } = await supabase.from('parents').select('*')
   if (sData) adminStudents.value = sData.map(s => {
@@ -161,7 +224,53 @@ const fetchData = async () => {
 }
 onMounted(() => fetchData())
 
-// 💡 計算五格統計人數
+// 💡 儲存鎖定時間
+const saveLockTime = async () => {
+  if (!lockTime.value) return alert('請填寫有效時間！')
+  isSavingLockTime.value = true
+  try {
+    await supabase.from('system_settings').upsert({ setting_key: 'attendance_lock_time', setting_value: lockTime.value }, { onConflict: 'setting_key' })
+    alert('✅ 鎖定時間已成功更新！前台將會同步套用此設定。')
+  } catch (error) {
+    alert('❌ 儲存失敗：' + error.message)
+  } finally {
+    isSavingLockTime.value = false
+  }
+}
+
+// 💡 測試模擬邏輯 (完美還原前台邏輯)
+const testLockLogic = () => {
+  if (!simDate.value || !simTime.value) {
+    alert('請先設定模擬的日期與時間！')
+    return
+  }
+  
+  const simulatedDateTime = new Date(`${simDate.value}T${simTime.value}:00`)
+  const day = simulatedDateTime.getDay()
+  const hours = simulatedDateTime.getHours()
+  const minutes = simulatedDateTime.getMinutes()
+
+  // 1. 週末防護測試
+  if (day === 0 || day === 6) {
+    simResult.value = '🛑 測試結果：被系統封鎖！(週六與週日為非上課時間，無法進行點名)'
+    simResultType.value = 'error'
+    return
+  }
+
+  // 2. 判斷是否超過鎖定時間
+  const [lockH, lockM] = lockTime.value.split(':').map(Number)
+  const isLockedTime = hours > lockH || (hours === lockH && minutes >= lockM)
+
+  if (isLockedTime && !isUnlockedSim.value) {
+    simResult.value = `🔒 測試結果：已超過設定的 ${lockTime.value}，系統會「彈出密碼框」要求導師解鎖。`
+    simResultType.value = 'warning'
+  } else {
+    simResult.value = '✅ 測試結果：正常通行！(因為尚未到達鎖定時間，或是您勾選了已解鎖狀態)'
+    simResultType.value = 'success'
+  }
+}
+
+// 計算五格統計人數
 const expectedCount = computed(() => adminStudents.value.length)
 const presentCount = computed(() => todayAttendances.value.filter(a => a.status === '已到').length)
 const leaveCount = computed(() => todayAttendances.value.filter(a => a.status === '請假').length)
@@ -379,9 +488,32 @@ const exportHistory = async (type) => {
 .btn-export-json { background: #8b5cf6; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
 .btn-export-csv { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
 
+/* 💡 鎖定設定與測試區樣式 (加上背景與強調色) */
+.lock-test-section { background: #e0f2fe; border-radius: 12px; padding: 20px; border: 2px solid #14b8a6; margin-bottom: 30px; box-shadow: 0 4px 6px rgba(15, 118, 110, 0.15);}
+.lock-settings-container { display: flex; gap: 20px; flex-wrap: wrap;}
+.setting-box, .test-box { flex: 1; min-width: 300px; background: white; padding: 20px; border-radius: 8px; border: 1px dashed #0f766e; box-shadow: 0 2px 4px rgba(0,0,0,0.05);}
+.setting-box h5, .test-box h5 { margin: 0 0 10px 0; color: #0f766e; font-size: 1.1rem;}
+.lock-time-input-group { display: flex; gap: 10px; align-items: center; margin-top: 15px;}
+.time-input { padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 1.1rem; font-weight: bold; color: #334155;}
+.save-lock-btn { background: #0f766e; color: white; border: none; padding: 10px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s;}
+.save-lock-btn:hover:not(:disabled) { background: #115e59; }
+
+.test-inputs { display: flex; gap: 15px; margin-bottom: 15px;}
+.test-inputs label { font-weight: bold; color: #475569; display: block; margin-bottom: 5px;}
+.sim-input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-family: monospace; font-size: 1rem;}
+.test-actions { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;}
+.test-click-btn { background: #3b82f6; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1.05rem; transition: 0.2s;}
+.test-click-btn:hover { background: #2563eb; }
+.unlock-checkbox { display: flex; align-items: center; gap: 8px; cursor: pointer; color: #475569; font-weight: bold;}
+.unlock-checkbox input { transform: scale(1.2); cursor: pointer; }
+.sim-result-box { padding: 15px; border-radius: 6px; font-weight: bold; font-size: 1.05rem; }
+.sim-result-box.success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0;}
+.sim-result-box.warning { background: #fef9c3; color: #b45309; border: 1px solid #fde047;}
+.sim-result-box.error { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5;}
+
+
 .attendance-control-panel { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 20px; }
 
-/* 💡 新增：五格統計區塊樣式 (同步首頁設計) */
 .stats-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
 .stat-box { flex: 1; padding: 12px; border-radius: 6px; text-align: center; font-size: 1.05rem; font-weight: bold; min-width: 80px; }
 .stat-expected { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
@@ -394,7 +526,6 @@ const exportHistory = async (type) => {
 .absent-list-section h4 { margin: 0 0 15px 0; color: #b45309; }
 .tags-container { display: flex; flex-wrap: wrap; gap: 10px; }
 
-/* 💡 更新：標籤的基礎與各種狀態樣式 (同步首頁卡片顏色) */
 .status-tag { padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 0.95rem; border: 1px solid transparent; }
 .absent-tag { background: #ffe4e6; color: #e11d48; border-color: #fca5a5; }
 .late-tag { background: #e0e7ff; color: #3730a3; border-color: #a5b4fc; }
@@ -449,7 +580,6 @@ const exportHistory = async (type) => {
 .stu-seat { color: #64748b; font-size: 0.9rem;}
 .status-select { padding: 4px; border-radius: 4px; border: 1px solid #cbd5e1; font-weight: bold; text-align: center; outline: none; background: white; transition: 0.2s color;}
 
-/* 💡 歷史編輯區的卡片顏色同步設定 */
 .card-absent { background: #ffe4e6; border-color: #fca5a5; }
 .card-absent .stu-name { color: #e11d48; }
 .card-absent .status-select { color: #e11d48; }
@@ -465,4 +595,11 @@ const exportHistory = async (type) => {
 .card-late { background: #e0e7ff; border-color: #a5b4fc; }
 .card-late .stu-name { color: #4f46e5; }
 .card-late .status-select { color: #4f46e5; }
+
+@media (max-width: 768px) {
+  .calendar-layout { flex-direction: column; }
+  .lock-settings-container { flex-direction: column; }
+  .test-inputs { flex-direction: column; gap: 10px; }
+  .test-inputs div { width: 100%; display: flex; flex-direction: column;}
+}
 </style>
