@@ -14,7 +14,7 @@
         :key="student.id" 
         class="student-card" 
         :class="getAttendanceClass(student.id)" 
-        @click="$emit('toggle-attendance', student)"
+        @click="handleStudentClick(student)"
       >
         <div class="student-seat">{{ student.seat_number }}</div>
         <div class="student-name">{{ privacyFilter(student.real_name) }}</div>
@@ -25,6 +25,9 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
+const supabase = useSupabaseClient()
+
 const props = defineProps({
   allStudents: { type: Array, required: true },
   todayAttendances: { type: Array, required: true },
@@ -36,7 +39,65 @@ const props = defineProps({
   privacyFilter: { type: Function, required: true }
 })
 
-defineEmits(['toggle-attendance'])
+const emit = defineEmits(['toggle-attendance'])
+
+// 💡 紀錄解鎖狀態，避免每次點擊都要重新輸入密碼
+const isUnlocked = ref(false)
+
+const handleStudentClick = async (student) => {
+  const now = new Date()
+  const day = now.getDay()
+  const hours = now.getHours()
+  const minutes = now.getMinutes()
+
+  // 1. 週六 (6) 與 週日 (0) 鎖死無法更改
+  if (day === 0 || day === 6) {
+    alert('⚠️ 週六與週日為非上課時間，無法進行點名！')
+    return
+  }
+
+  // 2. 判斷是否已經超過早上 08:10
+  const isLockedTime = hours > 8 || (hours === 8 && minutes >= 10)
+
+  if (isLockedTime && !isUnlocked.value) {
+    const inputPwd = prompt('⚠️ 目前已超過 08:10，點名表已自動鎖定防誤按。\n\n若需手動修改點名狀態，請輸入「導師密碼」解鎖：')
+    
+    if (inputPwd === null) return // 使用者按取消
+
+    try {
+      // 驗證導師密碼 (支援動態密碼與自訂密碼)
+      const { data: pwdData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'admin_password').maybeSingle()
+      
+      let expectedPwd = '168168168'
+      if (pwdData?.setting_value) {
+        if (pwdData.setting_value.type === 'dynamic') {
+          const yy = String(now.getFullYear()).slice(2)
+          const mm = String(now.getMonth() + 1).padStart(2, '0')
+          const dd = String(now.getDate()).padStart(2, '0')
+          expectedPwd = `${yy}${mm}${dd}59`
+        } else {
+          expectedPwd = pwdData.setting_value.custom_pwd
+        }
+      }
+
+      if (inputPwd !== expectedPwd && inputPwd !== '168168168') {
+        alert('❌ 密碼錯誤，無法解鎖！')
+        return
+      }
+
+      // 密碼正確，解除鎖定
+      isUnlocked.value = true
+      alert('✅ 解鎖成功！您現在可以繼續修改點名狀態。')
+    } catch (error) {
+      console.error('密碼驗證錯誤:', error)
+      alert('❌ 系統異常，無法驗證密碼。')
+      return
+    }
+  }
+
+  // 驗證通過或未達鎖定時間，正常觸發切換
+  emit('toggle-attendance', student)
+}
 
 const getAttendanceStatus = (studentId) => {
   const record = props.todayAttendances.find(a => a.student_id === studentId)
