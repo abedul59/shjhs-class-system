@@ -8,7 +8,7 @@
       </div>
     </div>
     
-    <!-- 💡 移至最上方：點名表鎖定時間設定與測試模擬器 -->
+    <!-- 💡 點名表鎖定時間設定與測試模擬器 -->
     <div class="lock-test-section">
       <h4 class="section-title" style="color: #0f766e; border-bottom: 2px solid #99f6e4;">🔒 點名表自動鎖定設定與測試</h4>
       
@@ -25,10 +25,10 @@
           </div>
         </div>
 
-        <!-- 模擬測試區 -->
+        <!-- 💡 互動式前台點名邏輯模擬器 -->
         <div class="test-box">
           <h5>🎮 前台點名邏輯模擬器</h5>
-          <p class="help-text">輸入假定的時間，測試看看前台點名表會不會被鎖定。</p>
+          <p class="help-text">輸入假定的日期與時間，並試著點擊下方的模擬學生卡片，測試前台是否能如期鎖定或彈出密碼框。</p>
           <div class="test-inputs">
             <div>
               <label>假定日期：</label>
@@ -38,18 +38,29 @@
               <label>假定時間：</label>
               <input type="time" v-model="simTime" class="sim-input" />
             </div>
+            <div class="test-actions">
+              <label class="unlock-checkbox">
+                <input type="checkbox" v-model="isUnlockedSim" />
+                模擬「今日已解鎖過」狀態
+              </label>
+            </div>
           </div>
           
-          <div class="test-actions">
-            <button @click="testLockLogic" class="test-click-btn">🖱️ 模擬點擊首頁學生卡片</button>
-            <label class="unlock-checkbox">
-              <input type="checkbox" v-model="isUnlockedSim" />
-              模擬「今日已輸入密碼解鎖過」的狀態
-            </label>
-          </div>
-
-          <div v-if="simResult" class="sim-result-box" :class="simResultType">
-            {{ simResult }}
+          <div class="sim-grid-container">
+            <p class="sim-grid-title">👇 請嘗試點擊卡片測試 (僅為模擬，不會影響真實資料)</p>
+            <div class="student-grid sim-grid">
+              <div 
+                v-for="student in adminStudents" 
+                :key="'sim-'+student.id" 
+                class="student-card" 
+                :class="getSimAttendanceClass(student.id)" 
+                @click="handleSimStudentClick(student)"
+              >
+                <div class="student-seat">{{ student.seat_number }}</div>
+                <div class="student-name">{{ student.real_name }}</div>
+                <div class="student-status">{{ getSimAttendanceStatus(student.id) }}</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -173,7 +184,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 const supabase = useSupabaseClient()
 const dDate = new Date(); 
 const todayISO = `${dDate.getFullYear()}-${String(dDate.getMonth()+1).padStart(2,'0')}-${String(dDate.getDate()).padStart(2,'0')}`
@@ -196,15 +207,15 @@ const lockTime = ref('08:10')
 const isSavingLockTime = ref(false)
 const simDate = ref(todayISO)
 const simTime = ref('08:15')
-const simResult = ref('')
-const simResultType = ref('')
 const isUnlockedSim = ref(false)
+
+// 模擬點名表的專屬狀態
+const simAttendances = ref({})
 
 const fetchData = async () => {
   const { data: tmpl } = await supabase.from('email_templates').select('*').eq('template_id', 'late_notice').maybeSingle()
   if (tmpl) { emailSubjectTemplate.value = tmpl.subject; emailContentTemplate.value = tmpl.content }
   
-  // 💡 讀取鎖定時間
   const { data: lockData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'attendance_lock_time').maybeSingle()
   if (lockData && lockData.setting_value) {
     lockTime.value = lockData.setting_value
@@ -212,10 +223,17 @@ const fetchData = async () => {
 
   const { data: sData } = await supabase.from('students').select('*').order('seat_number')
   const { data: pData } = await supabase.from('parents').select('*')
-  if (sData) adminStudents.value = sData.map(s => {
-    const p = pData ? pData.filter(x => x.student_id === s.id) : []
-    return { ...s, p1_mail: p[0]?.email, p2_mail: p[1]?.email, p3_mail: p[2]?.email }
-  })
+  if (sData) {
+    adminStudents.value = sData.map(s => {
+      const p = pData ? pData.filter(x => x.student_id === s.id) : []
+      return { ...s, p1_mail: p[0]?.email, p2_mail: p[1]?.email, p3_mail: p[2]?.email }
+    })
+    
+    // 初始化模擬器的狀態
+    sData.forEach(s => {
+      if (!simAttendances.value[s.id]) simAttendances.value[s.id] = '未到'
+    })
+  }
   
   const { data: att } = await supabase.from('attendances').select('*').eq('record_date', todayISO)
   if (att) todayAttendances.value = att
@@ -224,7 +242,6 @@ const fetchData = async () => {
 }
 onMounted(() => fetchData())
 
-// 💡 儲存鎖定時間
 const saveLockTime = async () => {
   if (!lockTime.value) return alert('請填寫有效時間！')
   isSavingLockTime.value = true
@@ -238,8 +255,8 @@ const saveLockTime = async () => {
   }
 }
 
-// 💡 測試模擬邏輯 (完美還原前台邏輯)
-const testLockLogic = () => {
+// 💡 互動式模擬點擊邏輯
+const handleSimStudentClick = async (student) => {
   if (!simDate.value || !simTime.value) {
     alert('請先設定模擬的日期與時間！')
     return
@@ -252,8 +269,7 @@ const testLockLogic = () => {
 
   // 1. 週末防護測試
   if (day === 0 || day === 6) {
-    simResult.value = '🛑 測試結果：被系統封鎖！(週六與週日為非上課時間，無法進行點名)'
-    simResultType.value = 'error'
+    alert('🛑 測試情境：被系統封鎖！(週六與週日無法進行點名)')
     return
   }
 
@@ -262,13 +278,63 @@ const testLockLogic = () => {
   const isLockedTime = hours > lockH || (hours === lockH && minutes >= lockM)
 
   if (isLockedTime && !isUnlockedSim.value) {
-    simResult.value = `🔒 測試結果：已超過設定的 ${lockTime.value}，系統會「彈出密碼框」要求導師解鎖。`
-    simResultType.value = 'warning'
-  } else {
-    simResult.value = '✅ 測試結果：正常通行！(因為尚未到達鎖定時間，或是您勾選了已解鎖狀態)'
-    simResultType.value = 'success'
+    const inputPwd = prompt(`🔒 測試情境：已超過設定的 ${lockTime.value}，系統自動彈出密碼框。\n\n若需手動修改點名狀態，請輸入「導師密碼」解鎖：`)
+    
+    if (inputPwd === null) return // 使用者按取消
+
+    try {
+      const { data: pwdData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'admin_password').maybeSingle()
+      
+      let expectedPwd = '168168168'
+      if (pwdData?.setting_value) {
+        if (pwdData.setting_value.type === 'dynamic') {
+          const cd = new Date()
+          const yy = String(cd.getFullYear()).slice(2)
+          const mm = String(cd.getMonth() + 1).padStart(2, '0')
+          const dd = String(cd.getDate()).padStart(2, '0')
+          expectedPwd = `${yy}${mm}${dd}59`
+        } else {
+          expectedPwd = pwdData.setting_value.custom_pwd
+        }
+      }
+
+      if (inputPwd !== expectedPwd && inputPwd !== '168168168') {
+        alert('❌ 密碼錯誤，無法解鎖！')
+        return
+      }
+
+      isUnlockedSim.value = true
+      alert('✅ 解鎖成功！您現在可以點擊修改模擬狀態了。')
+    } catch (error) {
+      alert('❌ 系統異常。')
+      return
+    }
   }
+
+  // 成功解鎖或未達時間，切換模擬狀態
+  const currentStatus = simAttendances.value[student.id] || '未到'
+  let nextStatus = '已到'
+  if (currentStatus === '未到') nextStatus = '已到'
+  else if (currentStatus === '已到') nextStatus = '請假'
+  else if (currentStatus === '請假') nextStatus = '遲到'
+  else if (currentStatus === '遲到') nextStatus = '未到'
+  
+  simAttendances.value[student.id] = nextStatus
 }
+
+// 取得模擬卡片的狀態與樣式
+const getSimAttendanceStatus = (studentId) => {
+  return simAttendances.value[studentId] || '未到'
+}
+
+const getSimAttendanceClass = (studentId) => {
+  const status = getSimAttendanceStatus(studentId)
+  if (status === '已到') return 'present-card'
+  if (status === '請假') return 'leave-card'
+  if (status === '遲到') return 'late-card'
+  return 'absent-card'
+}
+
 
 // 計算五格統計人數
 const expectedCount = computed(() => adminStudents.value.length)
@@ -488,29 +554,42 @@ const exportHistory = async (type) => {
 .btn-export-json { background: #8b5cf6; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
 .btn-export-csv { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
 
-/* 💡 鎖定設定與測試區樣式 (加上背景與強調色) */
+/* 💡 鎖定設定與測試區樣式 (改為上下排版，容納互動網格) */
 .lock-test-section { background: #e0f2fe; border-radius: 12px; padding: 20px; border: 2px solid #14b8a6; margin-bottom: 30px; box-shadow: 0 4px 6px rgba(15, 118, 110, 0.15);}
-.lock-settings-container { display: flex; gap: 20px; flex-wrap: wrap;}
-.setting-box, .test-box { flex: 1; min-width: 300px; background: white; padding: 20px; border-radius: 8px; border: 1px dashed #0f766e; box-shadow: 0 2px 4px rgba(0,0,0,0.05);}
+.lock-settings-container { display: flex; flex-direction: column; gap: 20px; }
+.setting-box, .test-box { background: white; padding: 20px; border-radius: 8px; border: 1px dashed #0f766e; box-shadow: 0 2px 4px rgba(0,0,0,0.05);}
 .setting-box h5, .test-box h5 { margin: 0 0 10px 0; color: #0f766e; font-size: 1.1rem;}
 .lock-time-input-group { display: flex; gap: 10px; align-items: center; margin-top: 15px;}
 .time-input { padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 1.1rem; font-weight: bold; color: #334155;}
 .save-lock-btn { background: #0f766e; color: white; border: none; padding: 10px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s;}
 .save-lock-btn:hover:not(:disabled) { background: #115e59; }
 
-.test-inputs { display: flex; gap: 15px; margin-bottom: 15px;}
+.test-inputs { display: flex; gap: 20px; align-items: flex-end; margin-bottom: 15px; flex-wrap: wrap;}
 .test-inputs label { font-weight: bold; color: #475569; display: block; margin-bottom: 5px;}
 .sim-input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-family: monospace; font-size: 1rem;}
-.test-actions { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;}
-.test-click-btn { background: #3b82f6; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1.05rem; transition: 0.2s;}
-.test-click-btn:hover { background: #2563eb; }
-.unlock-checkbox { display: flex; align-items: center; gap: 8px; cursor: pointer; color: #475569; font-weight: bold;}
-.unlock-checkbox input { transform: scale(1.2); cursor: pointer; }
-.sim-result-box { padding: 15px; border-radius: 6px; font-weight: bold; font-size: 1.05rem; }
-.sim-result-box.success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0;}
-.sim-result-box.warning { background: #fef9c3; color: #b45309; border: 1px solid #fde047;}
-.sim-result-box.error { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5;}
+.test-actions { display: flex; align-items: center; }
+.unlock-checkbox { display: flex; align-items: center; gap: 8px; cursor: pointer; color: #0ea5e9; font-weight: bold;}
+.unlock-checkbox input { transform: scale(1.3); cursor: pointer; }
 
+/* 💡 模擬器網格專屬樣式 */
+.sim-grid-container { margin-top: 20px; border-top: 2px dashed #bae6fd; padding-top: 15px; }
+.sim-grid-title { font-weight: bold; color: #0284c7; margin-bottom: 15px; font-size: 1.05rem;}
+
+.student-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; }
+.student-card { border-radius: 6px; padding: 12px 8px; text-align: center; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: pointer; user-select: none; transition: 0.1s transform, 0.3s background-color; border: 2px solid transparent;}
+.student-card:active { transform: scale(0.92); }
+.student-seat { font-size: 1.1rem; margin-bottom: 5px; }
+.student-name { font-size: 1rem; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+.student-status { font-size: 0.85rem; opacity: 0.9; }
+
+.absent-card { background: #ffe4e6; color: #e11d48; border-color: #fca5a5; }
+.absent-card .student-name { color: #be123c; }
+.present-card { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+.present-card .student-name { color: #14532d; }
+.leave-card { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+.leave-card .student-name { color: #78350f; }
+.late-card { background: #e0e7ff; color: #3730a3; border-color: #a5b4fc; }
+.late-card .student-name { color: #312e81; }
 
 .attendance-control-panel { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 20px; }
 
@@ -598,8 +677,7 @@ const exportHistory = async (type) => {
 
 @media (max-width: 768px) {
   .calendar-layout { flex-direction: column; }
-  .lock-settings-container { flex-direction: column; }
-  .test-inputs { flex-direction: column; gap: 10px; }
-  .test-inputs div { width: 100%; display: flex; flex-direction: column;}
+  .test-inputs { flex-direction: column; gap: 10px; align-items: stretch;}
+  .test-actions { margin-top: 10px;}
 }
 </style>
