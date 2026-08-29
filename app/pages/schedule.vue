@@ -36,6 +36,27 @@
         </div>
       </header>
 
+      <!-- 💡 新增：大螢幕展示按鈕與首頁顯示設定 -->
+      <div class="settings-section">
+        <div class="settings-left">
+          <h3 style="margin: 0 0 10px 0; color: #1e293b;">⚙️ 首頁顯示設定</h3>
+          <label class="switch-label">
+            <input type="checkbox" v-model="indexSettings.isVisible" class="large-checkbox" />
+            <span style="font-weight: bold;">在首頁顯示「課表管理」按鈕</span>
+          </label>
+          
+          <div class="visibility-options" :class="{ 'disabled-options': !indexSettings.isVisible }">
+            <label><input type="radio" v-model="indexSettings.visibility" value="both" :disabled="!indexSettings.isVisible"> 內外網皆顯示</label>
+            <label><input type="radio" v-model="indexSettings.visibility" value="inside" :disabled="!indexSettings.isVisible"> 僅在褐名單「內」顯示 (校內)</label>
+            <label><input type="radio" v-model="indexSettings.visibility" value="outside" :disabled="!indexSettings.isVisible"> 僅在褐名單「外」顯示 (校外)</label>
+          </div>
+        </div>
+        <div class="settings-right">
+          <button @click="openLargeSchedule" class="btn-large-preview">🖥️ 開啟大螢幕課表展示</button>
+          <p style="font-size: 0.85rem; color: #64748b; margin-top: 5px;">適合投放至班級大平板或電子黑板</p>
+        </div>
+      </div>
+
       <div class="tips">
         💡 提示：請設定每節課的開始與結束時間 (24小時制，如 08:15)。首頁會自動根據當下時間顯示目前與下一節課。留空表示該時段沒有特定課程。
       </div>
@@ -105,6 +126,59 @@
         </table>
       </div>
     </div>
+
+    <!-- 💡 全螢幕大字體課表展示 Modal -->
+    <div v-if="showLargeSchedule" class="large-schedule-overlay">
+      <div class="large-header">
+        <h1 class="large-title">📅 班級課表</h1>
+        <button class="btn-close-large" @click="showLargeSchedule = false">✖ 關閉展示</button>
+      </div>
+
+      <div class="large-schedule-content">
+        <!-- 桌機/平板：完整網格 -->
+        <div class="desktop-grid">
+          <div class="grid-header time-header">節次 / 時間</div>
+          <div class="grid-header">星期一</div>
+          <div class="grid-header">星期二</div>
+          <div class="grid-header">星期三</div>
+          <div class="grid-header">星期四</div>
+          <div class="grid-header">星期五</div>
+          
+          <template v-for="(period, pIdx) in scheduleData.periods" :key="'lg-'+pIdx">
+            <div class="grid-cell time-cell">
+              <div class="p-name">{{ period.name }}</div>
+              <div class="p-time">{{ period.startTime }} - {{ period.endTime }}</div>
+            </div>
+            <div v-for="day in 5" :key="'lgc-'+day" class="grid-cell subject-cell" :class="{'empty-cell': !period.days[day-1].subject}">
+              <div class="cell-subject">{{ period.days[day-1].subject || '-' }}</div>
+              <div class="cell-teacher" v-if="period.days[day-1].teacher">{{ period.days[day-1].teacher }}</div>
+            </div>
+          </template>
+        </div>
+
+        <!-- 手機：單日卡片清單 -->
+        <div class="mobile-view">
+          <div class="mobile-day-selector">
+             <button v-for="d in 5" :key="'btn-'+d" 
+                     :class="{active: mobileDay === d}" 
+                     @click="mobileDay = d">星期{{ ['一','二','三','四','五'][d-1] }}</button>
+          </div>
+          <div class="mobile-list">
+            <div v-for="(period, pIdx) in scheduleData.periods" :key="'ml-'+pIdx" class="mobile-card">
+              <div class="m-time-box">
+                <span class="m-name">{{ period.name }}</span>
+                <span class="m-time">{{ period.startTime }} - {{ period.endTime }}</span>
+              </div>
+              <div class="m-subject-box" :class="{'m-empty': !period.days[mobileDay-1].subject}">
+                 <div class="m-subject">{{ period.days[mobileDay-1].subject || '無課程' }}</div>
+                 <div class="m-teacher" v-if="period.days[mobileDay-1].teacher">{{ period.days[mobileDay-1].teacher }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -119,6 +193,16 @@ const isSaving = ref(false)
 
 const mockDay = ref(1) // 1=星期一
 const mockTime = ref('08:10')
+
+// 💡 大螢幕展示狀態與手機版日期
+const showLargeSchedule = ref(false)
+const mobileDay = ref(new Date().getDay() >= 1 && new Date().getDay() <= 5 ? new Date().getDay() : 1)
+
+// 💡 首頁按鈕設定狀態
+const indexSettings = ref({
+  isVisible: true,
+  visibility: 'both' // both, inside, outside
+})
 
 // 預設課表，包含早掃與午掃時間
 const defaultSchedule = {
@@ -213,7 +297,6 @@ const handleLogin = async () => {
       isLoggedIn.value = true
       sessionStorage.setItem('schedule_admin_logged_in', 'true')
       
-      // 💡 登入成功寫入日誌
       try {
         const ipRes = await fetch('https://api.ipify.org?format=json')
         const { ip } = await ipRes.json()
@@ -228,14 +311,11 @@ const handleLogin = async () => {
     if (passwordInput.value === '168168168') { 
        isLoggedIn.value = true; 
        sessionStorage.setItem('schedule_admin_logged_in', 'true'); 
-       
-       // 降級登入也嘗試寫入紀錄
        try {
          const ipRes = await fetch('https://api.ipify.org?format=json')
          const { ip } = await ipRes.json()
          await supabase.from('visitor_logs').insert([{ ip_address: ip, device_info: navigator.userAgent, role: '導師(降級登入)' }])
        } catch(e) { console.error(e) }
-       
        await fetchSchedule() 
     }
     else alert('驗證發生錯誤。')
@@ -245,12 +325,12 @@ const handleLogin = async () => {
 const logout = () => { sessionStorage.removeItem('schedule_admin_logged_in'); isLoggedIn.value = false; navigateTo('/') }
 
 const fetchSchedule = async () => {
+  // 載入課表資料
   const { data } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'class_schedule_data').maybeSingle()
   
   if (data?.setting_value && data.setting_value.periods) {
     let loadedPeriods = data.setting_value.periods
     
-    // 自動升級腳本：確保舊資料能無縫插入「早掃時間」與「午餐和午掃」
     if (!loadedPeriods.find(p => p.name === '早掃時間')) {
       const idx = loadedPeriods.findIndex(p => p.name === '早修')
       if(idx !== -1) {
@@ -269,23 +349,41 @@ const fetchSchedule = async () => {
   } else {
     scheduleData.value = JSON.parse(JSON.stringify(defaultSchedule))
   }
+
+  // 💡 載入首頁按鈕設定
+  const { data: btnData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'schedule_button_settings').maybeSingle()
+  if (btnData?.setting_value) {
+    indexSettings.value = btnData.setting_value
+  }
 }
 
 const saveSchedule = async () => {
   isSaving.value = true
   try {
-    const { error } = await supabase.from('system_settings').upsert({
+    // 儲存課表
+    await supabase.from('system_settings').upsert({
       setting_key: 'class_schedule_data',
       setting_value: scheduleData.value
     }, { onConflict: 'setting_key' })
+
+    // 💡 儲存首頁按鈕設定
+    await supabase.from('system_settings').upsert({
+      setting_key: 'schedule_button_settings',
+      setting_value: indexSettings.value
+    }, { onConflict: 'setting_key' })
     
-    if (error) throw error
-    alert('✅ 課表已成功儲存並同步至首頁！')
+    alert('✅ 課表與顯示設定已成功儲存並同步！')
   } catch (err) {
     alert('❌ 儲存失敗：' + err.message)
   } finally {
     isSaving.value = false
   }
+}
+
+const openLargeSchedule = () => {
+  showLargeSchedule.value = true
+  // 開啟全螢幕時，確保手機版預設日期正確
+  mobileDay.value = new Date().getDay() >= 1 && new Date().getDay() <= 5 ? new Date().getDay() : 1
 }
 </script>
 
@@ -310,6 +408,22 @@ const saveSchedule = async () => {
 .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .btn-save { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 .btn-logout { background: #ef4444; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+
+/* 💡 首頁設定與大螢幕按鈕區塊 */
+.settings-section {
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px;
+  background: #f8fafc; padding: 20px 25px; border-radius: 8px; border: 2px dashed #94a3b8; margin-bottom: 20px;
+}
+.settings-left { flex: 1; min-width: 300px; }
+.switch-label { display: flex; align-items: center; gap: 10px; font-size: 1.1rem; color: #334155; cursor: pointer; margin-bottom: 10px;}
+.large-checkbox { transform: scale(1.3); cursor: pointer; }
+.visibility-options { display: flex; gap: 15px; margin-left: 30px; margin-top: 10px; flex-wrap: wrap;}
+.visibility-options label { color: #475569; font-weight: bold; cursor: pointer; }
+.disabled-options { opacity: 0.5; pointer-events: none; }
+.settings-right { text-align: center; }
+.btn-large-preview { background: #8b5cf6; color: white; border: none; padding: 15px 25px; border-radius: 8px; font-weight: bold; font-size: 1.1rem; cursor: pointer; box-shadow: 0 4px 6px rgba(139, 92, 246, 0.3); transition: 0.2s transform;}
+.btn-large-preview:hover { transform: scale(1.02); background: #7c3aed;}
+
 .tips { background: #fffbeb; color: #b45309; padding: 10px 15px; border-radius: 6px; border: 1px dashed #fcd34d; margin-bottom: 20px; font-size: 0.95rem; line-height: 1.5; }
 
 /* 預覽區塊樣式 */
@@ -343,4 +457,57 @@ const saveSchedule = async () => {
 .subject-input { padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-weight: bold; text-align: center; color: #1e293b;}
 .subject-input:focus { border-color: #3b82f6; outline: none; background: #eff6ff;}
 .teacher-input { padding: 4px; border: 1px dashed #cbd5e1; border-radius: 4px; font-size: 0.85rem; text-align: center; color: #64748b;}
+
+/* 💡 全螢幕大課表樣式 (Responsive) */
+.large-schedule-overlay { 
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
+  background: #f8fafc; z-index: 9999; display: flex; flex-direction: column; overflow-y: auto; 
+}
+.large-header { 
+  padding: 15px 30px; background: #1e293b; color: white; 
+  display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+.large-title { margin: 0; font-size: 1.8rem; letter-spacing: 2px;}
+.btn-close-large { background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; }
+
+.large-schedule-content { padding: 20px; flex: 1; max-width: 1600px; margin: 0 auto; width: 100%; box-sizing: border-box;}
+
+/* 桌機版網格 */
+.desktop-grid { display: grid; grid-template-columns: 180px repeat(5, 1fr); gap: 15px; }
+.grid-header { background: #e2e8f0; color: #0f172a; font-size: 1.5rem; font-weight: bold; padding: 15px; text-align: center; border-radius: 8px;}
+.time-header { background: #94a3b8; color: white; }
+
+.grid-cell { background: white; border: 2px solid #cbd5e1; border-radius: 8px; padding: 15px; text-align: center; display: flex; flex-direction: column; justify-content: center; min-height: 100px;}
+.time-cell { background: #f1f5f9; border-color: #94a3b8; }
+.p-name { font-size: 1.4rem; font-weight: bold; color: #334155; margin-bottom: 5px;}
+.p-time { font-size: 1.1rem; color: #64748b; font-family: monospace; font-weight: bold;}
+
+.subject-cell { box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+.empty-cell { background: #f8fafc; border-style: dashed; opacity: 0.6; }
+.cell-subject { font-size: 2.2rem; font-weight: bold; color: #0f766e; margin-bottom: 5px; }
+.cell-teacher { font-size: 1.3rem; color: #0369a1; font-weight: bold;}
+
+/* 手機版隱藏 */
+.mobile-view { display: none; }
+
+/* RWD: 手機與小平板切換至卡片模式 */
+@media (max-width: 900px) {
+  .desktop-grid { display: none; }
+  .mobile-view { display: block; }
+  
+  .mobile-day-selector { display: flex; overflow-x: auto; gap: 10px; padding-bottom: 15px; margin-bottom: 15px; border-bottom: 2px solid #e2e8f0;}
+  .mobile-day-selector button { flex: 1; min-width: 80px; padding: 12px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1.1rem; font-weight: bold; color: #475569;}
+  .mobile-day-selector button.active { background: #3b82f6; color: white; border-color: #2563eb; }
+
+  .mobile-list { display: flex; flex-direction: column; gap: 12px; }
+  .mobile-card { display: flex; background: white; border: 2px solid #cbd5e1; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.05);}
+  .m-time-box { background: #f1f5f9; width: 120px; padding: 15px 10px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-right: 2px solid #cbd5e1;}
+  .m-name { font-size: 1.2rem; font-weight: bold; color: #334155; margin-bottom: 5px;}
+  .m-time { font-size: 0.95rem; color: #64748b; font-weight: bold;}
+  
+  .m-subject-box { flex: 1; padding: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center;}
+  .m-empty { background: #f8fafc; opacity: 0.6; }
+  .m-subject { font-size: 1.8rem; font-weight: bold; color: #0f766e; text-align: center;}
+  .m-teacher { font-size: 1.1rem; color: #0369a1; font-weight: bold; margin-top: 5px;}
+}
 </style>
