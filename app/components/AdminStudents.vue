@@ -23,6 +23,44 @@
         </div>
       </div>
     </div>
+
+    <!-- 💡 新增：資料異動通知信設定區塊 -->
+    <div class="notify-settings-section">
+      <div class="editor-header">
+        <h4 style="margin: 0; color: #1e293b;">📧 學生資料異動通知設定</h4>
+        <button @click="saveNotifySettings" class="save-template-btn" :disabled="isSavingNotifySettings">
+          {{ isSavingNotifySettings ? '儲存中...' : '💾 儲存設定與範本' }}
+        </button>
+      </div>
+      <p class="help-text" style="margin-top: 5px;">當學生資料發生新增、修改、刪除或批次匯入時，系統會自動寄信通知您。</p>
+      
+      <div class="form-group" style="margin-bottom: 15px;">
+        <label>接收通知信箱：</label>
+        <input type="email" v-model="notifyEmail" class="edit-input" placeholder="請輸入您要接收通知的 Email (留空則不發送通知)" />
+      </div>
+      
+      <div class="email-flex-container">
+        <div class="email-form-col">
+          <p class="help-text" style="margin-bottom: 8px;">💡 可使用變數：<span class="var-tag" v-pre>{{異動類型}}</span>、<span class="var-tag" v-pre>{{學生姓名}}</span>、<span class="var-tag" v-pre>{{當下時間}}</span></p>
+          <div class="form-group">
+            <label>信件主旨：</label>
+            <input type="text" v-model="notifySubject" class="edit-input" />
+          </div>
+          <div class="form-group">
+            <label>信件內容：(系統鎖定為純文字發送)</label>
+            <textarea v-model="notifyContent" rows="5" class="edit-input textarea-input"></textarea>
+          </div>
+        </div>
+        
+        <div class="email-preview-col">
+          <h5 style="margin: 0 0 10px 0; color: #334155; font-size: 1rem;">👀 實際信件預覽</h5>
+          <div class="preview-box plain-text-preview">
+            <div class="preview-subject"><strong>主旨：</strong> {{ previewSubject }}</div>
+            <div class="preview-body">{{ previewContent }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
     
     <div class="import-section">
       <div class="import-controls">
@@ -92,7 +130,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 const supabase = useSupabaseClient()
 const adminStudents = ref([])
 const selectedFile = ref(null)
@@ -102,20 +140,37 @@ const isSavingAll = ref(false)
 
 const sortBy = ref('seat_number') 
 
-// 💡 ⚠️ 這裡請務必填寫您的導師信箱！系統發生異動時會寄信到這裡
-const teacherEmail = ref('your_email@example.com')
+// 💡 異動通知設定狀態
+const notifyEmail = ref('')
+const notifySubject = ref('🔔 班級系統通知：學生資料已{{異動類型}} ({{學生姓名}})')
+const notifyContent = ref(`導師您好：\n\n系統於 {{當下時間}} 發生了一筆學生資料變動。\n\n【變動內容】\n- 動作：{{異動類型}}\n- 影響學生：{{學生姓名}}\n\n此致\n系統自動通知`)
+const isSavingNotifySettings = ref(false)
 
-// 共用的通知發送函式
-const notifyTeacher = async (subject, content) => {
-  if (!teacherEmail.value || teacherEmail.value === 'your_email@example.com') return; // 如果沒設定就不寄送
+const previewSubject = computed(() => {
+  const nowStr = new Date().toLocaleString('zh-TW', { hour12: false })
+  return notifySubject.value.replace(/{{異動類型}}/g, '更新').replace(/{{學生姓名}}/g, '王小明').replace(/{{當下時間}}/g, nowStr)
+})
+
+const previewContent = computed(() => {
+  const nowStr = new Date().toLocaleString('zh-TW', { hour12: false })
+  return notifyContent.value.replace(/{{異動類型}}/g, '更新').replace(/{{學生姓名}}/g, '王小明').replace(/{{當下時間}}/g, nowStr)
+})
+
+// 發送通知信的共用邏輯
+const notifyTeacher = async (actionType, studentName) => {
+  if (!notifyEmail.value || !notifyEmail.value.includes('@')) return; 
   try {
+    const nowStr = new Date().toLocaleString('zh-TW', { hour12: false })
+    const subj = notifySubject.value.replace(/{{異動類型}}/g, actionType).replace(/{{學生姓名}}/g, studentName).replace(/{{當下時間}}/g, nowStr)
+    const cont = notifyContent.value.replace(/{{異動類型}}/g, actionType).replace(/{{學生姓名}}/g, studentName).replace(/{{當下時間}}/g, nowStr)
+    
     await fetch('/api/send-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        to: teacherEmail.value,
-        subject: subject,
-        content: content
+        to: notifyEmail.value,
+        subject: subj,
+        content: cont
       })
     });
   } catch (err) {
@@ -124,6 +179,18 @@ const notifyTeacher = async (subject, content) => {
 }
 
 const fetchData = async () => {
+  // 載入通知信箱設定
+  const { data: emailData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'teacher_notify_email').maybeSingle()
+  if (emailData && emailData.setting_value) notifyEmail.value = emailData.setting_value
+
+  // 載入通知信範本
+  const { data: tmplData } = await supabase.from('email_templates').select('*').eq('template_id', 'student_data_change_notice').maybeSingle()
+  if (tmplData) {
+    notifySubject.value = tmplData.subject
+    notifyContent.value = tmplData.content
+  }
+
+  // 載入學生與家長資料
   const { data: sData } = await supabase.from('students').select('*').order(sortBy.value)
   const { data: pData } = await supabase.from('parents').select('*')
   
@@ -140,6 +207,22 @@ const fetchData = async () => {
 }
 
 onMounted(() => fetchData())
+
+// 儲存通知設定
+const saveNotifySettings = async () => {
+  isSavingNotifySettings.value = true
+  try {
+    // 存信箱
+    await supabase.from('system_settings').upsert({ setting_key: 'teacher_notify_email', setting_value: notifyEmail.value }, { onConflict: 'setting_key' })
+    // 存範本 (純文字)
+    await supabase.from('email_templates').upsert({ template_id: 'student_data_change_notice', subject: notifySubject.value, content: notifyContent.value })
+    alert('✅ 通知設定與範本已儲存！')
+  } catch (error) {
+    alert('❌ 儲存失敗：' + error.message)
+  } finally {
+    isSavingNotifySettings.value = false
+  }
+}
 
 const applySort = () => {
   fetchData()
@@ -222,14 +305,9 @@ const saveStudent = async (student, showAlert = true) => {
       alert(`✅ ${rName} 資料儲存成功！`)
     }
 
-    // 💡 寄信通知導師
+    // 💡 呼叫通知函式
     const actionStr = isNew ? '新增' : '更新'
-    const nowStr = new Date().toLocaleString('zh-TW', { hour12: false })
-    const emailSubject = `🔔 班級系統通知：學生資料已${actionStr} (${rName})`
-    const emailContent = `導師您好：\n\n系統紀錄顯示，於 ${nowStr} 發生了一筆學生資料變動。\n\n【變動內容】\n- 動作：${actionStr}\n- 座號：${studentPayload.seat_number}\n- 姓名：${rName}\n- 學號：${sNum}\n\n此致\n系統自動通知`
-    
-    // 背景發送不阻擋畫面
-    notifyTeacher(emailSubject, emailContent)
+    notifyTeacher(actionStr, rName)
       
   } catch(e) { 
     if (showAlert) alert(`❌ 儲存失敗：${e.message}`) 
@@ -254,10 +332,8 @@ const saveAllStudents = async () => {
     
     alert('✅ 全體資料儲存成功！')
     
-    // 💡 寄信通知導師 (批次儲存)
     if (successCount > 0) {
-       const nowStr = new Date().toLocaleString('zh-TW', { hour12: false })
-       notifyTeacher(`🔔 班級系統通知：執行了全體資料儲存`, `導師您好：\n\n系統於 ${nowStr} 執行了「全體儲存」動作，共有 ${successCount} 筆學生資料被處理與更新。\n\n此致\n系統自動通知`)
+       notifyTeacher('批次全體儲存', `共 ${successCount} 筆學生`)
     }
 
     await fetchData()
@@ -283,9 +359,8 @@ const deleteStudent = async (id, name) => {
 
       alert(`✅ 學生 ${name || ''} 刪除成功。`)
 
-      // 💡 寄信通知導師
-      const nowStr = new Date().toLocaleString('zh-TW', { hour12: false })
-      notifyTeacher(`🚨 班級系統警告：學生資料遭刪除 (${name})`, `導師您好：\n\n系統於 ${nowStr} 刪除了學生「${name}」的所有資料（包含家長綁定）。若此非預期操作，請盡速檢查系統。\n\n此致\n系統自動通知`)
+      // 💡 呼叫通知函式
+      notifyTeacher('遭刪除', name || '未知學生')
 
       await fetchData() 
     } catch (err) {
@@ -310,9 +385,7 @@ const deleteAllStudents = async () => {
 
       alert('✅ 所有學生資料已徹底清空。')
 
-      // 💡 寄信通知導師
-      const nowStr = new Date().toLocaleString('zh-TW', { hour12: false })
-      notifyTeacher(`🚨🚨 班級系統嚴重警告：全體學生資料已被清空`, `導師您好：\n\n系統於 ${nowStr} 執行了「清空所有學生資料」的極端操作。所有學生及家長綁定皆已遭移除。\n\n此致\n系統自動通知`)
+      notifyTeacher('極端操作', '全體學生資料已被清空')
 
       await fetchData() 
     } catch (err) {
@@ -423,9 +496,7 @@ const processImport = async () => {
 
       alert(`✅ 成功匯入 ${studentsToUpsert.length} 筆學生資料！`)
       
-      // 💡 寄信通知導師
-      const nowStr = new Date().toLocaleString('zh-TW', { hour12: false })
-      notifyTeacher(`🔔 班級系統通知：透過 CSV 匯入了學生名單`, `導師您好：\n\n系統於 ${nowStr} 透過 CSV 檔案執行了匯入操作，共處理了 ${studentsToUpsert.length} 筆學生資料。\n\n此致\n系統自動通知`)
+      notifyTeacher('批次匯入 CSV', `共匯入了 ${studentsToUpsert.length} 筆資料`)
       
       selectedFile.value = null
       if (fileInput.value) fileInput.value.value = ''
@@ -469,6 +540,22 @@ const processImport = async () => {
 .danger-btn { background-color: #ef4444; }
 .danger-btn:hover { background-color: #dc2626; }
 
+/* 💡 通知設定區塊樣式 */
+.notify-settings-section { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.editor-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 10px; }
+.save-template-btn { background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+.save-template-btn:hover:not(:disabled) { background: #2563eb; }
+.save-template-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+.help-text { font-size: 0.95rem; color: #64748b; line-height: 1.5; }
+.var-tag { background: #e2e8f0; color: #0f172a; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-weight: bold; }
+.form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #475569; }
+.email-flex-container { display: flex; gap: 20px; align-items: stretch; margin-top: 15px; }
+.email-form-col { flex: 1; display: flex; flex-direction: column; gap: 15px; }
+.email-preview-col { flex: 1; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 15px; }
+.plain-text-preview { background: #fefce8; padding: 15px; border-radius: 6px; border: 1px solid #fde047; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); height: 100%; box-sizing: border-box; }
+.preview-subject { font-size: 1rem; color: #92400e; border-bottom: 1px dashed #fcd34d; padding-bottom: 10px; margin-bottom: 10px; font-weight: bold; }
+.preview-body { font-size: 1rem; color: #451a03; line-height: 1.6; white-space: pre-wrap; font-family: monospace; }
+
 .import-section { background: #f8fafc; border: 2px dashed #cbd5e1; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .import-controls { display: flex; gap: 10px; align-items: center;}
 .import-btn { background: #3b82f6; color: white; font-weight: bold; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; transition: 0.2s; }
@@ -487,6 +574,7 @@ const processImport = async () => {
 .num-input { width: 100%; min-width: 60px; text-align: center; } 
 .small-input { width: 100%; }
 .email-input { font-family: monospace; font-size: 0.8rem; }
+.textarea-input { resize: vertical; font-family: inherit; line-height: 1.5; }
 .action-cell { display: flex; gap: 5px; justify-content: center; }
 .save-row-btn { background: #3b82f6; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 1rem;}
 .save-row-btn:hover { background: #2563eb; }
@@ -494,4 +582,8 @@ const processImport = async () => {
 .del-row-btn:hover { background: #dc2626; }
 
 .block-checkbox { transform: scale(1.5); cursor: pointer; accent-color: #ef4444;}
+
+@media (max-width: 768px) {
+  .email-flex-container { flex-direction: column; }
+}
 </style>
