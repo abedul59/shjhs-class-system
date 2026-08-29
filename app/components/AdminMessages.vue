@@ -13,6 +13,44 @@
       </div>
     </div>
 
+    <!-- 💡 新增：資料庫異動通知設定區塊 (寄給導師自己) -->
+    <div class="notify-settings-section">
+      <div class="editor-header">
+        <h4 style="margin: 0; color: #1e293b;">📧 系統私訊異動通知設定 (寄給導師)</h4>
+        <button @click="saveNotifySettings" class="save-template-btn" :disabled="isSavingNotifySettings">
+          {{ isSavingNotifySettings ? '儲存中...' : '💾 儲存設定與範本' }}
+        </button>
+      </div>
+      <p class="help-text" style="margin-top: 5px;">當您在後台對私訊紀錄進行「新增、修改、刪除」時，系統會自動寄信通知您作為備份。</p>
+      
+      <div class="form-group" style="margin-bottom: 15px;">
+        <label>接收通知信箱：</label>
+        <input type="email" v-model="notifyEmail" class="edit-input" placeholder="請輸入您要接收通知的 Email (留空則不發送通知)" />
+      </div>
+      
+      <div class="email-flex-container">
+        <div class="email-form-col">
+          <p class="help-text" style="margin-bottom: 8px;">💡 可使用變數：<span class="var-tag" v-pre>{{異動類型}}</span>、<span class="var-tag" v-pre>{{相關對象}}</span>、<span class="var-tag" v-pre>{{當下時間}}</span></p>
+          <div class="form-group">
+            <label>信件主旨：</label>
+            <input type="text" v-model="notifySubject" class="edit-input" />
+          </div>
+          <div class="form-group">
+            <label>信件內容：(系統鎖定為純文字發送)</label>
+            <textarea v-model="notifyContent" rows="5" class="edit-input textarea-input"></textarea>
+          </div>
+        </div>
+        
+        <div class="email-preview-col">
+          <h5 style="margin: 0 0 10px 0; color: #334155; font-size: 1rem;">👀 實際信件預覽</h5>
+          <div class="preview-box plain-text-preview">
+            <div class="preview-subject"><strong>主旨：</strong> {{ previewNotifySubject }}</div>
+            <div class="preview-body">{{ previewNotifyContent }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="chat-selector">
       <label>切換對話頻道：</label>
       <select v-model="activeChatThread" @change="markCurrentThreadAsRead">
@@ -76,7 +114,7 @@
         <button @click="sendReply" class="send-reply-btn" :disabled="isSending">📤 傳送私訊</button>
       </div>
 
-      <!-- 信件推播設定區塊 (純文字防垃圾信版) -->
+      <!-- 信件推播設定區塊 (寄給家長/學生) -->
       <div class="email-editor-section">
         <div class="editor-header">
           <h4>📧 寄送「新私訊提醒」信件通知家長/學生</h4>
@@ -153,6 +191,23 @@ const isSending = ref(false)
 const editingMsgId = ref(null)
 const editContentTemp = ref('')
 
+// 💡 異動通知設定狀態 (寄給導師自己)
+const notifyEmail = ref('')
+const notifySubject = ref('🔔 班級系統通知：私訊紀錄已{{異動類型}} ({{相關對象}})')
+const notifyContent = ref(`導師您好：\n\n系統於 {{當下時間}} 發生了一筆私訊紀錄變動。\n\n【變動內容】\n- 動作：{{異動類型}}\n- 相關對象：{{相關對象}}\n\n此致\n系統自動通知`)
+const isSavingNotifySettings = ref(false)
+
+const previewNotifySubject = computed(() => {
+  const nowStr = new Date().toLocaleString('zh-TW', { hour12: false })
+  return notifySubject.value.replace(/{{異動類型}}/g, '新增回覆').replace(/{{相關對象}}/g, '1號 王小明 的家長').replace(/{{當下時間}}/g, nowStr)
+})
+
+const previewNotifyContent = computed(() => {
+  const nowStr = new Date().toLocaleString('zh-TW', { hour12: false })
+  return notifyContent.value.replace(/{{異動類型}}/g, '新增回覆').replace(/{{相關對象}}/g, '1號 王小明 的家長').replace(/{{當下時間}}/g, nowStr)
+})
+
+// 推播給家長的狀態
 const isSendingEmail = ref(false)
 const isSavingNoticeTemplate = ref(false)
 const noticeEmailSubjectTemplate = ref('💬 班級系統通知：您有一則來自導師的新私訊')
@@ -167,11 +222,21 @@ const fetchData = async () => {
   const { data: m } = await supabase.from('private_messages').select('*').order('created_at')
   allMessages.value = m || []
   
+  // 載入推播給家長的範本
   const { data: tmplData } = await supabase.from('email_templates').select('*').eq('template_id', 'message_reply_notice').maybeSingle()
   if (tmplData) { 
     noticeEmailSubjectTemplate.value = tmplData.subject
-    // 💡 清除資料庫裡上一版殘留的 HTML 垃圾標籤，還原乾淨純文字
     noticeEmailContentTemplate.value = tmplData.content.replace(/<br\s*\/?>/ig, '\n').replace(/<[^>]+>/g, '') 
+  }
+
+  // 💡 載入導師通知設定
+  const { data: emailData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'teacher_msg_notify_email').maybeSingle()
+  if (emailData && emailData.setting_value) notifyEmail.value = emailData.setting_value
+
+  const { data: notifyTmpl } = await supabase.from('email_templates').select('*').eq('template_id', 'teacher_msg_change_notice').maybeSingle()
+  if (notifyTmpl) {
+    notifySubject.value = notifyTmpl.subject
+    notifyContent.value = notifyTmpl.content
   }
 }
 
@@ -256,6 +321,51 @@ const formatTime = (isoString) => {
   return d.toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
+// 💡 取得當前對話目標名稱
+const getTargetName = () => {
+  if (!activeChatThread.value) return '未知對象'
+  const [targetId, targetType] = activeChatThread.value.split('_')
+  const student = students.value.find(s => String(s.id) === String(targetId))
+  if (student) return `${student.seat_number}號 ${student.real_name} 的${targetType}`
+  return '未知對象'
+}
+
+// 💡 寄送通知給導師
+const notifyTeacher = async (actionType, targetName) => {
+  if (!notifyEmail.value || !notifyEmail.value.includes('@')) return; 
+  try {
+    const nowStr = new Date().toLocaleString('zh-TW', { hour12: false })
+    const subj = notifySubject.value.replace(/{{異動類型}}/g, actionType).replace(/{{相關對象}}/g, targetName).replace(/{{當下時間}}/g, nowStr)
+    const cont = notifyContent.value.replace(/{{異動類型}}/g, actionType).replace(/{{相關對象}}/g, targetName).replace(/{{當下時間}}/g, nowStr)
+    
+    await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: notifyEmail.value,
+        subject: subj,
+        content: cont
+      })
+    });
+  } catch (err) {
+    console.error('發送導師通知信失敗:', err);
+  }
+}
+
+// 💡 儲存導師通知設定
+const saveNotifySettings = async () => {
+  isSavingNotifySettings.value = true
+  try {
+    await supabase.from('system_settings').upsert({ setting_key: 'teacher_msg_notify_email', setting_value: notifyEmail.value }, { onConflict: 'setting_key' })
+    await supabase.from('email_templates').upsert({ template_id: 'teacher_msg_change_notice', subject: notifySubject.value, content: notifyContent.value })
+    alert('✅ 通知設定與範本已儲存！')
+  } catch (error) {
+    alert('❌ 儲存失敗：' + error.message)
+  } finally {
+    isSavingNotifySettings.value = false
+  }
+}
+
 const sendReply = async () => {
   if (!replyContent.value || !activeChatThread.value) return
   isSending.value = true
@@ -272,10 +382,13 @@ const sendReply = async () => {
   replyContent.value = ''
   await fetchData()
   scrollToBottom()
+  
+  // 💡 發送通知給導師自己
+  notifyTeacher('新增回覆', getTargetName())
+  
   isSending.value = false
 }
 
-// 🚀 徹底純文字 + 安全間隔發送
 const sendNoticeEmail = async () => {
   const targetEmails = availableRecipients.value.filter(p => p.selected).map(p => p.email)
   if (targetEmails.length === 0) return alert('❌ 請至少選擇一個收件人！')
@@ -297,7 +410,6 @@ const sendNoticeEmail = async () => {
     }
 
     let successCount = 0
-    // 💡 絕對純淨的文字，沒有任何 HTML
     const pureTextContent = noticeEmailContentTemplate.value
 
     for (const email of targetEmails) {
@@ -306,16 +418,13 @@ const sendNoticeEmail = async () => {
           method: 'POST', 
           headers: { 'Content-Type': 'application/json' }, 
           body: JSON.stringify({ 
-            to: email, // 獨立收件人
+            to: email,
             subject: noticeEmailSubjectTemplate.value, 
             content: pureTextContent 
           }) 
         })
         successCount++
-        
-        // 💡 加長間隔至 1.5 秒，確保完全不會被判定為大量發送的機器人
         await new Promise(resolve => setTimeout(resolve, 1500))
-        
       } catch (err) {
         console.error(`寄送給 ${email} 失敗:`, err)
       }
@@ -360,12 +469,18 @@ const saveEdit = async (id) => {
   await supabase.from('private_messages').update({ content: editContentTemp.value }).eq('id', id)
   cancelEdit()
   await fetchData()
+  
+  // 💡 發送通知給導師自己
+  notifyTeacher('修改訊息', getTargetName())
 }
 
 const deleteMsg = async (id) => {
   if (confirm("確定要刪除這則訊息嗎？(刪除後無法復原)")) {
     await supabase.from('private_messages').delete().eq('id', id)
     await fetchData()
+    
+    // 💡 發送通知給導師自己
+    notifyTeacher('刪除訊息', getTargetName())
   }
 }
 
@@ -466,6 +581,16 @@ const importData = (e) => {
 .btn-outline-small { background: white; border: 1px solid #cbd5e1; color: #475569; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 0.85rem;}
 .btn-outline-small:hover { background: #f1f5f9; }
 
+/* 💡 通知設定區塊樣式 */
+.notify-settings-section { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.editor-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 10px; }
+.save-template-btn { background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+.save-template-btn:hover:not(:disabled) { background: #2563eb; }
+.save-template-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+.help-text { font-size: 0.95rem; color: #64748b; line-height: 1.5; }
+.var-tag { background: #e2e8f0; color: #0f172a; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-weight: bold; }
+.form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #475569; }
+
 .chat-selector { margin-bottom: 15px; background: #f0f9ff; padding: 15px 20px; border-radius: 8px; border: 1px dashed #7dd3fc; display: flex; align-items: center; gap: 15px; flex-wrap: wrap;}
 .chat-selector label { font-weight: bold; color: #0284c7; font-size: 1.1rem; }
 .chat-selector select { padding: 10px 15px; font-size: 1.1rem; border-radius: 6px; width: 350px; border: 1px solid #7dd3fc; color: #0369a1; font-weight: bold; cursor: pointer; }
@@ -505,7 +630,6 @@ const importData = (e) => {
 .email-editor-section { background: #fdfdfd; padding: 25px; }
 .editor-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;}
 .editor-header h4 { margin: 0; font-size: 1.1rem; color: #1e293b; }
-.save-template-btn.small-btn { padding: 6px 12px; font-size: 0.9rem; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
 
 .email-flex-container { display: flex; gap: 20px; align-items: stretch;}
 .email-form-col { flex: 1; display: flex; flex-direction: column; gap: 15px;}
@@ -516,7 +640,6 @@ const importData = (e) => {
 .edit-input { padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; width: 100%; font-size: 1rem;}
 .textarea-input { resize: vertical; font-family: inherit; line-height: 1.5; }
 
-/* 💡 使用 pre-wrap 讓純文字的換行在畫面上自然呈現 */
 .plain-text-preview { background: #fefce8; padding: 15px; border-radius: 6px; border: 1px solid #fde047; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); height: 100%; box-sizing: border-box;}
 .preview-subject { font-size: 1rem; color: #92400e; border-bottom: 1px dashed #fcd34d; padding-bottom: 10px; margin-bottom: 10px; font-weight: bold;}
 .preview-body { font-size: 1rem; color: #451a03; line-height: 1.6; white-space: pre-wrap; font-family: monospace;}
