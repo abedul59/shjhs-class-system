@@ -51,7 +51,6 @@
             <th width="90">稱謂1</th><th width="110">電話1</th><th width="160">信箱1</th>
             <th width="90">稱謂2</th><th width="110">電話2</th><th width="160">信箱2</th>
             <th width="90">稱謂3</th><th width="110">電話3</th><th width="160">信箱3</th>
-            <!-- 💡 新增：不列入點名的開關欄位 -->
             <th width="90" style="color: #dc2626;">不列入點名<br><span style="font-size: 0.8rem; font-weight: normal;">(休轉學/假帳號)</span></th>
             <th width="80">操作</th>
           </tr>
@@ -77,7 +76,6 @@
             <td><input type="tel" v-model="student.p3_tel" class="edit-input small-input" placeholder="電話"/></td>
             <td><input type="email" v-model="student.p3_mail" class="edit-input email-input" placeholder="信箱"/></td>
             
-            <!-- 💡 新增：打勾綁定 hide_attendance -->
             <td style="text-align: center; background-color: #fef2f2;">
               <input type="checkbox" v-model="student.hide_attendance" class="block-checkbox" title="打勾後，此學生將不會出現在首頁點名表中" />
             </td>
@@ -104,6 +102,27 @@ const isSavingAll = ref(false)
 
 const sortBy = ref('seat_number') 
 
+// 💡 ⚠️ 這裡請務必填寫您的導師信箱！系統發生異動時會寄信到這裡
+const teacherEmail = ref('your_email@example.com')
+
+// 共用的通知發送函式
+const notifyTeacher = async (subject, content) => {
+  if (!teacherEmail.value || teacherEmail.value === 'your_email@example.com') return; // 如果沒設定就不寄送
+  try {
+    await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: teacherEmail.value,
+        subject: subject,
+        content: content
+      })
+    });
+  } catch (err) {
+    console.error('發送導師通知信失敗:', err);
+  }
+}
+
 const fetchData = async () => {
   const { data: sData } = await supabase.from('students').select('*').order(sortBy.value)
   const { data: pData } = await supabase.from('parents').select('*')
@@ -112,7 +131,6 @@ const fetchData = async () => {
     const parents = pData ? pData.filter(p => p.student_id === student.id) : []
     return { 
       ...student, 
-      // 確保將資料庫讀出來的 hide_attendance 綁定給畫面
       hide_attendance: !!student.hide_attendance,
       p1_rel: parents[0]?.relationship || '', p1_tel: parents[0]?.phone || '', p1_mail: parents[0]?.email || '', 
       p2_rel: parents[1]?.relationship || '', p2_tel: parents[1]?.phone || '', p2_mail: parents[1]?.email || '', 
@@ -127,7 +145,6 @@ const applySort = () => {
   fetchData()
 }
 
-// 產生空白列讓使用者填寫
 const addNewStudent = () => {
   const maxSeat = adminStudents.value.length > 0 
     ? Math.max(...adminStudents.value.map(s => parseInt(s.seat_number) || 0)) 
@@ -143,7 +160,7 @@ const addNewStudent = () => {
     elementary_class: null,
     birthday: '',
     id_last_5: '',
-    hide_attendance: false, // 💡 新增的屬性預設為 false
+    hide_attendance: false,
     p1_rel: '', p1_tel: '', p1_mail: '',
     p2_rel: '', p2_tel: '', p2_mail: '',
     p3_rel: '', p3_tel: '', p3_mail: ''
@@ -152,29 +169,24 @@ const addNewStudent = () => {
   alert('✨ 已在清單最上方新增一筆空白列，請填妥學號、座號等資料後點擊「💾」進行儲存！')
 }
 
-// 🚀 終極防呆版儲存邏輯：不怕您漏填任何資料！
 const saveStudent = async (student, showAlert = true) => {
   try {
     const isNew = String(student.id).startsWith('temp_')
     
-    // 如果連學號都忘記填，系統自動給一組臨時學號
     const sNum = String(student.student_number || '').trim() || `T${Date.now().toString().slice(-6)}`
-    
-    // 如果名字沒填，給個預設名字
     const rName = String(student.real_name || '').trim() || '未命名學生'
     
-    // 所有的欄位都補上預設值，絕對不再讓資料庫報錯！
     const studentPayload = {
       seat_number: parseInt(student.seat_number) || 99, 
       student_number: sNum,
       student_id: sNum, 
       real_name: rName, 
-      hidden_name: String(student.hidden_name || '').trim() || rName, // 忘記填隱藏名，就自動先用本名代替
+      hidden_name: String(student.hidden_name || '').trim() || rName,
       elementary_school: String(student.elementary_school || '').trim(),
       elementary_class: parseInt(student.elementary_class) || null,
       birthday: String(student.birthday || '').trim(),
       id_last_5: String(student.id_last_5 || '').trim(),
-      hide_attendance: !!student.hide_attendance // 💡 將打勾狀態寫入資料庫
+      hide_attendance: !!student.hide_attendance
     }
 
     if (isNew) {
@@ -186,18 +198,15 @@ const saveStudent = async (student, showAlert = true) => {
     let currentStudentId = student.id
 
     if (isNew) {
-      // 全新寫入
       const { data, error } = await supabase.from('students').insert(studentPayload).select().single()
       if (error) throw error
       currentStudentId = data.id 
       student.id = currentStudentId 
     } else {
-      // 更新現有資料
       const { error } = await supabase.from('students').update(studentPayload).eq('id', currentStudentId)
       if (error) throw error
     }
     
-    // 處理家長資料
     await supabase.from('parents').delete().eq('student_id', currentStudentId)
     const parentsToInsert = []
     if (student.p1_rel || student.p1_tel || student.p1_mail) parentsToInsert.push({ student_id: currentStudentId, relationship: student.p1_rel, phone: student.p1_tel, email: student.p1_mail })
@@ -209,7 +218,18 @@ const saveStudent = async (student, showAlert = true) => {
       if (pErr) throw pErr
     }
     
-    if (showAlert) alert(`✅ ${rName} 資料儲存成功！`)
+    if (showAlert) {
+      alert(`✅ ${rName} 資料儲存成功！`)
+    }
+
+    // 💡 寄信通知導師
+    const actionStr = isNew ? '新增' : '更新'
+    const nowStr = new Date().toLocaleString('zh-TW', { hour12: false })
+    const emailSubject = `🔔 班級系統通知：學生資料已${actionStr} (${rName})`
+    const emailContent = `導師您好：\n\n系統紀錄顯示，於 ${nowStr} 發生了一筆學生資料變動。\n\n【變動內容】\n- 動作：${actionStr}\n- 座號：${studentPayload.seat_number}\n- 姓名：${rName}\n- 學號：${sNum}\n\n此致\n系統自動通知`
+    
+    // 背景發送不阻擋畫面
+    notifyTeacher(emailSubject, emailContent)
       
   } catch(e) { 
     if (showAlert) alert(`❌ 儲存失敗：${e.message}`) 
@@ -217,20 +237,29 @@ const saveStudent = async (student, showAlert = true) => {
   }
 }
 
-// 無腦全體儲存機制
 const saveAllStudents = async () => {
   if (!confirm('⚠️ 確定要儲存畫面上所有的修改嗎？這將會更新全體資料。')) return
   isSavingAll.value = true
   
+  let successCount = 0;
+
   try {
     for (const student of adminStudents.value) {
-      // 若是完全沒打字的暫存列，就直接跳過不存
       if (String(student.id).startsWith('temp_') && !student.student_number && !student.real_name) {
         continue;
       }
       await saveStudent(student, false)
+      successCount++;
     }
+    
     alert('✅ 全體資料儲存成功！')
+    
+    // 💡 寄信通知導師 (批次儲存)
+    if (successCount > 0) {
+       const nowStr = new Date().toLocaleString('zh-TW', { hour12: false })
+       notifyTeacher(`🔔 班級系統通知：執行了全體資料儲存`, `導師您好：\n\n系統於 ${nowStr} 執行了「全體儲存」動作，共有 ${successCount} 筆學生資料被處理與更新。\n\n此致\n系統自動通知`)
+    }
+
     await fetchData()
   } catch (err) {
     alert('❌ 儲存發生錯誤，請重新整理頁面後再試。')
@@ -253,6 +282,11 @@ const deleteStudent = async (id, name) => {
       if (error) throw error
 
       alert(`✅ 學生 ${name || ''} 刪除成功。`)
+
+      // 💡 寄信通知導師
+      const nowStr = new Date().toLocaleString('zh-TW', { hour12: false })
+      notifyTeacher(`🚨 班級系統警告：學生資料遭刪除 (${name})`, `導師您好：\n\n系統於 ${nowStr} 刪除了學生「${name}」的所有資料（包含家長綁定）。若此非預期操作，請盡速檢查系統。\n\n此致\n系統自動通知`)
+
       await fetchData() 
     } catch (err) {
       alert(`❌ 刪除失敗：${err.message}`)
@@ -275,6 +309,11 @@ const deleteAllStudents = async () => {
       if (error) throw error
 
       alert('✅ 所有學生資料已徹底清空。')
+
+      // 💡 寄信通知導師
+      const nowStr = new Date().toLocaleString('zh-TW', { hour12: false })
+      notifyTeacher(`🚨🚨 班級系統嚴重警告：全體學生資料已被清空`, `導師您好：\n\n系統於 ${nowStr} 執行了「清空所有學生資料」的極端操作。所有學生及家長綁定皆已遭移除。\n\n此致\n系統自動通知`)
+
       await fetchData() 
     } catch (err) {
       alert(`❌ 清空失敗：${err.message}`)
@@ -356,7 +395,7 @@ const processImport = async () => {
           if (values[index] !== undefined && values[index] !== '') {
             if (header === 'seat_number' || header === 'elementary_class') {
               studentObj[header] = parseInt(values[index], 10)
-            } else if (header === 'hide_attendance') { // 處理匯入檔案中的布林值
+            } else if (header === 'hide_attendance') {
               studentObj[header] = (values[index] === 'true' || values[index] === 'TRUE' || values[index] === '1')
             } else {
               studentObj[header] = values[index]
@@ -383,6 +422,10 @@ const processImport = async () => {
       if (error) throw error
 
       alert(`✅ 成功匯入 ${studentsToUpsert.length} 筆學生資料！`)
+      
+      // 💡 寄信通知導師
+      const nowStr = new Date().toLocaleString('zh-TW', { hour12: false })
+      notifyTeacher(`🔔 班級系統通知：透過 CSV 匯入了學生名單`, `導師您好：\n\n系統於 ${nowStr} 透過 CSV 檔案執行了匯入操作，共處理了 ${studentsToUpsert.length} 筆學生資料。\n\n此致\n系統自動通知`)
       
       selectedFile.value = null
       if (fileInput.value) fileInput.value.value = ''
@@ -450,6 +493,5 @@ const processImport = async () => {
 .del-row-btn { background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 1rem;}
 .del-row-btn:hover { background: #dc2626; }
 
-/* 💡 新增打勾按鈕樣式 */
 .block-checkbox { transform: scale(1.5); cursor: pointer; accent-color: #ef4444;}
 </style>
