@@ -113,6 +113,9 @@ const parentEmail = ref('')
 const isLoading = ref(false)
 const sysMessage = ref({ type: '', text: '' })
 
+// 💡 存放從資料庫抓取的導師信箱
+const teacherEmail = ref('')
+
 const showMessage = (type, text) => {
   sysMessage.value = { type, text }
   if (type === 'success') setTimeout(() => { sysMessage.value = { type: '', text: '' } }, 5000)
@@ -130,6 +133,40 @@ const fetchStudents = async () => {
     // 💡 提取所有國小名稱，並使用 Set 去除重複值，最後進行排序
     const schools = data.map(s => s.elementary_school).filter(Boolean)
     elementarySchools.value = [...new Set(schools)].sort()
+  }
+
+  // 💡 同時抓取後台設定的導師通知信箱
+  const { data: emailData } = await supabase
+    .from('system_settings')
+    .select('setting_value')
+    .eq('setting_key', 'teacher_notify_email')
+    .maybeSingle()
+    
+  if (emailData && emailData.setting_value) {
+    teacherEmail.value = emailData.setting_value
+  }
+}
+
+// 💡 發送通知信給導師的獨立函式
+const notifyTeacher = async (studentInfo, relationship, phone, email) => {
+  if (!teacherEmail.value || !teacherEmail.value.includes('@')) return; 
+  
+  try {
+    const nowStr = new Date().toLocaleString('zh-TW', { hour12: false })
+    const subject = `🔔 班級系統通知：家長已完成系統綁定 (${studentInfo.hidden_name})`
+    const content = `導師您好：\n\n系統紀錄顯示，於 ${nowStr} 有一位家長完成了系統綁定。\n\n【綁定資訊】\n- 學生：${studentInfo.student_number} ${studentInfo.hidden_name}\n- 關係：${relationship}\n- Email：${email}\n- 電話：${phone}\n\n此致\n系統自動通知`
+    
+    await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: teacherEmail.value,
+        subject: subject,
+        content: content
+      })
+    });
+  } catch (err) {
+    console.error('發送導師通知信失敗:', err);
   }
 }
 
@@ -175,6 +212,12 @@ const submitBinding = async () => {
     })
 
     showMessage('success', '🎉 驗證通過！綁定成功！')
+    
+    // 💡 找出剛綁定的學生資訊並觸發通知寄信
+    const boundStudent = students.value.find(s => s.id === selectedStudentId.value)
+    if (boundStudent) {
+      notifyTeacher(boundStudent, finalRelationship, parentPhone.value, parentEmail.value)
+    }
     
     // 清空表單
     parentEmail.value = ''; studentBirthday.value = ''; elementarySchool.value = ''; elementaryClass.value = ''; selectedStudentId.value = ''
