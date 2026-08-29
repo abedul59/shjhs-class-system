@@ -120,11 +120,15 @@
               <NuxtLink v-if="indexButtonSettings.parentBind" to="/parent-bind" class="btn btn-orange">👨‍👩‍👧 綁定</NuxtLink>
               <NuxtLink v-if="indexButtonSettings.parentMsg" to="/parent-message" class="btn btn-green">💬 家長私訊</NuxtLink>
               <NuxtLink v-if="indexButtonSettings.studentMsg" to="/student-message" class="btn btn-blue">💬 學生私訊</NuxtLink>
+              
+              <!-- 💡 新增：前台大課表顯示按鈕 -->
+              <button v-if="isScheduleButtonVisible" @click="openLargeSchedule" class="btn btn-lime">🗓️ 顯示班級大課表</button>
+
               <NuxtLink v-if="indexButtonSettings.assignments" to="/assignments" class="btn btn-purple">📚 作業管理</NuxtLink>
               <NuxtLink v-if="indexButtonSettings.discipline" to="/discipline" class="btn btn-dark-blue">⚖️ 秩序管理</NuxtLink>
               <NuxtLink v-if="indexButtonSettings.hygiene" to="/hygiene" class="btn btn-cyan">🧹 衛生管理</NuxtLink>            
               <NuxtLink v-if="indexButtonSettings.seats" to="/seats" class="btn btn-teal">🪑 座位管理</NuxtLink>
-              <NuxtLink v-if="indexButtonSettings.schedule" to="/schedule" class="btn btn-amber">🗓️ 課表管理</NuxtLink>
+              <NuxtLink v-if="indexButtonSettings.schedule" to="/schedule" class="btn btn-amber">⚙️ 課表管理</NuxtLink>
               <NuxtLink v-if="indexButtonSettings.exams" to="/exams" class="btn btn-rose">📝 大考管理</NuxtLink>
               <button v-if="indexButtonSettings.emergency" @click="openPwdModal('emergency')" class="btn btn-red">🚨 緊急通知</button>
               <NuxtLink v-if="indexButtonSettings.admin" to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
@@ -209,6 +213,58 @@
       </div>
     </div>
 
+    <!-- 💡 全螢幕大字體課表展示 Modal (與後台完全一致) -->
+    <div v-if="showLargeSchedule" class="large-schedule-overlay">
+      <div class="large-header">
+        <h1 class="large-title">📅 班級課表</h1>
+        <button class="btn-close-large" @click="showLargeSchedule = false">✖ 關閉課表</button>
+      </div>
+
+      <div class="large-schedule-content">
+        <!-- 桌機/平板：完整網格 -->
+        <div class="desktop-grid">
+          <div class="grid-header time-header">節次 / 時間</div>
+          <div class="grid-header">星期一</div>
+          <div class="grid-header">星期二</div>
+          <div class="grid-header">星期三</div>
+          <div class="grid-header">星期四</div>
+          <div class="grid-header">星期五</div>
+          
+          <template v-for="(period, pIdx) in scheduleData?.periods || []" :key="'lg-'+pIdx">
+            <div class="grid-cell time-cell">
+              <div class="p-name">{{ period.name }}</div>
+              <div class="p-time">{{ period.startTime }} - {{ period.endTime }}</div>
+            </div>
+            <div v-for="day in 5" :key="'lgc-'+day" class="grid-cell subject-cell" :class="{'empty-cell': !period.days[day-1].subject}">
+              <div class="cell-subject">{{ privacyFilter(period.days[day-1].subject) || '-' }}</div>
+              <div class="cell-teacher" v-if="period.days[day-1].teacher">{{ privacyFilter(period.days[day-1].teacher) }}</div>
+            </div>
+          </template>
+        </div>
+
+        <!-- 手機：單日卡片清單 -->
+        <div class="mobile-view">
+          <div class="mobile-day-selector">
+             <button v-for="d in 5" :key="'btn-'+d" 
+                     :class="{active: mobileDay === d}" 
+                     @click="mobileDay = d">星期{{ ['一','二','三','四','五'][d-1] }}</button>
+          </div>
+          <div class="mobile-list">
+            <div v-for="(period, pIdx) in scheduleData?.periods || []" :key="'ml-'+pIdx" class="mobile-card">
+              <div class="m-time-box">
+                <span class="m-name">{{ period.name }}</span>
+                <span class="m-time">{{ period.startTime }} - {{ period.endTime }}</span>
+              </div>
+              <div class="m-subject-box" :class="{'m-empty': !period.days[mobileDay-1].subject}">
+                 <div class="m-subject">{{ privacyFilter(period.days[mobileDay-1].subject) || '無課程' }}</div>
+                 <div class="m-teacher" v-if="period.days[mobileDay-1].teacher">{{ privacyFilter(period.days[mobileDay-1].teacher) }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <EmergencyModal v-if="showEmergencyModal" @close="showEmergencyModal = false" />
   </div>
 </template>
@@ -245,6 +301,11 @@ const unreadMsgCount = ref(0)
 const announcements = ref([])
 const parentAnnouncements = ref([])
 const scheduleData = ref(null)
+
+// 💡 課表展示按鈕設定與狀態
+const scheduleButtonConfig = ref({ isVisible: false, visibility: 'both' })
+const showLargeSchedule = ref(false)
+const mobileDay = ref(new Date().getDay() >= 1 && new Date().getDay() <= 5 ? new Date().getDay() : 1)
 
 const isExamModeView = ref(false)
 const examData = ref({ isExamModeEnabled: true, theme: 'midnight', title: '', periods: [] })
@@ -529,7 +590,7 @@ const fetchData = async () => {
       'contact_history_visible', 'index_button_settings', 'announcements_data', 
       'class_schedule_data', 'exam_schedule_data', 'parent_notices_data', 
       'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible',
-      'parent_announcements_data', 'parent_announcement_board_visible'
+      'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings'
     ])
   
   if (sysData) {
@@ -565,6 +626,12 @@ const fetchData = async () => {
 
     const schSetting = sysData.find(s => s.setting_key === 'class_schedule_data')
     if (schSetting && schSetting.setting_value) { scheduleData.value = schSetting.setting_value }
+    
+    // 💡 讀取課表展示按鈕的設定
+    const schBtnSetting = sysData.find(s => s.setting_key === 'schedule_button_settings')
+    if (schBtnSetting && schBtnSetting.setting_value) {
+      scheduleButtonConfig.value = schBtnSetting.setting_value
+    }
 
     const exSetting = sysData.find(s => s.setting_key === 'exam_schedule_data')
     if (exSetting && exSetting.setting_value) { examData.value = { ...examData.value, ...exSetting.setting_value } }
@@ -612,23 +679,33 @@ const fetchData = async () => {
   const { data: attData } = await supabase.from('attendances').select('*').eq('record_date', todayISO)
   if (attData) todayAttendances.value = attData
 
-  // 💡 查詢私訊數量
   try {
     const { data: msgData } = await supabase.from('private_messages')
       .select('*')
       .neq('sender_role', '導師')
 
     if (msgData) {
-      // 找出家長與學生的未讀數量
       const unreadParents = msgData.filter(m => m.chat_type === '家長' && (m.is_read_by_teacher === false || m.is_read_by_admin === false)).length
       const unreadStudents = msgData.filter(m => m.chat_type === '學生' && (m.is_read_by_teacher === false || m.is_read_by_admin === false)).length
-      
-      // 💡 只有家長私訊不用褐名單，學生私訊需要褐名單才通知
       unreadMsgCount.value = isIpBrownlisted.value ? (unreadParents + unreadStudents) : unreadParents
     }
   } catch (e) {
     console.error('無法取得未讀私訊數量', e)
   }
+}
+
+// 💡 計算課表按鈕是否顯示的邏輯
+const isScheduleButtonVisible = computed(() => {
+  if (!scheduleButtonConfig.value.isVisible) return false
+  if (scheduleButtonConfig.value.visibility === 'both') return true
+  if (scheduleButtonConfig.value.visibility === 'inside' && isIpBrownlisted.value) return true
+  if (scheduleButtonConfig.value.visibility === 'outside' && !isIpBrownlisted.value) return true
+  return false
+})
+
+const openLargeSchedule = () => {
+  showLargeSchedule.value = true
+  mobileDay.value = new Date().getDay() >= 1 && new Date().getDay() <= 5 ? new Date().getDay() : 1
 }
 
 onMounted(() => { 
@@ -721,7 +798,6 @@ const saveClassNoteItems = async () => {
 .left-panel { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .control-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; text-align: center; }
 
-/* 💡 將時鐘與鈴鐺放在同一行，並隱藏文字 */
 .clock-display { display: flex; align-items: center; justify-content: center; gap: 15px; font-size: 2.2rem; font-weight: bold; color: #1e293b; margin-bottom: 10px; }
 .icon-alert-bell { font-size: 2.2rem; text-decoration: none; animation: shake 1.5s infinite; filter: drop-shadow(0 2px 4px rgba(239,68,68,0.5)); cursor: pointer; }
 @keyframes shake { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-15deg); } 75% { transform: rotate(15deg); } }
@@ -736,6 +812,7 @@ const saveClassNoteItems = async () => {
 .btn-orange { background: #f59e0b; }
 .btn-green { background: #10b981; }
 .btn-blue { background: #3b82f6; }
+.btn-lime { background: #84cc16; color: #14532d; border: 1px solid #65a30d;}
 .btn-dark { background: #64748b; }
 .btn-purple { background: #8b5cf6; }
 .btn-red { background: #ef4444; }
@@ -762,6 +839,59 @@ const saveClassNoteItems = async () => {
 .pwd-actions button { padding: 10px 25px; border-radius: 8px; font-weight: bold; font-size: 1.05rem; cursor: pointer; border: none;}
 .confirm-btn { background: #3b82f6; color: white; }
 .cancel-btn { background: #e2e8f0; color: #475569; }
+
+/* 💡 全螢幕大課表樣式 (Responsive) */
+.large-schedule-overlay { 
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
+  background: #f8fafc; z-index: 9999; display: flex; flex-direction: column; overflow-y: auto; 
+}
+.large-header { 
+  padding: 15px 30px; background: #1e293b; color: white; 
+  display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+.large-title { margin: 0; font-size: 1.8rem; letter-spacing: 2px;}
+.btn-close-large { background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; }
+
+.large-schedule-content { padding: 20px; flex: 1; max-width: 1600px; margin: 0 auto; width: 100%; box-sizing: border-box;}
+
+/* 桌機版網格 */
+.desktop-grid { display: grid; grid-template-columns: 180px repeat(5, 1fr); gap: 15px; }
+.grid-header { background: #e2e8f0; color: #0f172a; font-size: 1.5rem; font-weight: bold; padding: 15px; text-align: center; border-radius: 8px;}
+.time-header { background: #94a3b8; color: white; }
+
+.grid-cell { background: white; border: 2px solid #cbd5e1; border-radius: 8px; padding: 15px; text-align: center; display: flex; flex-direction: column; justify-content: center; min-height: 100px;}
+.time-cell { background: #f1f5f9; border-color: #94a3b8; }
+.p-name { font-size: 1.4rem; font-weight: bold; color: #334155; margin-bottom: 5px;}
+.p-time { font-size: 1.1rem; color: #64748b; font-family: monospace; font-weight: bold;}
+
+.subject-cell { box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+.empty-cell { background: #f8fafc; border-style: dashed; opacity: 0.6; }
+.cell-subject { font-size: 2.2rem; font-weight: bold; color: #0f766e; margin-bottom: 5px; }
+.cell-teacher { font-size: 1.3rem; color: #0369a1; font-weight: bold;}
+
+/* 手機版隱藏 */
+.mobile-view { display: none; }
+
+/* RWD: 手機與小平板切換至卡片模式 */
+@media (max-width: 900px) {
+  .desktop-grid { display: none; }
+  .mobile-view { display: block; }
+  
+  .mobile-day-selector { display: flex; overflow-x: auto; gap: 10px; padding-bottom: 15px; margin-bottom: 15px; border-bottom: 2px solid #e2e8f0;}
+  .mobile-day-selector button { flex: 1; min-width: 80px; padding: 12px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1.1rem; font-weight: bold; color: #475569;}
+  .mobile-day-selector button.active { background: #3b82f6; color: white; border-color: #2563eb; }
+
+  .mobile-list { display: flex; flex-direction: column; gap: 12px; }
+  .mobile-card { display: flex; background: white; border: 2px solid #cbd5e1; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.05);}
+  .m-time-box { background: #f1f5f9; width: 120px; padding: 15px 10px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-right: 2px solid #cbd5e1;}
+  .m-name { font-size: 1.2rem; font-weight: bold; color: #334155; margin-bottom: 5px;}
+  .m-time { font-size: 0.95rem; color: #64748b; font-weight: bold;}
+  
+  .m-subject-box { flex: 1; padding: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center;}
+  .m-empty { background: #f8fafc; opacity: 0.6; }
+  .m-subject { font-size: 1.8rem; font-weight: bold; color: #0f766e; text-align: center;}
+  .m-teacher { font-size: 1.1rem; color: #0369a1; font-weight: bold; margin-top: 5px;}
+}
 
 @media (max-width: 1024px) { .main-split { flex-direction: column; } }
 @media (max-width: 768px) {
