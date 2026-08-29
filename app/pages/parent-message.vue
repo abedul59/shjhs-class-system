@@ -6,7 +6,7 @@
           <h2>💬 班級私訊聊天室</h2>
           <div class="security-notice">
             🔒 提醒家長：為維護資安與嚴格保護學生個資，請擇一方式進行身分驗證，完成後即可檢視與導師的對話紀錄。<br>
-            （學生的身份證後4碼和生日尚未建構完成，請先用email綁定功能，或提供email給導師為您綁定，再用email前五碼即可進入和導師私訊或請假。）
+            （學生的身份證後4碼和生日已經建構完成，可用來認證登入。也可先用email綁定功能，或提供email給導師為您綁定，再用email前五碼即可進入和導師私訊或請假。）
           </div>
         </div>
 
@@ -116,6 +116,9 @@ const sysMessage = ref({ type: '', text: '' })
 const chatMessages = ref([])
 const newMessage = ref('')
 
+// 💡 存放從資料庫抓取的導師信箱
+const teacherEmail = ref('')
+
 const checkSchoolNetwork = async () => {
   try {
     const res = await fetch('https://api.ipify.org?format=json')
@@ -147,8 +150,20 @@ const showMessage = (type, text) => {
 }
 
 const fetchStudents = async () => { 
-  const { data } = await supabase.from('students').select('id, seat_number, hidden_name').order('seat_number')
+  // 💡 在抓取時連同 real_name 一起拉出來，寄給導師的信件中會顯示真名
+  const { data } = await supabase.from('students').select('id, seat_number, hidden_name, real_name').order('seat_number')
   if (data) students.value = data 
+
+  // 💡 同時抓取後台 (AdminMessages.vue) 設定的導師私訊通知信箱
+  const { data: emailData } = await supabase
+    .from('system_settings')
+    .select('setting_value')
+    .eq('setting_key', 'teacher_msg_notify_email')
+    .maybeSingle()
+    
+  if (emailData && emailData.setting_value) {
+    teacherEmail.value = emailData.setting_value
+  }
 }
 
 const extractAlphanumericPrefix = (email) => {
@@ -187,7 +202,7 @@ const verifyIdentity = async () => {
       const userInputPrefix = emailPrefix.value.replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toLowerCase()
       let emailsToCheck = []
 
-      // 💡 修正：正確抓取 parents 資料表中的信箱 (對應 AdminStudents.vue)
+      // 💡 正確抓取 parents 資料表中的信箱
       const { data: parentsData } = await supabase
         .from('parents')
         .select('email')
@@ -243,19 +258,56 @@ const loadChatHistory = async () => {
   } 
 }
 
+// 💡 寄送通知信給導師的獨立函式
+const notifyTeacher = async (messageContent) => {
+  // 如果導師沒在後台設定信箱，就不寄送
+  if (!teacherEmail.value || !teacherEmail.value.includes('@')) return; 
+  
+  try {
+    const nowStr = new Date().toLocaleString('zh-TW', { hour12: false })
+    
+    // 從學生清單中找出對應的真實姓名 (因為導師看信件時不需要隱藏)
+    const student = students.value.find(s => s.id === selectedStudentId.value)
+    const studentNameInfo = student ? `${student.seat_number}號 ${student.real_name}` : '未知學生'
+
+    const subject = `🔔 班級系統通知：有家長傳送了新私訊 (${studentNameInfo})`
+    const content = `導師您好：\n\n系統紀錄顯示，於 ${nowStr} 收到了一則家長的新私訊。\n\n【私訊資訊】\n- 學生：${studentNameInfo}\n- 內容摘要：${messageContent}\n\n煩請抽空登入班級系統後台，進入「班級私訊管理」查看完整內容並進行回覆。\n\n此致\n系統自動通知`
+    
+    await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: teacherEmail.value,
+        subject: subject,
+        content: content
+      })
+    });
+  } catch (err) {
+    console.error('發送導師私訊通知信失敗:', err);
+  }
+}
+
 const sendMessage = async () => {
   if (!newMessage.value.trim()) return
   isSending.value = true
   try {
+    // 💡 先把訊息內容存進變數，稍後寄信會用到
+    const contentToSend = newMessage.value
+    
     await supabase.from('private_messages').insert({ 
       student_id: selectedStudentId.value, 
       sender_role: '家長', 
       chat_type: '家長', 
-      content: newMessage.value, 
+      content: contentToSend, 
       is_read_by_teacher: false 
     })
+    
     newMessage.value = ''
     await loadChatHistory()
+    
+    // 💡 發送背景通知信給導師
+    notifyTeacher(contentToSend)
+
   } catch (error) { 
     alert('傳送失敗') 
   } finally { 
