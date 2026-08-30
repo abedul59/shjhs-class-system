@@ -36,13 +36,14 @@
         </div>
       </header>
 
-      <!-- 💡 新增：大螢幕展示按鈕與首頁顯示設定 -->
+      <!-- 💡 大螢幕展示按鈕與首頁顯示設定 -->
       <div class="settings-section">
         <div class="settings-left">
           <h3 style="margin: 0 0 10px 0; color: #1e293b;">⚙️ 首頁顯示設定</h3>
+          
           <label class="switch-label">
             <input type="checkbox" v-model="indexSettings.isVisible" class="large-checkbox" />
-            <span style="font-weight: bold;">在首頁顯示「課表管理」按鈕</span>
+            <span style="font-weight: bold;">在首頁顯示「開啟大螢幕課表展示」按鈕</span>
           </label>
           
           <div class="visibility-options" :class="{ 'disabled-options': !indexSettings.isVisible }">
@@ -50,7 +51,15 @@
             <label><input type="radio" v-model="indexSettings.visibility" value="inside" :disabled="!indexSettings.isVisible"> 僅在褐名單「內」顯示 (校內)</label>
             <label><input type="radio" v-model="indexSettings.visibility" value="outside" :disabled="!indexSettings.isVisible"> 僅在褐名單「外」顯示 (校外)</label>
           </div>
+
+          <!-- 💡 新增：老師名稱隱私開關 -->
+          <label class="switch-label" style="margin-top: 15px;">
+            <input type="checkbox" v-model="indexSettings.teacherOnlyInBrownlist" class="large-checkbox" />
+            <span style="font-weight: bold;">大課表「僅在褐名單內 (校內)」才顯示老師名稱</span>
+          </label>
+          <p style="font-size: 0.85rem; color: #64748b; margin: 5px 0 0 30px;">(打勾後，在校外網路查看大課表時，將自動隱藏教師姓名)</p>
         </div>
+        
         <div class="settings-right">
           <button @click="openLargeSchedule" class="btn-large-preview">🖥️ 開啟大螢幕課表展示</button>
           <p style="font-size: 0.85rem; color: #64748b; margin-top: 5px;">適合投放至班級大平板或電子黑板</p>
@@ -127,7 +136,7 @@
       </div>
     </div>
 
-    <!-- 💡 全螢幕大字體課表展示 Modal -->
+    <!-- 💡 全螢幕大字體課表展示 Modal (後台預覽用) -->
     <div v-if="showLargeSchedule" class="large-schedule-overlay">
       <div class="large-header">
         <h1 class="large-title">📅 班級課表</h1>
@@ -194,14 +203,15 @@ const isSaving = ref(false)
 const mockDay = ref(1) // 1=星期一
 const mockTime = ref('08:10')
 
-// 💡 大螢幕展示狀態與手機版日期
+// 大螢幕展示狀態與手機版日期
 const showLargeSchedule = ref(false)
 const mobileDay = ref(new Date().getDay() >= 1 && new Date().getDay() <= 5 ? new Date().getDay() : 1)
 
-// 💡 首頁按鈕設定狀態
+// 💡 首頁按鈕設定狀態 (加入 teacherOnlyInBrownlist)
 const indexSettings = ref({
   isVisible: true,
-  visibility: 'both' // both, inside, outside
+  visibility: 'both', 
+  teacherOnlyInBrownlist: true // 預設開啟保護
 })
 
 // 預設課表，包含早掃與午掃時間
@@ -350,10 +360,11 @@ const fetchSchedule = async () => {
     scheduleData.value = JSON.parse(JSON.stringify(defaultSchedule))
   }
 
-  // 💡 載入首頁按鈕設定
+  // 載入首頁按鈕設定
   const { data: btnData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'schedule_button_settings').maybeSingle()
   if (btnData?.setting_value) {
-    indexSettings.value = btnData.setting_value
+    // 💡 確保讀取舊資料時保留預設值 (若無該欄位自動補上 true)
+    indexSettings.value = { teacherOnlyInBrownlist: true, ...btnData.setting_value }
   }
 }
 
@@ -366,7 +377,7 @@ const saveSchedule = async () => {
       setting_value: scheduleData.value
     }, { onConflict: 'setting_key' })
 
-    // 💡 儲存首頁按鈕設定
+    // 儲存首頁按鈕設定
     await supabase.from('system_settings').upsert({
       setting_key: 'schedule_button_settings',
       setting_value: indexSettings.value
@@ -409,7 +420,7 @@ const openLargeSchedule = () => {
 .btn-save { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 .btn-logout { background: #ef4444; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 
-/* 💡 首頁設定與大螢幕按鈕區塊 */
+/* 首頁設定與大螢幕按鈕區塊 */
 .settings-section {
   display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px;
   background: #f8fafc; padding: 20px 25px; border-radius: 8px; border: 2px dashed #94a3b8; margin-bottom: 20px;
@@ -458,7 +469,7 @@ const openLargeSchedule = () => {
 .subject-input:focus { border-color: #3b82f6; outline: none; background: #eff6ff;}
 .teacher-input { padding: 4px; border: 1px dashed #cbd5e1; border-radius: 4px; font-size: 0.85rem; text-align: center; color: #64748b;}
 
-/* 💡 全螢幕大課表樣式 (Responsive) */
+/* 全螢幕大課表樣式 (Responsive) */
 .large-schedule-overlay { 
   position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
   background: #f8fafc; z-index: 9999; display: flex; flex-direction: column; overflow-y: auto; 
