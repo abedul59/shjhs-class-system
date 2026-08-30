@@ -120,7 +120,6 @@
               <NuxtLink v-if="indexButtonSettings.parentMsg" to="/parent-message" class="btn btn-green">💬 家長私訊</NuxtLink>
               <NuxtLink v-if="indexButtonSettings.studentMsg" to="/student-message" class="btn btn-blue">💬 學生私訊</NuxtLink>
               
-              <!-- 前台大課表顯示按鈕 -->
               <button v-if="isScheduleButtonVisible" @click="openLargeSchedule" class="btn btn-lime">🗓️ 顯示班級大課表</button>
 
               <NuxtLink v-if="indexButtonSettings.assignments" to="/assignments" class="btn btn-purple">📚 作業管理</NuxtLink>
@@ -217,12 +216,12 @@
       <div class="large-header">
         <h1 class="large-title">📅 班級課表</h1>
         
-        <!-- 💡 新增的排版控制選項 -->
         <div class="large-controls">
           <label class="control-label">
             <input type="checkbox" v-model="showNonAcademicPeriods"> 顯示早/午休
           </label>
-          <label class="control-label">
+          <!-- 💡 修正：若設定為「僅限褐名單顯示老師」，則在褐名單外自動隱藏此開關 -->
+          <label class="control-label" v-if="!scheduleButtonConfig.teacherOnlyInBrownlist || isIpBrownlisted">
             <input type="checkbox" v-model="showTeacherNames"> 顯示老師
           </label>
           <label class="control-label">
@@ -233,11 +232,11 @@
       </div>
 
       <div class="large-schedule-content">
-        <!-- 桌機/平板：雙欄模式 (Split Layout) -->
+        <!-- 桌機/平板：雙欄模式 -->
         <div v-if="isSplitLayout" class="split-desktop-grid">
-          <!-- 左半邊 -->
           <div class="schedule-half">
-            <div class="desktop-grid">
+            <!-- 💡 動態綁定 .dense-mode 類別，當節數過多時自動縮小字體以塞入一頁 -->
+            <div class="desktop-grid" :class="{'dense-mode': morningPeriods.length > 5}">
               <div class="grid-header time-header">節次 / 時間</div>
               <div class="grid-header">星期一</div><div class="grid-header">星期二</div><div class="grid-header">星期三</div><div class="grid-header">星期四</div><div class="grid-header">星期五</div>
               <template v-for="(period, pIdx) in morningPeriods" :key="'lg-m-'+pIdx">
@@ -247,14 +246,16 @@
                 </div>
                 <div v-for="day in 5" :key="'lgc-m-'+day" class="grid-cell subject-cell" :class="{'empty-cell': !period.days[day-1].subject}">
                   <div class="cell-subject">{{ privacyFilter(period.days[day-1].subject) || '-' }}</div>
-                  <div class="cell-teacher" v-if="showTeacherNames && period.days[day-1].teacher">{{ privacyFilter(period.days[day-1].teacher) }}</div>
+                  <!-- 💡 修正：加入權限判斷，若不合規強制隱藏老師名稱 -->
+                  <div class="cell-teacher" v-if="showTeacherNames && (!scheduleButtonConfig.teacherOnlyInBrownlist || isIpBrownlisted) && period.days[day-1].teacher">
+                    {{ privacyFilter(period.days[day-1].teacher) }}
+                  </div>
                 </div>
               </template>
             </div>
           </div>
-          <!-- 右半邊 -->
           <div class="schedule-half">
-            <div class="desktop-grid">
+            <div class="desktop-grid" :class="{'dense-mode': afternoonPeriods.length > 5}">
               <div class="grid-header time-header">節次 / 時間</div>
               <div class="grid-header">星期一</div><div class="grid-header">星期二</div><div class="grid-header">星期三</div><div class="grid-header">星期四</div><div class="grid-header">星期五</div>
               <template v-for="(period, pIdx) in afternoonPeriods" :key="'lg-a-'+pIdx">
@@ -264,15 +265,17 @@
                 </div>
                 <div v-for="day in 5" :key="'lgc-a-'+day" class="grid-cell subject-cell" :class="{'empty-cell': !period.days[day-1].subject}">
                   <div class="cell-subject">{{ privacyFilter(period.days[day-1].subject) || '-' }}</div>
-                  <div class="cell-teacher" v-if="showTeacherNames && period.days[day-1].teacher">{{ privacyFilter(period.days[day-1].teacher) }}</div>
+                  <div class="cell-teacher" v-if="showTeacherNames && (!scheduleButtonConfig.teacherOnlyInBrownlist || isIpBrownlisted) && period.days[day-1].teacher">
+                    {{ privacyFilter(period.days[day-1].teacher) }}
+                  </div>
                 </div>
               </template>
             </div>
           </div>
         </div>
 
-        <!-- 桌機/平板：單欄模式 (預設全滿模式) -->
-        <div v-else class="desktop-grid">
+        <!-- 桌機/平板：單欄模式 -->
+        <div v-else class="desktop-grid" :class="{'dense-mode': displayPeriods.length > 8}">
           <div class="grid-header time-header">節次 / 時間</div>
           <div class="grid-header">星期一</div>
           <div class="grid-header">星期二</div>
@@ -287,12 +290,14 @@
             </div>
             <div v-for="day in 5" :key="'lgc-'+day" class="grid-cell subject-cell" :class="{'empty-cell': !period.days[day-1].subject}">
               <div class="cell-subject">{{ privacyFilter(period.days[day-1].subject) || '-' }}</div>
-              <div class="cell-teacher" v-if="showTeacherNames && period.days[day-1].teacher">{{ privacyFilter(period.days[day-1].teacher) }}</div>
+              <div class="cell-teacher" v-if="showTeacherNames && (!scheduleButtonConfig.teacherOnlyInBrownlist || isIpBrownlisted) && period.days[day-1].teacher">
+                {{ privacyFilter(period.days[day-1].teacher) }}
+              </div>
             </div>
           </template>
         </div>
 
-        <!-- 手機：單日卡片清單 (RWD) -->
+        <!-- 手機：單日卡片清單 -->
         <div class="mobile-view">
           <div class="mobile-day-selector">
              <button v-for="d in 5" :key="'btn-'+d" 
@@ -307,7 +312,9 @@
               </div>
               <div class="m-subject-box" :class="{'m-empty': !period.days[mobileDay-1].subject}">
                  <div class="m-subject">{{ privacyFilter(period.days[mobileDay-1].subject) || '無課程' }}</div>
-                 <div class="m-teacher" v-if="showTeacherNames && period.days[mobileDay-1].teacher">{{ privacyFilter(period.days[mobileDay-1].teacher) }}</div>
+                 <div class="m-teacher" v-if="showTeacherNames && (!scheduleButtonConfig.teacherOnlyInBrownlist || isIpBrownlisted) && period.days[mobileDay-1].teacher">
+                   {{ privacyFilter(period.days[mobileDay-1].teacher) }}
+                 </div>
               </div>
             </div>
           </div>
@@ -352,17 +359,17 @@ const announcements = ref([])
 const parentAnnouncements = ref([])
 const scheduleData = ref(null)
 
-// 💡 課表展示按鈕設定與狀態
-const scheduleButtonConfig = ref({ isVisible: false, visibility: 'both' })
+// 課表展示按鈕設定與狀態
+const scheduleButtonConfig = ref({ isVisible: false, visibility: 'both', teacherOnlyInBrownlist: true })
 const showLargeSchedule = ref(false)
 const mobileDay = ref(new Date().getDay() >= 1 && new Date().getDay() <= 5 ? new Date().getDay() : 1)
 
-// 💡 大課表自訂排版開關狀態
-const showNonAcademicPeriods = ref(false) // 預設關閉以節省空間
-const showTeacherNames = ref(true)        // 預設顯示老師
-const isSplitLayout = ref(false)          // 預設單欄
+// 大課表自訂排版開關狀態
+const showNonAcademicPeriods = ref(false) 
+const showTeacherNames = ref(true)        
+const isSplitLayout = ref(false)          
 
-// 💡 動態計算需要顯示的節次 (過濾掉非正課)
+// 動態計算需要顯示的節次 (過濾掉非正課)
 const nonAcademicKeywords = ['早修', '早掃', '午餐', '午休']
 const displayPeriods = computed(() => {
   if (!scheduleData.value?.periods) return []
@@ -372,7 +379,7 @@ const displayPeriods = computed(() => {
   })
 })
 
-// 💡 雙欄模式切割 (動態對半切，以適應不同學校的節數設定)
+// 雙欄模式切割 
 const morningPeriods = computed(() => {
   const mid = Math.ceil(displayPeriods.value.length / 2)
   return displayPeriods.value.slice(0, mid)
@@ -703,10 +710,10 @@ const fetchData = async () => {
     const schSetting = sysData.find(s => s.setting_key === 'class_schedule_data')
     if (schSetting && schSetting.setting_value) { scheduleData.value = schSetting.setting_value }
     
-    // 讀取課表展示按鈕的設定
+    // 💡 讀取課表展示按鈕的設定 (保留預設防呆)
     const schBtnSetting = sysData.find(s => s.setting_key === 'schedule_button_settings')
     if (schBtnSetting && schBtnSetting.setting_value) {
-      scheduleButtonConfig.value = schBtnSetting.setting_value
+      scheduleButtonConfig.value = { teacherOnlyInBrownlist: true, ...schBtnSetting.setting_value }
     }
 
     const exSetting = sysData.find(s => s.setting_key === 'exam_schedule_data')
@@ -922,21 +929,21 @@ const saveClassNoteItems = async () => {
   background: #f8fafc; z-index: 9999; display: flex; flex-direction: column;
 }
 .large-header { 
-  padding: 15px 25px; background: #1e293b; color: white; 
-  display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); flex-wrap: wrap; gap: 15px;
+  padding: 10px 20px; background: #1e293b; color: white; 
+  display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); flex-wrap: wrap; gap: 10px;
 }
 .large-title { margin: 0; font-size: 1.6rem; letter-spacing: 2px;}
 
 /* 💡 新增的排版控制選單 CSS */
-.large-controls { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; background: rgba(255,255,255,0.1); padding: 8px 15px; border-radius: 8px; }
+.large-controls { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; background: rgba(255,255,255,0.1); padding: 6px 12px; border-radius: 8px; }
 .control-label { display: flex; align-items: center; gap: 6px; font-size: 1rem; color: #f8fafc; cursor: pointer; font-weight: bold; }
 .control-label input { transform: scale(1.2); cursor: pointer; }
 
-.btn-close-large { background: #ef4444; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; margin-left: 10px; }
+.btn-close-large { background: #ef4444; color: white; border: none; padding: 6px 15px; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; margin-left: 10px; }
 
 /* 💡 讓內容區塊動態填滿剩下的高度 */
 .large-schedule-content { 
-  padding: 15px; flex: 1; width: 100%; box-sizing: border-box;
+  padding: 10px 15px; flex: 1; width: 100%; box-sizing: border-box;
   display: flex; flex-direction: column; overflow: hidden;
 }
 
@@ -946,32 +953,42 @@ const saveClassNoteItems = async () => {
   display: grid; 
   grid-template-columns: 140px repeat(5, 1fr); 
   grid-template-rows: auto; 
-  grid-auto-rows: 1fr; /* 強制所有資料列等高，自然擠壓進一頁 */
-  gap: 10px; 
-  min-height: 500px; /* 螢幕過小時的防呆底線 */
+  grid-auto-rows: minmax(0, 1fr); /* 💡 改為自動適應壓縮，避免溢出螢幕 */
+  gap: 8px; 
+  min-height: 0; 
 }
-.grid-header { background: #e2e8f0; color: #0f172a; font-size: 1.3rem; font-weight: bold; padding: 10px; text-align: center; border-radius: 8px; display: flex; align-items: center; justify-content: center;}
+
+.grid-header { background: #e2e8f0; color: #0f172a; font-size: 1.2rem; font-weight: bold; padding: 8px; text-align: center; border-radius: 6px; display: flex; align-items: center; justify-content: center;}
 .time-header { background: #94a3b8; color: white; }
 
 /* 💡 雙欄模式專屬網格 */
-.split-desktop-grid { display: flex; gap: 20px; height: 100%; width: 100%; }
+.split-desktop-grid { display: flex; gap: 15px; height: 100%; width: 100%; }
 .schedule-half { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.split-desktop-grid .desktop-grid { min-height: 0; grid-template-columns: 120px repeat(5, 1fr); gap: 8px;}
-.split-desktop-grid .cell-subject { font-size: 1.6rem; }
-.split-desktop-grid .cell-teacher { font-size: 1.1rem; }
+.split-desktop-grid .desktop-grid { min-height: 0; grid-template-columns: 120px repeat(5, 1fr); gap: 6px;}
+.split-desktop-grid .cell-subject { font-size: 1.5rem; }
+.split-desktop-grid .cell-teacher { font-size: 1.05rem; }
 .split-desktop-grid .p-name { font-size: 1.1rem; }
-.split-desktop-grid .p-time { font-size: 0.9rem; }
-.split-desktop-grid .grid-header { font-size: 1.1rem; padding: 8px; }
+.split-desktop-grid .p-time { font-size: 0.85rem; }
+.split-desktop-grid .grid-header { font-size: 1.05rem; padding: 6px; }
 
-.grid-cell { background: white; border: 2px solid #cbd5e1; border-radius: 8px; padding: 10px; text-align: center; display: flex; flex-direction: column; justify-content: center;}
+.grid-cell { background: white; border: 2px solid #cbd5e1; border-radius: 6px; padding: 5px 10px; text-align: center; display: flex; flex-direction: column; justify-content: center; min-height: 0;}
 .time-cell { background: #f1f5f9; border-color: #94a3b8; }
-.p-name { font-size: 1.3rem; font-weight: bold; color: #334155; margin-bottom: 3px;}
-.p-time { font-size: 1rem; color: #64748b; font-family: monospace; font-weight: bold;}
+.p-name { font-size: 1.2rem; font-weight: bold; color: #334155; margin-bottom: 2px;}
+.p-time { font-size: 0.95rem; color: #64748b; font-family: monospace; font-weight: bold;}
 
 .subject-cell { box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
 .empty-cell { background: #f8fafc; border-style: dashed; opacity: 0.6; }
-.cell-subject { font-size: 2.1rem; font-weight: bold; color: #0f766e; margin-bottom: 3px; }
-.cell-teacher { font-size: 1.2rem; color: #0369a1; font-weight: bold;}
+.cell-subject { font-size: 1.8rem; font-weight: bold; color: #0f766e; margin-bottom: 2px; }
+.cell-teacher { font-size: 1.1rem; color: #0369a1; font-weight: bold;}
+
+/* 💡 高密度模式：當節數過多(>8節)自動縮小字體與間距，保證一頁塞得下 */
+.dense-mode { gap: 6px; }
+.dense-mode .grid-cell { padding: 4px; border-width: 1px;}
+.dense-mode .cell-subject { font-size: 1.5rem; margin-bottom: 2px; }
+.dense-mode .cell-teacher { font-size: 1rem; }
+.dense-mode .p-name { font-size: 1.1rem; }
+.dense-mode .p-time { font-size: 0.85rem; }
+.dense-mode .grid-header { font-size: 1.1rem; padding: 6px; }
 
 /* 手機版隱藏 */
 .mobile-view { display: none; }
