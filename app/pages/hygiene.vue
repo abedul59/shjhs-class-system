@@ -58,7 +58,6 @@
       <!-- ================= 1. 早上掃地管理 ================= -->
       <div v-show="activeTab === 'morning'" class="table-card" id="morning-card">
         
-        <!-- 💡 產生 PDF / Word 輸出按鈕 -->
         <div class="print-actions screen-only">
           <button @click="triggerPrint" class="btn-print">📄 產生 PDF / 預覽</button>
           <button @click="generateWord" class="btn-word">📝 匯出 Word</button>
@@ -152,7 +151,6 @@
       <!-- ================= 2. 中午搬餐管理 ================= -->
       <div v-show="activeTab === 'lunch'" class="table-card" id="lunch-card">
         
-        <!-- 💡 產生 PDF / Word 輸出按鈕 -->
         <div class="print-actions screen-only">
           <button @click="triggerPrint" class="btn-print">📄 產生 PDF / 預覽</button>
           <button @click="generateWord" class="btn-word">📝 匯出 Word</button>
@@ -236,7 +234,6 @@
       <!-- ================= 3. 小隊工作管理 ================= -->
       <div v-show="activeTab === 'squad'" class="table-card" id="squad-card">
         
-        <!-- 💡 產生 PDF / Word 輸出按鈕 -->
         <div class="print-actions screen-only">
           <button @click="triggerPrint" class="btn-print">📄 產生 PDF / 預覽</button>
           <button @click="generateWord" class="btn-word">📝 匯出 Word</button>
@@ -501,14 +498,13 @@ const triggerPrint = () => {
   }, 300)
 }
 
-// 💡 新增的 Word 匯出功能
+// 💡 升級版：強制套用 Microsoft Word 列印排版 XML (單頁A4)
 const generateWord = () => {
   if (isEditing.value) {
     alert('💡 請先點擊右上角「👁️ 切換預覽模式」退出編輯，再產生 Word 會有最完美的排版喔！')
     return
   }
   
-  // 找出目前顯示的分頁卡片
   let targetCardId = ''
   let title = '衛生管理表'
   
@@ -526,41 +522,57 @@ const generateWord = () => {
   const activeCard = document.getElementById(targetCardId)
   if (!activeCard) return
   
-  // 複製一份 HTML 以便進行清理
   const tempDiv = document.createElement('div')
   tempDiv.innerHTML = activeCard.innerHTML
   
-  // 移除網頁專用的操作按鈕區塊
   const screenOnlyElements = tempDiv.querySelectorAll('.screen-only')
   screenOnlyElements.forEach(el => el.remove())
 
   const contentHtml = tempDiv.innerHTML
 
-  // 組裝符合 Word 解析格式的 HTML
+  // 💡 強制套用 Office XML: 開啟時預設為「列印版面 (預覽模式)」，並設定 @page 為 A4 橫式
   const html = `
-    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" 
+          xmlns:w="urn:schemas-microsoft-com:office:word" 
+          xmlns="http://www.w3.org/TR/REC-html40">
     <head>
       <meta charset="utf-8">
       <title>${title}</title>
+      <!--[if gte mso 9]>
+      <xml>
+        <w:WordDocument>
+          <w:View>Print</w:View>
+          <w:Zoom>100</w:Zoom>
+          <w:DoNotOptimizeForBrowser/>
+        </w:WordDocument>
+      </xml>
+      <![endif]-->
       <style>
+        @page WordSection1 {
+            size: 841.9pt 595.3pt; /* A4 橫向 */
+            mso-page-orientation: landscape;
+            margin: 25.0pt 25.0pt 25.0pt 25.0pt; /* 上下左右邊界縮小，確保單頁塞下 */
+        }
+        div.WordSection1 { page: WordSection1; }
         body { font-family: "微軟正黑體", "Microsoft JhengHei", sans-serif; }
-        h3 { text-align: center; font-size: 20px; margin-bottom: 15px; }
-        .sub-title { text-align: center; margin-bottom: 15px; font-size: 14px; color: #555; }
-        table { width: 100%; border-collapse: collapse; text-align: center; margin-bottom: 20px; }
-        th, td { border: 1px solid #000; padding: 10px; vertical-align: middle; }
+        h3 { text-align: center; font-size: 16pt; margin-bottom: 8pt; }
+        .sub-title { text-align: center; margin-bottom: 8pt; font-size: 10pt; color: #555; }
+        table { width: 100%; border-collapse: collapse; text-align: center; margin-bottom: 8pt; }
+        th, td { border: 1px solid #000; padding: 4px; vertical-align: middle; font-size: 9.5pt; }
         th { background-color: #f1f5f9; font-weight: bold; }
-        .footer-note { margin-top: 15px; font-size: 13px; line-height: 1.6; }
-        .text-sm { font-size: 12px; }
-        .text-xs { font-size: 10px; color: #666; }
+        .footer-note { margin-top: 8pt; font-size: 9.5pt; line-height: 1.3; }
+        .text-sm { font-size: 9pt; }
+        .text-xs { font-size: 8pt; color: #666; }
       </style>
     </head>
     <body>
-      ${contentHtml}
+      <div class="WordSection1">
+        ${contentHtml}
+      </div>
     </body>
     </html>
   `
 
-  // 轉換成 Blob 並觸發下載
   const blob = new Blob(['\ufeff', html], { type: 'application/msword' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -616,7 +628,6 @@ const generateWord = () => {
 .btn-delete-row { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 6px; padding: 6px 10px; cursor: pointer; transition: 0.2s; font-size: 0.9rem;}
 .btn-delete-row:hover { background: #fecaca; }
 
-/* 💡 新增的 Word 按鈕樣式 */
 .print-actions { display: flex; justify-content: flex-end; gap: 12px; margin-bottom: 15px; }
 .btn-print { background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
 .btn-print:hover { background: #2563eb; }
