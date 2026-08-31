@@ -55,6 +55,13 @@
         💡 提示：您正在編輯模式，可以直接修改表格中的所有文字。如需變色，可輸入 HTML，例如：<code>&lt;span style="color:red; font-weight:bold"&gt;紅色文字&lt;/span&gt;</code>。
       </div>
 
+      <!-- 💡 新增的字體大小統一控制器 -->
+      <div class="font-settings screen-only" v-if="isEditing">
+        <label>🔍 表格內「成員名單/座號」字體大小：</label>
+        <input type="number" v-model="d.nameFontSize" class="font-input" min="12" max="60" /> px
+        <span style="font-size: 0.85rem; color: #64748b; margin-left: 10px;">(修改此數字即可統一控制名單大小，不需再手打 HTML)</span>
+      </div>
+
       <!-- ================= 1. 早上掃地管理 ================= -->
       <div v-show="activeTab === 'morning'" class="table-card" id="morning-card">
         
@@ -79,40 +86,41 @@
           <tbody>
             <tr>
               <td colspan="2"><EditText v-model="d.morning.in_hygiene" :edit="isEditing" /></td>
-              <td><EditText v-model="d.morning.in_hygiene_names" :edit="isEditing" /></td>
+              <!-- 💡 加入 :largeFont 屬性，自動套用放大字體 -->
+              <td><EditText v-model="d.morning.in_hygiene_names" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
               <td><EditText v-model="d.morning.in_hygiene_work" :edit="isEditing" /></td>
             </tr>
             <tr>
               <td colspan="2"><EditText v-model="d.morning.board" :edit="isEditing" /></td>
-              <td><EditText v-model="d.morning.board_names" :edit="isEditing" /></td>
+              <td><EditText v-model="d.morning.board_names" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
               <td><EditText v-model="d.morning.board_work" :edit="isEditing" /></td>
             </tr>
             <tr>
               <td colspan="2"><EditText v-model="d.morning.sweep" :edit="isEditing" /></td>
-              <td><EditText v-model="d.morning.sweep_names" :edit="isEditing" /></td>
+              <td><EditText v-model="d.morning.sweep_names" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
               <td rowspan="2"><EditText v-model="d.morning.sweep_mop_work" :edit="isEditing" class="h-full" /></td>
             </tr>
             <tr>
               <td colspan="2"><EditText v-model="d.morning.mop" :edit="isEditing" /></td>
-              <td><EditText v-model="d.morning.mop_names" :edit="isEditing" /></td>
+              <td><EditText v-model="d.morning.mop_names" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
             </tr>
             <tr>
               <td colspan="2"><EditText v-model="d.morning.window" :edit="isEditing" /></td>
-              <td><EditText v-model="d.morning.window_names" :edit="isEditing" /></td>
+              <td><EditText v-model="d.morning.window_names" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
               <td><EditText v-model="d.morning.window_work" :edit="isEditing" /></td>
             </tr>
             <tr>
               <td colspan="2"><EditText v-model="d.morning.hallway" :edit="isEditing" /></td>
-              <td><EditText v-model="d.morning.hallway_names" :edit="isEditing" /></td>
+              <td><EditText v-model="d.morning.hallway_names" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
               <td><EditText v-model="d.morning.hallway_work" :edit="isEditing" /></td>
             </tr>
             <tr>
               <td colspan="2"><EditText v-model="d.morning.trash" :edit="isEditing" /></td>
-              <td><EditText v-model="d.morning.trash_names" :edit="isEditing" /></td>
+              <td><EditText v-model="d.morning.trash_names" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
               <td><EditText v-model="d.morning.trash_work" :edit="isEditing" /></td>
             </tr>
 
-            <!-- 外掃區 (可無限新增列的動態表格) -->
+            <!-- 外掃區 -->
             <tr class="header-row">
               <th>外掃區</th>
               <th>打掃區域</th>
@@ -125,7 +133,7 @@
                 <EditText v-model="d.morning.out_area" :edit="isEditing" class="h-full" />
               </td>
               <td><EditText v-model="item.area" :edit="isEditing" /></td>
-              <td><EditText v-model="item.names" :edit="isEditing" /></td>
+              <td><EditText v-model="item.names" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
               <td style="position: relative;">
                 <div style="display: flex; gap: 8px; align-items: stretch; height: 100%;">
                   <div style="flex: 1;"><EditText v-model="item.work" :edit="isEditing" class="h-full" /></div>
@@ -167,6 +175,7 @@
 
         <table class="custom-table lunch-table">
           <tbody>
+            <!-- 清潔組 -->
             <tr>
               <th rowspan="2" width="10%"><EditText v-model="d.lunch.clean_header" :edit="isEditing" class="h-full"/></th>
               <th width="15%"><EditText v-model="d.lunch.clean_h1" :edit="isEditing" /></th>
@@ -177,13 +186,14 @@
               <th width="15%"><EditText v-model="d.lunch.clean_h6" :edit="isEditing" /></th>
             </tr>
             <tr>
-              <td><EditText v-model="d.lunch.clean_n1" :edit="isEditing" /></td>
-              <td><EditText v-model="d.lunch.clean_n2" :edit="isEditing" /></td>
-              <td><EditText v-model="d.lunch.clean_n3" :edit="isEditing" /></td>
-              <td><EditText v-model="d.lunch.clean_n4" :edit="isEditing" /></td>
-              <td><EditText v-model="d.lunch.clean_n5" :edit="isEditing" /></td>
-              <td><EditText v-model="d.lunch.clean_n6" :edit="isEditing" /></td>
+              <td><EditText v-model="d.lunch.clean_n1" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
+              <td><EditText v-model="d.lunch.clean_n2" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
+              <td><EditText v-model="d.lunch.clean_n3" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
+              <td><EditText v-model="d.lunch.clean_n4" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
+              <td><EditText v-model="d.lunch.clean_n5" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
+              <td><EditText v-model="d.lunch.clean_n6" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
             </tr>
+            <!-- 搬餐組 -->
             <tr>
               <th rowspan="2"><EditText v-model="d.lunch.move_header" :edit="isEditing" class="h-full"/></th>
               <th><EditText v-model="d.lunch.move_h1" :edit="isEditing" /></th>
@@ -194,13 +204,14 @@
               <th><EditText v-model="d.lunch.move_h6" :edit="isEditing" /></th>
             </tr>
             <tr>
-              <td><EditText v-model="d.lunch.move_n1" :edit="isEditing" /></td>
-              <td><EditText v-model="d.lunch.move_n2" :edit="isEditing" /></td>
-              <td><EditText v-model="d.lunch.move_n3" :edit="isEditing" /></td>
-              <td><EditText v-model="d.lunch.move_n4" :edit="isEditing" /></td>
-              <td><EditText v-model="d.lunch.move_n5" :edit="isEditing" /></td>
-              <td><EditText v-model="d.lunch.move_n6" :edit="isEditing" /></td>
+              <td><EditText v-model="d.lunch.move_n1" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
+              <td><EditText v-model="d.lunch.move_n2" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
+              <td><EditText v-model="d.lunch.move_n3" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
+              <td><EditText v-model="d.lunch.move_n4" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
+              <td><EditText v-model="d.lunch.move_n5" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
+              <td><EditText v-model="d.lunch.move_n6" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
             </tr>
+            <!-- 配膳組 -->
             <tr>
               <th rowspan="2"><EditText v-model="d.lunch.serve_header" :edit="isEditing" class="h-full"/></th>
               <th><EditText v-model="d.lunch.serve_h1" :edit="isEditing" /></th>
@@ -211,12 +222,12 @@
               <th><EditText v-model="d.lunch.serve_h6" :edit="isEditing" /></th>
             </tr>
             <tr>
-              <td><EditText v-model="d.lunch.serve_n1" :edit="isEditing" /></td>
-              <td><EditText v-model="d.lunch.serve_n2" :edit="isEditing" /></td>
-              <td><EditText v-model="d.lunch.serve_n3" :edit="isEditing" /></td>
-              <td><EditText v-model="d.lunch.serve_n4" :edit="isEditing" /></td>
-              <td><EditText v-model="d.lunch.serve_n5" :edit="isEditing" /></td>
-              <td><EditText v-model="d.lunch.serve_n6" :edit="isEditing" /></td>
+              <td><EditText v-model="d.lunch.serve_n1" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
+              <td><EditText v-model="d.lunch.serve_n2" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
+              <td><EditText v-model="d.lunch.serve_n3" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
+              <td><EditText v-model="d.lunch.serve_n4" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
+              <td><EditText v-model="d.lunch.serve_n5" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
+              <td><EditText v-model="d.lunch.serve_n6" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
             </tr>
           </tbody>
         </table>
@@ -254,37 +265,37 @@
             <tr v-for="n in 6" :key="'ld-'+n">
               <td v-if="n===1" rowspan="6"><EditText v-model="d.squad.role_1" :edit="isEditing" class="h-full" /></td>
               <td><EditText v-model="d.squad.leader_items[n-1]" :edit="isEditing" /></td>
-              <td><EditText v-model="d.squad.leaders[n-1]" :edit="isEditing" /></td>
+              <td><EditText v-model="d.squad.leaders[n-1]" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
               <td v-if="n===1" rowspan="6"><EditText v-model="d.squad.leader_desc" :edit="isEditing" class="h-full" /></td>
             </tr>
             <tr v-for="n in 6" :key="'dy-'+n">
               <td v-if="n===1" rowspan="6"><EditText v-model="d.squad.role_2" :edit="isEditing" class="h-full" /></td>
               <td><EditText v-model="d.squad.duty_items[n-1]" :edit="isEditing" /></td>
-              <td><EditText v-model="d.squad.duties[n-1]" :edit="isEditing" /></td>
+              <td><EditText v-model="d.squad.duties[n-1]" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
               <td><EditText v-model="d.squad.duty_desc[n-1]" :edit="isEditing" /></td>
             </tr>
             <tr v-for="n in 5" :key="'hp-'+n">
               <td v-if="n===1" rowspan="5"><EditText v-model="d.squad.role_3" :edit="isEditing" class="h-full" /></td>
               <td><EditText v-model="d.squad.helper_items[n-1]" :edit="isEditing" /></td>
-              <td><EditText v-model="d.squad.helpers[n-1]" :edit="isEditing" /></td>
+              <td><EditText v-model="d.squad.helpers[n-1]" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
               <td><EditText v-model="d.squad.helper_desc[n-1]" :edit="isEditing" /></td>
             </tr>
             <tr v-for="n in 4" :key="'er-'+n">
               <td v-if="n===1" rowspan="4"><EditText v-model="d.squad.role_4" :edit="isEditing" class="h-full" /></td>
               <td><EditText v-model="d.squad.errand_items[n-1]" :edit="isEditing" /></td>
-              <td><EditText v-model="d.squad.errands[n-1]" :edit="isEditing" /></td>
+              <td><EditText v-model="d.squad.errands[n-1]" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
               <td><EditText v-model="d.squad.errand_desc[n-1]" :edit="isEditing" /></td>
             </tr>
             <tr v-for="n in 2" :key="'mn-'+n">
               <td v-if="n===1" rowspan="2"><EditText v-model="d.squad.role_5" :edit="isEditing" class="h-full" /></td>
               <td><EditText v-model="d.squad.minion_items[n-1]" :edit="isEditing" /></td>
-              <td><EditText v-model="d.squad.minions[n-1]" :edit="isEditing" /></td>
+              <td><EditText v-model="d.squad.minions[n-1]" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
               <td v-if="n===1" rowspan="2"><EditText v-model="d.squad.minion_desc" :edit="isEditing" class="h-full" /></td>
             </tr>
             <tr v-for="n in 3" :key="'ot-'+n">
               <td v-if="n===1" rowspan="3"><EditText v-model="d.squad.role_6" :edit="isEditing" class="h-full" /></td>
               <td><EditText v-model="d.squad.other_items[n-1]" :edit="isEditing" /></td>
-              <td><EditText v-model="d.squad.others[n-1]" :edit="isEditing" /></td>
+              <td><EditText v-model="d.squad.others[n-1]" :edit="isEditing" :largeFont="d.nameFontSize" /></td>
               <td v-if="n===1" rowspan="3"><EditText v-model="d.squad.other_desc" :edit="isEditing" class="h-full" /></td>
             </tr>
           </tbody>
@@ -299,17 +310,27 @@
 import { ref, onMounted, defineComponent, h } from 'vue'
 const supabase = useSupabaseClient()
 
+// 💡 升級版 EditText：接收 largeFont 屬性，若有值則自動套用放大與粗體
 const EditText = defineComponent({
-  props: ['modelValue', 'edit', 'class'],
+  props: ['modelValue', 'edit', 'class', 'largeFont'],
   emits: ['update:modelValue'],
   setup(props, { emit }) {
-    return () => props.edit 
-      ? h('textarea', { 
-          value: props.modelValue, 
-          class: ['editable-textarea', props.class],
-          onInput: (e) => emit('update:modelValue', e.target.value) 
-        })
-      : h('div', { class: ['readonly-text', props.class], innerHTML: String(props.modelValue || '').replace(/\n/g, '<br>') })
+    return () => {
+      const styleObj = props.largeFont ? { fontSize: `${props.largeFont}px`, fontWeight: 'bold' } : {}
+      
+      return props.edit 
+        ? h('textarea', { 
+            value: props.modelValue, 
+            class: ['editable-textarea', props.class],
+            style: styleObj,
+            onInput: (e) => emit('update:modelValue', e.target.value) 
+          })
+        : h('div', { 
+            class: ['readonly-text', props.class], 
+            style: styleObj,
+            innerHTML: String(props.modelValue || '').replace(/\n/g, '<br>') 
+          })
+    }
   }
 })
 
@@ -336,6 +357,7 @@ const activeTab = ref('morning')
 
 const defaultData = {
   isVisibleOnIndex: false, 
+  nameFontSize: 24, // 💡 新增的預設字體大小
   morning: {
     title: '704 班 教室和外掃區 早上掃地工作分配表 2021/10/18 開始',
     note: '請先做好垃圾分類。每天早上和週五下午都要倒資源回收垃圾。\n每天早上和週五下午打掃時間視情況倒一般垃圾，超過八分滿時得立刻倒。週五下午和例假日前一天下午一定得倒光。',
@@ -362,7 +384,7 @@ const defaultData = {
     move_n1: '鄭人閤、王\n聰文', move_n2: '劉子涵、楊\n佩綺', move_n3: '王翊潔、周\n宥芸', move_n4: '楊元豪', move_n5: '王麟賢、\n劉沅翰', move_n6: '林科甫',
     serve_header: '配膳組 (先打菜，\n全部同學分配\n完，再用餐)', serve_h1: '飯盒\n1-1', serve_h2: '大菜盒 A\n1-2', serve_h3: '大菜盒 B\n1-3', serve_h4: '小菜盒\n1-4', serve_h5: '湯桶\n1-5', serve_h6: '清潔消毒餐\n桌且移動桌\n子並歸位\n1-6',
     serve_n1: '黃鈺淳', serve_n2: '林毓庭', serve_n3: '黃芊樺', serve_n4: '許珮萱', serve_n5: '副衛生股長', serve_n6: '衛生股長',
-    note1: '1. 1200-1215 為用餐時間，用餐時請勿聊天，活動範圍為教室、陽台和走廊，要上廁所或外出請詢問導師。\n2. 最晚 1215 用餐結束（老師會看用餐狀況調整），每個人請將廚餘丟至「一般垃圾桶」，並用衛生紙將餐盘整理收好，整理抽屜和書櫃，最後自己搬上椅子，沒有工作者請退到掃地區域以外等候，<span style="color:blue">拖地完、地板吹乾後</span>，方可進入。整理組搬椅子的同學請在 1225 前按照導師指示搬下，勿亂跑。\n3. <span style="background:black; color:white; font-weight:bold;">副衛生股長</span>監督「飯菜的搬送」；<span style="background:black; color:white; font-weight:bold;">正衛生股長</span>監督「中午掃地情況」，一遇有缺人則請詢問導師。\n4. <span style="font-weight:bold; text-decoration:underline;">正副衛生股長</span>負責午休鐘響之後<span style="text-decoration:underline;">檢查室內外地板垃圾</span>。(每天輪流)\n5. <span style="font-weight:bold; text-decoration:underline;">禁止私下更換搬運之飯菜，違者下個階段續搬</span>。除非第四節上課老師延後下課，全班之飯菜需於<span style="font-weight:bold; text-decoration:underline;">每天 1200 前</span>搬至教室。\n6. 導師未到教室前不得私自打菜。<span style="font-weight:bold;">若導師在 1205 尚未到教室，由班長宣佈開始打菜。</span>\n7. <span style="text-decoration:underline;">每週不定期</span>有水果或點心，同學記得去廚房搬運<span style="font-weight:bold; text-decoration:underline;">全部搬運回來</span>。(或由老師指派)\n若餐盒配置不太相同時，整組 8 人必須負責全部搬回來，先到者先選擇搬運東西。',
+    note1: '1. 1200-1215 為用餐時間，用餐時請勿聊天，活動範圍為教室、陽台和走廊，要上廁所或外出請詢問導師。\n2. 最晚 1215 用餐結束（老師會看用餐狀況調整），每個人請將廚餘丟至「一般垃圾桶」，並用衛生紙將餐盘整理收好，整理抽屜和書櫃，最後自己搬上椅子，沒有工作者請退到掃地區域以外等候，<span style="color:blue">拖地完、地板吹乾後</span>，方可進入。整理組搬椅子的同學請在 1225 前按照導師指示搬下，勿亂跑。\n3. <span style="background:black; color:white; font-weight:bold;">副衛生股長</span>監督「飯菜的搬送」；<span style="background:black; color:white; font-weight:bold;">正衛生股長</span>監督「中午掃地情況」，一遇有缺人則請詢問導師。\n4. <span style="font-weight:bold; text-decoration:underline;">正副衛生股長</span>負責午休鐘響之後<span style="text-decoration:underline;">檢查室內外地板垃圾</span>。(每天輪流)\n5. <span style="font-weight:bold; text-decoration:underline;">禁止私下更換搬運之飯菜，違者下個階段續搬</span>。除非第四節上課老師延後下課，全班之飯菜需於<span style="font-weight:bold; text-decoration:underline;">每天 1200 前</span>搬至教室。\n6. 導師未到教室前不得私自打菜。<span style="font-weight:bold;">若導師在 1205 尚未到教室，由班長宣佈開始打菜。</span>\n7. <span style="text-decoration:underline;">每週不定期</span>有水果或點心，同學記得去廚房搬運<span style="font-weight:bold; text-decoration:underline;">全部搬運回來</span>。(或由老師指派)\n若餐盒配置不太相同時，整組 8 工作必須負責全部搬回來，先到者先選擇搬運東西。',
     note2: '----------------------------清潔組（中午打掃）工作守則----------------------------\n1. 清潔組負責「講台桌黑板、餐桌」者，請用抹布擦餐桌，處理廚餘（第一優先），然後擦粉筆槽，請勿在午休時間教室內板擦，然後擦黑板，將粉筆排好，<span style="color:blue">然後掃和拖</span>講台，講桌也要擦，上面的東西請擺好。請將垃圾桶周圍垃圾清理乾淨，將必要垃圾分類。\n2. 清潔組負責「教室掃地」和「座位拖地」者，請於大部分的同學吃完飯後，開始打掃。先掃，後拖。「座位拖地」代表只拖桌子和椅子下方地板。\n3. 清潔組負責「走廊掃拖」者，請「最慢」在 12:20 開始掃地。<span style="font-weight:bold;">唯有拖地的人，必須在 12:25 打鐘後，才開始拖，一共兩次。<span style="text-decoration:underline;">正副衛生股長請在教室內最後進行善後補強工作。</span></span>\n4. 清潔組負責「整理垃圾、用具、洗手臺」者，請將洗手臺廚餘清理乾淨，抹布擺好。然後將垃圾桶旁垃圾整理，垃圾壓好。'
   },
   squad: {
@@ -385,7 +407,10 @@ const defaultData = {
     errand_items: ['公差 1', '公差 2', '公差 3', '公差 4'],
     errand_desc: ['8:20 前，搬聯絡簿到辦公室', '12:00 前，搬聯絡簿到教室的講桌旁', '<span style="color:red">13:05</span> 一打鐘，便搬聯絡簿到辦公室', '第七節下課，搬聯絡簿到教室'],
     errands: ['林珈媗', '黃芊樺', '葉佳妤', '朱佳晟'],
-
+    minion_items: ['小小兵 1', '小小兵 2'],
+    minion_desc: '每天第 3,7 節下課到辦公室向導師報告十件上課時同學們的行為。', minions: ['許珮萱', '張歆悅'],
+    other_items: ['特別小助理 1', '特別小助理 2', '特別小助理 3'],
+    other_desc: '每天第 1,6 節下課到辦公室詢問老師要做的事', others: ['劉子涵', '黃鈺淳', '楊佩綺']
   }
 }
 
@@ -439,6 +464,7 @@ const fetchLayout = async () => {
     d.value = { 
       ...baseData, 
       ...dbData,
+      nameFontSize: dbData.nameFontSize || 24, // 💡 載入儲存的字體大小
       morning: { ...baseData.morning, ...(dbData.morning || {}) },
       lunch: { ...baseData.lunch, ...(dbData.lunch || {}) },
       squad: { ...baseData.squad, ...(dbData.squad || {}) }
@@ -495,7 +521,6 @@ const triggerPrint = () => {
   }, 300)
 }
 
-// 💡 升級版：強制套用 Microsoft Word 列印排版 XML (單頁A4)
 const generateWord = () => {
   if (isEditing.value) {
     alert('💡 請先點擊右上角「👁️ 切換預覽模式」退出編輯，再產生 Word 會有最完美的排版喔！')
@@ -527,7 +552,6 @@ const generateWord = () => {
 
   const contentHtml = tempDiv.innerHTML
 
-  // 💡 強制套用 Office XML: 開啟時預設為「列印版面 (預覽模式)」，並設定 @page 為 A4 橫式
   const html = `
     <html xmlns:o="urn:schemas-microsoft-com:office:office" 
           xmlns:w="urn:schemas-microsoft-com:office:word" 
@@ -546,9 +570,9 @@ const generateWord = () => {
       <![endif]-->
       <style>
         @page WordSection1 {
-            size: 841.9pt 595.3pt; /* A4 橫向 */
+            size: 841.9pt 595.3pt; 
             mso-page-orientation: landscape;
-            margin: 25.0pt 25.0pt 25.0pt 25.0pt; /* 上下左右邊界縮小，確保單頁塞下 */
+            margin: 25.0pt 25.0pt 25.0pt 25.0pt; 
         }
         div.WordSection1 { page: WordSection1; }
         body { font-family: "微軟正黑體", "Microsoft JhengHei", sans-serif; }
@@ -619,6 +643,10 @@ const generateWord = () => {
 .tab-btn.active { color: #0891b2; border-bottom-color: #0891b2; }
 
 .tips { background: #fffbeb; color: #b45309; padding: 10px 15px; border-radius: 6px; border: 1px dashed #fcd34d; margin-bottom: 20px; font-size: 0.95rem; }
+
+/* 💡 字體大小控制器樣式 */
+.font-settings { background: #f0f9ff; border: 1px dashed #bae6fd; padding: 10px 15px; border-radius: 6px; margin-bottom: 15px; display: inline-flex; align-items: center; gap: 10px; color: #0284c7; font-weight: bold; }
+.font-input { width: 70px; padding: 5px; border: 1px solid #7dd3fc; border-radius: 4px; text-align: center; font-weight: bold; color: #0369a1; }
 
 .btn-add-row { background: #e0f2fe; color: #0284c7; border: 1px dashed #7dd3fc; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
 .btn-add-row:hover { background: #bae6fd; }
