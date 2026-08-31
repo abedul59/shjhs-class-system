@@ -211,7 +211,7 @@
       </div>
     </div>
 
-    <!-- 💡 全螢幕大字體課表展示 Modal -->
+    <!-- 全螢幕大字體課表展示 Modal -->
     <div v-if="showLargeSchedule" class="large-schedule-overlay">
       <div class="large-header">
         <h1 class="large-title">📅 班級課表</h1>
@@ -703,6 +703,7 @@ const fetchData = async () => {
     const schSetting = sysData.find(s => s.setting_key === 'class_schedule_data')
     if (schSetting && schSetting.setting_value) { scheduleData.value = schSetting.setting_value }
     
+    // 讀取課表展示按鈕的設定
     const schBtnSetting = sysData.find(s => s.setting_key === 'schedule_button_settings')
     if (schBtnSetting && schBtnSetting.setting_value) {
       scheduleButtonConfig.value = { teacherOnlyInBrownlist: true, ...schBtnSetting.setting_value }
@@ -769,6 +770,7 @@ const fetchData = async () => {
   }
 }
 
+// 計算課表按鈕是否顯示的邏輯
 const isScheduleButtonVisible = computed(() => {
   if (!scheduleButtonConfig.value.isVisible) return false
   if (scheduleButtonConfig.value.visibility === 'both') return true
@@ -936,6 +938,7 @@ const saveClassNoteItems = async () => {
   display: flex; flex-direction: column; overflow: hidden;
 }
 
+/* 桌機版單欄網格 */
 .desktop-grid { 
   flex: 1;
   display: grid; 
@@ -968,6 +971,7 @@ const saveClassNoteItems = async () => {
 .cell-subject { font-size: 1.8rem; font-weight: bold; color: #0f766e; margin-bottom: 2px; }
 .cell-teacher { font-size: 1.1rem; color: #0369a1; font-weight: bold;}
 
+/* 💡 高密度模式：當節數過多自動縮小字體與間距，保證一頁塞得下 */
 .dense-mode { gap: 6px; }
 .dense-mode .grid-cell { padding: 4px; border-width: 1px;}
 .dense-mode .cell-subject { font-size: 1.5rem; margin-bottom: 2px; }
@@ -1012,9 +1016,19 @@ const saveClassNoteItems = async () => {
   .desktop-only { display: none; }
 }
 
-/* 💡 確保衛生工作的內嵌 HTML 樣式在前台也能正常顯示 */
+/* 同步衛生工作字體設定 */
 :deep(.text-sm) { font-size: 0.9rem !important; line-height: 1.5; }
 :deep(.text-xs) { font-size: 0.75rem !important; color: #64748b; font-weight: normal; line-height: 1.4; }
 :deep(.mt-10) { margin-top: 10px; }
 :deep(.mt-15) { margin-top: 15px; }
+
+/* 💡 強制同步 hygiene.vue 的表格排版與字體大小到首頁 */
+:deep(.custom-table) { width: 100%; border-collapse: collapse; min-width: 800px; text-align: center; font-size: 0.95rem; }
+:deep(.custom-table th), :deep(.custom-table td) { border: 1px solid #000; padding: 8px; vertical-align: middle; }
+:deep(.custom-table th) { background-color: #f1f5f9; font-weight: bold; }
+:deep(.header-row th) { background-color: #e2e8f0; }
+:deep(.morning-table td:nth-child(1)), :deep(.morning-table td:nth-child(2)) { font-weight: bold; }
+:deep(.lunch-table th) { background: transparent; font-weight: bold; }
+:deep(.lunch-table td) { background: transparent; }
+:deep(.seat-num), :deep(.seat-number) { font-size: 1.2rem; font-weight: bold; }
 </style>
