@@ -1,5 +1,6 @@
 <template>
-  <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
+  <!-- 💡 加入 :style 動態傳遞字體大小變數 -->
+  <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }" :style="{ '--name-size': (hygieneData.nameFontSize || 25) + 'px' }">
     
     <ExamDashboard 
       v-if="isExamModeView && isIpBrownlisted" 
@@ -211,7 +212,7 @@
       </div>
     </div>
 
-    <!-- 全螢幕大字體課表展示 Modal -->
+    <!-- 💡 全螢幕大字體課表展示 Modal -->
     <div v-if="showLargeSchedule" class="large-schedule-overlay">
       <div class="large-header">
         <h1 class="large-title">📅 班級課表</h1>
@@ -404,6 +405,7 @@ const examThemes = {
 
 const defaultHygieneData = {
   isVisibleOnIndex: false,
+  nameFontSize: 25, // 💡 預設字體大小
   morning: {
     title: '704 班 教室和外掃區 早上掃地工作分配表', note: '', in_hygiene: '內衛生', in_hygiene_names: '季昀苓', in_hygiene_work: '',
     board: '講台掃拖、講桌', board_names: '葉柏妍、許壹淳', board_work: '整理黑板', sweep: '教室地板掃地', sweep_names: '呂有陞\n田孟任\n林珈媗', sweep_mop_work: '',
@@ -703,7 +705,6 @@ const fetchData = async () => {
     const schSetting = sysData.find(s => s.setting_key === 'class_schedule_data')
     if (schSetting && schSetting.setting_value) { scheduleData.value = schSetting.setting_value }
     
-    // 讀取課表展示按鈕的設定
     const schBtnSetting = sysData.find(s => s.setting_key === 'schedule_button_settings')
     if (schBtnSetting && schBtnSetting.setting_value) {
       scheduleButtonConfig.value = { teacherOnlyInBrownlist: true, ...schBtnSetting.setting_value }
@@ -770,7 +771,6 @@ const fetchData = async () => {
   }
 }
 
-// 計算課表按鈕是否顯示的邏輯
 const isScheduleButtonVisible = computed(() => {
   if (!scheduleButtonConfig.value.isVisible) return false
   if (scheduleButtonConfig.value.visibility === 'both') return true
@@ -938,7 +938,6 @@ const saveClassNoteItems = async () => {
   display: flex; flex-direction: column; overflow: hidden;
 }
 
-/* 桌機版單欄網格 */
 .desktop-grid { 
   flex: 1;
   display: grid; 
@@ -971,7 +970,6 @@ const saveClassNoteItems = async () => {
 .cell-subject { font-size: 1.8rem; font-weight: bold; color: #0f766e; margin-bottom: 2px; }
 .cell-teacher { font-size: 1.1rem; color: #0369a1; font-weight: bold;}
 
-/* 💡 高密度模式：當節數過多自動縮小字體與間距，保證一頁塞得下 */
 .dense-mode { gap: 6px; }
 .dense-mode .grid-cell { padding: 4px; border-width: 1px;}
 .dense-mode .cell-subject { font-size: 1.5rem; margin-bottom: 2px; }
@@ -1016,13 +1014,52 @@ const saveClassNoteItems = async () => {
   .desktop-only { display: none; }
 }
 
-/* 同步衛生工作字體設定 */
+/* ========================================================
+   💡 強制同步「衛生管理名單/座號」的大字體設定
+   ======================================================== */
+/* 早掃表：針對名單欄位套用動態字體 */
+:deep(.morning-table tbody tr td:nth-child(2)) {
+    font-size: var(--name-size, 25px) !important;
+    font-weight: bold !important;
+}
+/* 排除外掃區第一列的第2欄 (打掃區域)，並把大字體移到第3欄 (成員名單) */
+:deep(.morning-table tbody tr td[rowspan] + td) {
+    font-size: inherit !important;
+    font-weight: normal !important;
+}
+:deep(.morning-table tbody tr td[rowspan] + td + td) {
+    font-size: var(--name-size, 25px) !important;
+    font-weight: bold !important;
+}
+
+/* 午餐表：所有包含名單的偶數列 */
+:deep(.lunch-table tbody tr:nth-child(even) td) {
+    font-size: var(--name-size, 25px) !important;
+    font-weight: bold !important;
+}
+
+/* 小隊表：針對名單欄位套用動態字體 */
+:deep(.squad-table tbody tr td:nth-child(2)) {
+    font-size: var(--name-size, 25px) !important;
+    font-weight: bold !important;
+}
+/* 排除小隊表第一列的第2欄 (細項)，並把大字體移到第3欄 (名單) */
+:deep(.squad-table tbody tr td[rowspan] + td) {
+    font-size: inherit !important;
+    font-weight: normal !important;
+}
+:deep(.squad-table tbody tr td[rowspan] + td + td) {
+    font-size: var(--name-size, 25px) !important;
+    font-weight: bold !important;
+}
+
+/* 確保衛生工作的內嵌 HTML 樣式正常顯示 */
 :deep(.text-sm) { font-size: 0.9rem !important; line-height: 1.5; }
 :deep(.text-xs) { font-size: 0.75rem !important; color: #64748b; font-weight: normal; line-height: 1.4; }
 :deep(.mt-10) { margin-top: 10px; }
 :deep(.mt-15) { margin-top: 15px; }
 
-/* 💡 強制同步 hygiene.vue 的表格排版與字體大小到首頁 */
+/* 強制同步 hygiene.vue 的表格基本排版到首頁 */
 :deep(.custom-table) { width: 100%; border-collapse: collapse; min-width: 800px; text-align: center; font-size: 0.95rem; }
 :deep(.custom-table th), :deep(.custom-table td) { border: 1px solid #000; padding: 8px; vertical-align: middle; }
 :deep(.custom-table th) { background-color: #f1f5f9; font-weight: bold; }
@@ -1030,5 +1067,4 @@ const saveClassNoteItems = async () => {
 :deep(.morning-table td:nth-child(1)), :deep(.morning-table td:nth-child(2)) { font-weight: bold; }
 :deep(.lunch-table th) { background: transparent; font-weight: bold; }
 :deep(.lunch-table td) { background: transparent; }
-:deep(.seat-num), :deep(.seat-number) { font-size: 1.2rem; font-weight: bold; }
 </style>
