@@ -48,14 +48,33 @@
             <div v-for="assign in assignments" :key="assign.id" 
                  :class="['assign-item', { active: currentAssignment?.id === assign.id }]"
                  @click="selectAssignment(assign)">
-              <div class="assign-info">
-                <strong>
-                  <span v-if="activeRole === '導師'" class="subject-tag">[{{ assign.subject_name }}]</span>
-                  {{ assign.title }}
-                </strong>
-                <span class="deadline">期限: {{ assign.deadline || '無' }}</span>
+              
+              <!-- 💡 正常檢視模式 -->
+              <template v-if="editingAssignmentId !== assign.id">
+                <div class="assign-info">
+                  <strong>
+                    <span v-if="activeRole === '導師'" class="subject-tag">[{{ assign.subject_name }}]</span>
+                    {{ assign.title }}
+                  </strong>
+                  <span class="deadline">期限: {{ assign.deadline || '無' }}</span>
+                </div>
+                <div class="assign-actions">
+                  <!-- 💡 僅導師與科任老師可見編輯按鈕 -->
+                  <button v-if="activeRole !== '小老師'" @click.stop="startEditAssignment(assign)" class="action-btn" title="編輯作業">✏️</button>
+                  <button @click.stop="deleteAssignment(assign.id, assign.title)" class="action-btn del-btn" title="刪除作業">🗑️</button>
+                </div>
+              </template>
+
+              <!-- 💡 編輯模式 (內聯編輯表單) -->
+              <div v-else class="assign-edit-wrapper" @click.stop>
+                <input v-model="editAssignmentData.title" type="text" placeholder="作業名稱" class="edit-input-small" />
+                <input v-model="editAssignmentData.deadline" type="date" class="edit-input-small" />
+                <div class="edit-actions">
+                  <button @click.stop="cancelEditAssignment" class="cancel-btn-small">取消</button>
+                  <button @click.stop="saveEditAssignment(assign.id)" class="save-btn-small">儲存</button>
+                </div>
               </div>
-              <button @click.stop="deleteAssignment(assign.id, assign.title)" class="del-btn">🗑️</button>
+
             </div>
           </div>
         </div>
@@ -100,6 +119,10 @@ const isUnlocked = ref(false); const activeRole = ref('')
 const students = ref([]); const assignments = ref([]); const allSubmissions = ref([])
 const currentAssignment = ref(null)
 const newAssignment = ref({ title: '', deadline: '' })
+
+// 💡 編輯狀態變數
+const editingAssignmentId = ref(null)
+const editAssignmentData = ref({ title: '', deadline: '' })
 
 // 💡 登入成功寫入日誌的共用函式
 const logRoleVisit = async (roleName) => {
@@ -155,7 +178,6 @@ const verifyPassword = async () => {
         isUnlocked.value = true; 
         await fetchDashboardData(); 
         logAction('系統登入', '導師登入成功')
-        // 💡 登入成功寫入全站訪客日誌
         await logRoleVisit('導師')
         return
       }
@@ -165,7 +187,6 @@ const verifyPassword = async () => {
         isUnlocked.value = true; 
         await fetchDashboardData(); 
         logAction('系統登入', '導師登入成功')
-        // 💡 降級模式登入成功寫入全站訪客日誌
         await logRoleVisit('導師(降級登入)')
         return
       }
@@ -180,7 +201,6 @@ const verifyPassword = async () => {
     isUnlocked.value = true; 
     await fetchDashboardData(); 
     logAction('系統登入', `${teacherInfo.subject_name} 科任老師登入成功`)
-    // 💡 登入成功寫入全站訪客日誌 (精準標示科目)
     await logRoleVisit(`${teacherInfo.subject_name} 科任老師`)
     
   } else if (teacherInfo && teacherInfo.assistant_password && passwordInput.value === teacherInfo.assistant_password) {
@@ -188,7 +208,6 @@ const verifyPassword = async () => {
     isUnlocked.value = true; 
     await fetchDashboardData(); 
     logAction('系統登入', `${teacherInfo.subject_name} 小老師登入成功`)
-    // 💡 登入成功寫入全站訪客日誌 (精準標示科目)
     await logRoleVisit(`${teacherInfo.subject_name} 小老師`)
     
   } else {
@@ -222,6 +241,47 @@ const addAssignment = async () => {
     assignments.value.unshift(data)
     logAction('新增作業', `新增了項目：${newAssignment.value.title}`)
     newAssignment.value = { title: '', deadline: '' } 
+  }
+}
+
+// 💡 編輯作業相關邏輯
+const startEditAssignment = (assign) => {
+  editingAssignmentId.value = assign.id
+  editAssignmentData.value = { title: assign.title, deadline: assign.deadline || '' }
+}
+
+const cancelEditAssignment = () => {
+  editingAssignmentId.value = null
+  editAssignmentData.value = { title: '', deadline: '' }
+}
+
+const saveEditAssignment = async (id) => {
+  if (!editAssignmentData.value.title) return alert('作業名稱不能為空！')
+  
+  try {
+    const { error } = await supabase.from('assignments').update({
+      title: editAssignmentData.value.title,
+      deadline: editAssignmentData.value.deadline || null
+    }).eq('id', id)
+    
+    if (error) throw error
+    
+    // 更新本地列表資料
+    const index = assignments.value.findIndex(a => a.id === id)
+    if (index !== -1) {
+      assignments.value[index].title = editAssignmentData.value.title
+      assignments.value[index].deadline = editAssignmentData.value.deadline
+    }
+    
+    // 同步更新右側目前正在瀏覽的標題
+    if (currentAssignment.value && currentAssignment.value.id === id) {
+      currentAssignment.value.title = editAssignmentData.value.title
+    }
+    
+    logAction('編輯作業', `將作業修改為：${editAssignmentData.value.title}`)
+    cancelEditAssignment()
+  } catch (err) {
+    alert('❌ 儲存失敗：' + err.message)
   }
 }
 
@@ -304,10 +364,20 @@ h3 { color: #334155; margin-top: 0; margin-bottom: 15px; border-bottom: 2px soli
 .assign-item.active { background: #f3e8ff; border-color: #9333ea; box-shadow: 0 0 0 2px rgba(147, 51, 234, 0.2); }
 .assign-info { display: flex; flex-direction: column; gap: 5px; }
 .subject-tag { color: #d946ef; font-size: 0.9rem; margin-right: 4px; }
-
 .deadline { font-size: 0.85rem; color: #64748b; }
-.del-btn { background: transparent; border: none; cursor: pointer; font-size: 1.2rem; opacity: 0.5; }
-.del-btn:hover { opacity: 1; }
+
+/* 💡 新增操作區塊與按鈕樣式 */
+.assign-actions { display: flex; gap: 8px; align-items: center; }
+.action-btn { background: transparent; border: none; cursor: pointer; font-size: 1.2rem; opacity: 0.5; transition: 0.2s; padding: 0; }
+.action-btn:hover { opacity: 1; transform: scale(1.1); }
+
+/* 💡 編輯模式專屬樣式 */
+.assign-edit-wrapper { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.edit-input-small { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.95rem; }
+.edit-input-small:focus { border-color: #8b5cf6; outline: none; }
+.edit-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.save-btn-small { background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.85rem;}
+.cancel-btn-small { background: #e2e8f0; color: #475569; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.85rem;}
 
 .empty-prompt { text-align: center; padding: 50px; color: #64748b; font-size: 1.2rem; background: #f8fafc; border-radius: 8px; border: 2px dashed #cbd5e1; }
 .grid-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
