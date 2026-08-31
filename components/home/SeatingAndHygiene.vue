@@ -139,14 +139,7 @@
                 <td v-if="n===1" rowspan="4">公差<br><span class="text-xs">(每天第 2 節下課到辦公室簽到...)</span></td><td>公差 {{n}}</td>
                 <td v-html="formatNL(hygieneData.squad.errands[n-1])"></td><td v-html="formatNL(hygieneData.squad.errand_desc[n-1])"></td>
               </tr>
-              <tr v-for="n in 2" :key="'mn-'+n">
-                <td v-if="n===1" rowspan="2">小小兵<br><span class="text-xs">(每天第 3 節下課到辦公室簽到)</span></td><td>小小兵 {{n}}</td>
-                <td v-html="formatNL(hygieneData.squad.minions[n-1])"></td><td v-if="n===1" rowspan="2" v-html="formatNL(hygieneData.squad.minion_desc)"></td>
-              </tr>
-              <tr v-for="n in 3" :key="'ot-'+n">
-                <td v-if="n===1" rowspan="3">其他</td><td>特別小助理 {{n}}</td>
-                <td v-html="formatNL(hygieneData.squad.others[n-1])"></td><td v-if="n===1" rowspan="3" v-html="formatNL(hygieneData.squad.other_desc)"></td>
-              </tr>
+
             </tbody>
           </table>
         </div>
