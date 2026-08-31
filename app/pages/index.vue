@@ -220,7 +220,6 @@
           <label class="control-label">
             <input type="checkbox" v-model="showNonAcademicPeriods"> 顯示早/午休
           </label>
-          <!-- 💡 修正：若設定為「僅限褐名單顯示老師」，則在褐名單外自動隱藏此開關 -->
           <label class="control-label" v-if="!scheduleButtonConfig.teacherOnlyInBrownlist || isIpBrownlisted">
             <input type="checkbox" v-model="showTeacherNames"> 顯示老師
           </label>
@@ -235,7 +234,6 @@
         <!-- 桌機/平板：雙欄模式 -->
         <div v-if="isSplitLayout" class="split-desktop-grid">
           <div class="schedule-half">
-            <!-- 💡 動態綁定 .dense-mode 類別，當節數過多時自動縮小字體以塞入一頁 -->
             <div class="desktop-grid" :class="{'dense-mode': morningPeriods.length > 5}">
               <div class="grid-header time-header">節次 / 時間</div>
               <div class="grid-header">星期一</div><div class="grid-header">星期二</div><div class="grid-header">星期三</div><div class="grid-header">星期四</div><div class="grid-header">星期五</div>
@@ -246,7 +244,6 @@
                 </div>
                 <div v-for="day in 5" :key="'lgc-m-'+day" class="grid-cell subject-cell" :class="{'empty-cell': !period.days[day-1].subject}">
                   <div class="cell-subject">{{ privacyFilter(period.days[day-1].subject) || '-' }}</div>
-                  <!-- 💡 修正：加入權限判斷，若不合規強制隱藏老師名稱 -->
                   <div class="cell-teacher" v-if="showTeacherNames && (!scheduleButtonConfig.teacherOnlyInBrownlist || isIpBrownlisted) && period.days[day-1].teacher">
                     {{ privacyFilter(period.days[day-1].teacher) }}
                   </div>
@@ -359,17 +356,14 @@ const announcements = ref([])
 const parentAnnouncements = ref([])
 const scheduleData = ref(null)
 
-// 課表展示按鈕設定與狀態
 const scheduleButtonConfig = ref({ isVisible: false, visibility: 'both', teacherOnlyInBrownlist: true })
 const showLargeSchedule = ref(false)
 const mobileDay = ref(new Date().getDay() >= 1 && new Date().getDay() <= 5 ? new Date().getDay() : 1)
 
-// 大課表自訂排版開關狀態
 const showNonAcademicPeriods = ref(false) 
 const showTeacherNames = ref(true)        
 const isSplitLayout = ref(false)          
 
-// 動態計算需要顯示的節次 (過濾掉非正課)
 const nonAcademicKeywords = ['早修', '早掃', '午餐', '午休']
 const displayPeriods = computed(() => {
   if (!scheduleData.value?.periods) return []
@@ -379,7 +373,6 @@ const displayPeriods = computed(() => {
   })
 })
 
-// 雙欄模式切割 
 const morningPeriods = computed(() => {
   const mid = Math.ceil(displayPeriods.value.length / 2)
   return displayPeriods.value.slice(0, mid)
@@ -424,7 +417,7 @@ const defaultHygieneData = {
     serve_header: '配膳組', serve_h1: '', serve_h2: '', serve_h3: '', serve_h4: '', serve_h5: '', serve_h6: '', serve_n1: '', serve_n2: '', serve_n3: '', serve_n4: '', serve_n5: '', serve_n6: '',
     note1: '', note2: ''
   },
-  squad: { title: '704 各項小隊成員工作', leader_desc: '', leaders: ['', '', '', '', '', ''], duty_desc: ['', '', '', '', '', ''], duties: ['', '', '', '', '', ''], helper_desc: ['', '', '', '', ''], helpers: ['', '', '', '', ''], errand_desc: ['', '', '', ''], errands: ['', '', '', ''] }
+  squad: { title: '704 各項小隊成員工作', leader_desc: '', leaders: ['', '', '', '', '', ''], duty_desc: ['', '', '', '', '', ''], duties: ['', '', '', '', '', ''], helper_desc: ['', '', '', '', ''], helpers: ['', '', '', '', ''], errand_desc: ['', '', '', ''], errands: ['', '', '', ''], minion_desc: '', minions: ['', ''], other_desc: '', others: ['', '', ''] }
 }
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
@@ -710,7 +703,6 @@ const fetchData = async () => {
     const schSetting = sysData.find(s => s.setting_key === 'class_schedule_data')
     if (schSetting && schSetting.setting_value) { scheduleData.value = schSetting.setting_value }
     
-    // 💡 讀取課表展示按鈕的設定 (保留預設防呆)
     const schBtnSetting = sysData.find(s => s.setting_key === 'schedule_button_settings')
     if (schBtnSetting && schBtnSetting.setting_value) {
       scheduleButtonConfig.value = { teacherOnlyInBrownlist: true, ...schBtnSetting.setting_value }
@@ -777,7 +769,6 @@ const fetchData = async () => {
   }
 }
 
-// 計算課表按鈕是否顯示的邏輯
 const isScheduleButtonVisible = computed(() => {
   if (!scheduleButtonConfig.value.isVisible) return false
   if (scheduleButtonConfig.value.visibility === 'both') return true
@@ -934,26 +925,23 @@ const saveClassNoteItems = async () => {
 }
 .large-title { margin: 0; font-size: 1.6rem; letter-spacing: 2px;}
 
-/* 💡 新增的排版控制選單 CSS */
 .large-controls { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; background: rgba(255,255,255,0.1); padding: 6px 12px; border-radius: 8px; }
 .control-label { display: flex; align-items: center; gap: 6px; font-size: 1rem; color: #f8fafc; cursor: pointer; font-weight: bold; }
 .control-label input { transform: scale(1.2); cursor: pointer; }
 
 .btn-close-large { background: #ef4444; color: white; border: none; padding: 6px 15px; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; margin-left: 10px; }
 
-/* 💡 讓內容區塊動態填滿剩下的高度 */
 .large-schedule-content { 
   padding: 10px 15px; flex: 1; width: 100%; box-sizing: border-box;
   display: flex; flex-direction: column; overflow: hidden;
 }
 
-/* 桌機版單欄網格 (使用 flex-1 填滿高度，並平均分配每列) */
 .desktop-grid { 
   flex: 1;
   display: grid; 
   grid-template-columns: 140px repeat(5, 1fr); 
   grid-template-rows: auto; 
-  grid-auto-rows: minmax(0, 1fr); /* 💡 改為自動適應壓縮，避免溢出螢幕 */
+  grid-auto-rows: minmax(0, 1fr); 
   gap: 8px; 
   min-height: 0; 
 }
@@ -961,7 +949,6 @@ const saveClassNoteItems = async () => {
 .grid-header { background: #e2e8f0; color: #0f172a; font-size: 1.2rem; font-weight: bold; padding: 8px; text-align: center; border-radius: 6px; display: flex; align-items: center; justify-content: center;}
 .time-header { background: #94a3b8; color: white; }
 
-/* 💡 雙欄模式專屬網格 */
 .split-desktop-grid { display: flex; gap: 15px; height: 100%; width: 100%; }
 .schedule-half { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .split-desktop-grid .desktop-grid { min-height: 0; grid-template-columns: 120px repeat(5, 1fr); gap: 6px;}
@@ -981,7 +968,6 @@ const saveClassNoteItems = async () => {
 .cell-subject { font-size: 1.8rem; font-weight: bold; color: #0f766e; margin-bottom: 2px; }
 .cell-teacher { font-size: 1.1rem; color: #0369a1; font-weight: bold;}
 
-/* 💡 高密度模式：當節數過多(>8節)自動縮小字體與間距，保證一頁塞得下 */
 .dense-mode { gap: 6px; }
 .dense-mode .grid-cell { padding: 4px; border-width: 1px;}
 .dense-mode .cell-subject { font-size: 1.5rem; margin-bottom: 2px; }
@@ -990,10 +976,8 @@ const saveClassNoteItems = async () => {
 .dense-mode .p-time { font-size: 0.85rem; }
 .dense-mode .grid-header { font-size: 1.1rem; padding: 6px; }
 
-/* 手機版隱藏 */
 .mobile-view { display: none; }
 
-/* RWD: 手機與小平板切換至卡片模式 */
 @media (max-width: 900px) {
   .large-schedule-content { overflow-y: auto; display: block; }
   .desktop-grid, .split-desktop-grid { display: none; }
@@ -1027,4 +1011,10 @@ const saveClassNoteItems = async () => {
   .fade-mask { display: none; }
   .desktop-only { display: none; }
 }
+
+/* 💡 確保衛生工作的內嵌 HTML 樣式在前台也能正常顯示 */
+:deep(.text-sm) { font-size: 0.9rem !important; line-height: 1.5; }
+:deep(.text-xs) { font-size: 0.75rem !important; color: #64748b; font-weight: normal; line-height: 1.4; }
+:deep(.mt-10) { margin-top: 10px; }
+:deep(.mt-15) { margin-top: 15px; }
 </style>
