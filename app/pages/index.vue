@@ -1,6 +1,5 @@
-<template>
-  <!-- 💡 加入 :style 動態傳遞字體大小變數 -->
-  <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }" :style="{ '--name-size': (hygieneData.nameFontSize || 25) + 'px' }">
+<template><template>
+  <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
     
     <ExamDashboard 
       v-if="isExamModeView && isIpBrownlisted" 
@@ -92,7 +91,8 @@
         <div class="left-panel">
           <div class="control-card">
             
-            <div class="clock-display">
+            <!-- 💡 修正：時鐘字體大小綁定變數 clockFontSize -->
+            <div class="clock-display" :style="{ fontSize: clockFontSize + 'px' }">
               🕒 {{ currentTime }}
               <NuxtLink v-if="unreadMsgCount > 0" to="/admin" class="icon-alert-bell" title="您有未讀私訊，點擊前往後台！">
                 🚨
@@ -104,7 +104,8 @@
                 <span class="pulse-dot" v-if="scheduleDisplay.current.status === '上課中'"></span>
                 <strong>{{ scheduleDisplay.current.label }}：</strong>
                 <span class="subject-text">{{ scheduleDisplay.current.subject }}</span>
-                <span class="teacher-text" v-if="scheduleDisplay.current.teacher">({{ scheduleDisplay.current.teacher }})</span>
+                <!-- 💡 修正：加入與大課表相同的隱私判斷，在褐名單外隱藏老師名稱 -->
+                <span class="teacher-text" v-if="scheduleDisplay.current.teacher && (!scheduleButtonConfig.teacherOnlyInBrownlist || isIpBrownlisted)">({{ scheduleDisplay.current.teacher }})</span>
               </div>
               <div class="next-class" v-if="scheduleDisplay.next">
                 <strong>下節課：</strong>
@@ -212,7 +213,7 @@
       </div>
     </div>
 
-    <!-- 💡 全螢幕大字體課表展示 Modal -->
+    <!-- 全螢幕大字體課表展示 Modal -->
     <div v-if="showLargeSchedule" class="large-schedule-overlay">
       <div class="large-header">
         <h1 class="large-title">📅 班級課表</h1>
@@ -361,6 +362,9 @@ const scheduleButtonConfig = ref({ isVisible: false, visibility: 'both', teacher
 const showLargeSchedule = ref(false)
 const mobileDay = ref(new Date().getDay() >= 1 && new Date().getDay() <= 5 ? new Date().getDay() : 1)
 
+// 💡 動態時鐘字體大小
+const clockFontSize = ref(35) // 預設 35px
+
 const showNonAcademicPeriods = ref(false) 
 const showTeacherNames = ref(true)        
 const isSplitLayout = ref(false)          
@@ -405,7 +409,6 @@ const examThemes = {
 
 const defaultHygieneData = {
   isVisibleOnIndex: false,
-  nameFontSize: 25, // 💡 預設字體大小
   morning: {
     title: '704 班 教室和外掃區 早上掃地工作分配表', note: '', in_hygiene: '內衛生', in_hygiene_names: '季昀苓', in_hygiene_work: '',
     board: '講台掃拖、講桌', board_names: '葉柏妍、許壹淳', board_work: '整理黑板', sweep: '教室地板掃地', sweep_names: '呂有陞\n田孟任\n林珈媗', sweep_mop_work: '',
@@ -668,7 +671,8 @@ const fetchData = async () => {
       'contact_history_visible', 'index_button_settings', 'announcements_data', 
       'class_schedule_data', 'exam_schedule_data', 'parent_notices_data', 
       'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible',
-      'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings'
+      'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings',
+      'index_clock_size'
     ])
   
   if (sysData) {
@@ -708,6 +712,12 @@ const fetchData = async () => {
     const schBtnSetting = sysData.find(s => s.setting_key === 'schedule_button_settings')
     if (schBtnSetting && schBtnSetting.setting_value) {
       scheduleButtonConfig.value = { teacherOnlyInBrownlist: true, ...schBtnSetting.setting_value }
+    }
+
+    // 💡 讀取首頁時鐘大小設定
+    const clockSetting = sysData.find(s => s.setting_key === 'index_clock_size')
+    if (clockSetting && clockSetting.setting_value) {
+      clockFontSize.value = Number(clockSetting.setting_value) || 35
     }
 
     const exSetting = sysData.find(s => s.setting_key === 'exam_schedule_data')
@@ -874,7 +884,8 @@ const saveClassNoteItems = async () => {
 .left-panel { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .control-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; text-align: center; }
 
-.clock-display { display: flex; align-items: center; justify-content: center; gap: 15px; font-size: 2.2rem; font-weight: bold; color: #1e293b; margin-bottom: 10px; }
+/* 💡 修正：移除固定的 font-size，改以行內樣式綁定變數覆蓋 */
+.clock-display { display: flex; align-items: center; justify-content: center; gap: 15px; font-weight: bold; color: #1e293b; margin-bottom: 10px; }
 .icon-alert-bell { font-size: 2.2rem; text-decoration: none; animation: shake 1.5s infinite; filter: drop-shadow(0 2px 4px rgba(239,68,68,0.5)); cursor: pointer; }
 @keyframes shake { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-15deg); } 75% { transform: rotate(15deg); } }
 
@@ -916,7 +927,6 @@ const saveClassNoteItems = async () => {
 .confirm-btn { background: #3b82f6; color: white; }
 .cancel-btn { background: #e2e8f0; color: #475569; }
 
-/* 💡 全螢幕大課表樣式 (Responsive & Fits Screen) */
 .large-schedule-overlay { 
   position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
   background: #f8fafc; z-index: 9999; display: flex; flex-direction: column;
@@ -998,7 +1008,7 @@ const saveClassNoteItems = async () => {
   .m-subject-box { flex: 1; padding: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center;}
   .m-empty { background: #f8fafc; opacity: 0.6; }
   .m-subject { font-size: 1.8rem; font-weight: bold; color: #0f766e; text-align: center;}
-  .m-teacher { font-size: 1.1rem; color: #0369a1; font-weight: bold; margin-top: 5px;}
+  .m-teacher { font-size: 1.1rem; color: #0369a1; font-weight: margin-top: 5px;}
 }
 
 @media (max-width: 1024px) { .main-split { flex-direction: column; } }
@@ -1014,52 +1024,11 @@ const saveClassNoteItems = async () => {
   .desktop-only { display: none; }
 }
 
-/* ========================================================
-   💡 強制同步「衛生管理名單/座號」的大字體設定
-   ======================================================== */
-/* 早掃表：針對名單欄位套用動態字體 */
-:deep(.morning-table tbody tr td:nth-child(2)) {
-    font-size: var(--name-size, 25px) !important;
-    font-weight: bold !important;
-}
-/* 排除外掃區第一列的第2欄 (打掃區域)，並把大字體移到第3欄 (成員名單) */
-:deep(.morning-table tbody tr td[rowspan] + td) {
-    font-size: inherit !important;
-    font-weight: normal !important;
-}
-:deep(.morning-table tbody tr td[rowspan] + td + td) {
-    font-size: var(--name-size, 25px) !important;
-    font-weight: bold !important;
-}
-
-/* 午餐表：所有包含名單的偶數列 */
-:deep(.lunch-table tbody tr:nth-child(even) td) {
-    font-size: var(--name-size, 25px) !important;
-    font-weight: bold !important;
-}
-
-/* 小隊表：針對名單欄位套用動態字體 */
-:deep(.squad-table tbody tr td:nth-child(2)) {
-    font-size: var(--name-size, 25px) !important;
-    font-weight: bold !important;
-}
-/* 排除小隊表第一列的第2欄 (細項)，並把大字體移到第3欄 (名單) */
-:deep(.squad-table tbody tr td[rowspan] + td) {
-    font-size: inherit !important;
-    font-weight: normal !important;
-}
-:deep(.squad-table tbody tr td[rowspan] + td + td) {
-    font-size: var(--name-size, 25px) !important;
-    font-weight: bold !important;
-}
-
-/* 確保衛生工作的內嵌 HTML 樣式正常顯示 */
 :deep(.text-sm) { font-size: 0.9rem !important; line-height: 1.5; }
 :deep(.text-xs) { font-size: 0.75rem !important; color: #64748b; font-weight: normal; line-height: 1.4; }
 :deep(.mt-10) { margin-top: 10px; }
 :deep(.mt-15) { margin-top: 15px; }
 
-/* 強制同步 hygiene.vue 的表格基本排版到首頁 */
 :deep(.custom-table) { width: 100%; border-collapse: collapse; min-width: 800px; text-align: center; font-size: 0.95rem; }
 :deep(.custom-table th), :deep(.custom-table td) { border: 1px solid #000; padding: 8px; vertical-align: middle; }
 :deep(.custom-table th) { background-color: #f1f5f9; font-weight: bold; }
@@ -1067,4 +1036,13 @@ const saveClassNoteItems = async () => {
 :deep(.morning-table td:nth-child(1)), :deep(.morning-table td:nth-child(2)) { font-weight: bold; }
 :deep(.lunch-table th) { background: transparent; font-weight: bold; }
 :deep(.lunch-table td) { background: transparent; }
+:deep(.seat-num), :deep(.seat-number) { font-size: 1.2rem; font-weight: bold; }
+
+:deep(.morning-table tbody tr td:nth-child(2)) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
+:deep(.morning-table tbody tr td[rowspan] + td) { font-size: inherit !important; font-weight: normal !important; }
+:deep(.morning-table tbody tr td[rowspan] + td + td) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
+:deep(.lunch-table tbody tr:nth-child(even) td) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
+:deep(.squad-table tbody tr td:nth-child(2)) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
+:deep(.squad-table tbody tr td[rowspan] + td) { font-size: inherit !important; font-weight: normal !important; }
+:deep(.squad-table tbody tr td[rowspan] + td + td) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
 </style>
