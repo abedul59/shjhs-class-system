@@ -91,7 +91,6 @@
         <div class="left-panel">
           <div class="control-card">
             
-            <!-- 💡 修正：時鐘字體大小綁定變數 clockFontSize -->
             <div class="clock-display" :style="{ fontSize: clockFontSize + 'px' }">
               🕒 {{ currentTime }}
               <NuxtLink v-if="unreadMsgCount > 0" to="/admin" class="icon-alert-bell" title="您有未讀私訊，點擊前往後台！">
@@ -104,7 +103,6 @@
                 <span class="pulse-dot" v-if="scheduleDisplay.current.status === '上課中'"></span>
                 <strong>{{ scheduleDisplay.current.label }}：</strong>
                 <span class="subject-text">{{ scheduleDisplay.current.subject }}</span>
-                <!-- 💡 修正：加入與大課表相同的隱私判斷，在褐名單外隱藏老師名稱 -->
                 <span class="teacher-text" v-if="scheduleDisplay.current.teacher && (!scheduleButtonConfig.teacherOnlyInBrownlist || isIpBrownlisted)">({{ scheduleDisplay.current.teacher }})</span>
               </div>
               <div class="next-class" v-if="scheduleDisplay.next">
@@ -137,9 +135,11 @@
                 {{ showSeatingChartLocal ? '🙈 隱藏教室座位表' : '👀 顯示教室座位表' }}
               </button>
               
-              <button v-if="hygieneData.isVisibleOnIndex && indexButtonSettings.hygiene" @click="showHygieneLocal = !showHygieneLocal" class="btn btn-sky">
+              <!-- 💡 修正：加入 isIpBrownlisted 判斷，在褐名單外隱藏此按鈕 -->
+              <button v-if="isIpBrownlisted && hygieneData.isVisibleOnIndex && indexButtonSettings.hygiene" @click="showHygieneLocal = !showHygieneLocal" class="btn btn-sky">
                 {{ showHygieneLocal ? '🙈 隱藏衛生工作' : '🧹 顯示衛生工作' }}
               </button>
+              
               <NuxtLink v-if="isHistoryVisibleOnIndex" to="/history" class="btn btn-pink">📅 查詢近期聯絡簿</NuxtLink>
             </div>
           </div>
@@ -362,8 +362,7 @@ const scheduleButtonConfig = ref({ isVisible: false, visibility: 'both', teacher
 const showLargeSchedule = ref(false)
 const mobileDay = ref(new Date().getDay() >= 1 && new Date().getDay() <= 5 ? new Date().getDay() : 1)
 
-// 💡 動態時鐘字體大小
-const clockFontSize = ref(35) // 預設 35px
+const clockFontSize = ref(35) 
 
 const showNonAcademicPeriods = ref(false) 
 const showTeacherNames = ref(true)        
@@ -714,7 +713,6 @@ const fetchData = async () => {
       scheduleButtonConfig.value = { teacherOnlyInBrownlist: true, ...schBtnSetting.setting_value }
     }
 
-    // 💡 讀取首頁時鐘大小設定
     const clockSetting = sysData.find(s => s.setting_key === 'index_clock_size')
     if (clockSetting && clockSetting.setting_value) {
       clockFontSize.value = Number(clockSetting.setting_value) || 35
@@ -884,7 +882,6 @@ const saveClassNoteItems = async () => {
 .left-panel { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .control-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; text-align: center; }
 
-/* 💡 修正：移除固定的 font-size，改以行內樣式綁定變數覆蓋 */
 .clock-display { display: flex; align-items: center; justify-content: center; gap: 15px; font-weight: bold; color: #1e293b; margin-bottom: 10px; }
 .icon-alert-bell { font-size: 2.2rem; text-decoration: none; animation: shake 1.5s infinite; filter: drop-shadow(0 2px 4px rgba(239,68,68,0.5)); cursor: pointer; }
 @keyframes shake { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-15deg); } 75% { transform: rotate(15deg); } }
