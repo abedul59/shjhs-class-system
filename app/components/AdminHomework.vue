@@ -44,12 +44,22 @@
         </div>
       </div>
 
-      <div class="action-bar" style="margin-bottom: 25px;">
-        <button @click="sendHomeworkEmails" class="email-btn late-btn" :disabled="isSendingHomework">
+      <!-- 💡 加入列印/產生PDF 按鈕 -->
+      <div class="action-bar" style="margin-bottom: 25px; display: flex; gap: 15px;">
+        <button @click="triggerPrint" class="email-btn print-btn">
+          📄 產生全班報表 (預覽 / 匯出 PDF)
+        </button>
+        <button @click="sendHomeworkEmails" class="email-btn late-btn" :disabled="isSendingHomework" style="flex: 2;">
           {{ isSendingHomework ? '正在逐一發送作業報表，請稍候...' : '📧 密碼解鎖：確認無誤並一鍵發送全班作業通知' }}
         </button>
       </div>
       
+      <!-- 💡 專屬列印用的表頭 (平時隱藏，列印時顯示) -->
+      <div class="print-only-header">
+        <h2>📚 全班作業繳交狀態報表</h2>
+        <p>列印時間：{{ new Date().toLocaleString('zh-TW') }}</p>
+      </div>
+
       <div class="student-homework-grid">
         <div v-for="stat in studentAssignmentStats" :key="stat.id" class="hw-card">
           <div class="hw-card-header">
@@ -118,6 +128,11 @@ const saveTeacher = async (t) => { await supabase.from('subject_teachers').updat
 const deleteTeacher = async (id) => { if(confirm('確定刪除此科目？')) { await supabase.from('subject_teachers').delete().eq('id', id); subjectTeachers.value = subjectTeachers.value.filter(t => t.id !== id) } }
 const saveHwEmailTemplate = async () => { isSavingHwTemplate.value = true; await supabase.from('email_templates').upsert({ template_id: 'homework_notice', subject: hwEmailSubjectTemplate.value, content: hwEmailContentTemplate.value }); alert('✅ 作業信件範本已永久儲存！'); isSavingHwTemplate.value = false }
 
+// 💡 觸發列印(產生PDF) 功能
+const triggerPrint = () => {
+  window.print()
+}
+
 const sendHomeworkEmails = async () => {
   isSendingHomework.value = true
   
@@ -176,7 +191,13 @@ const sendHomeworkEmails = async () => {
 .preview-box { background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
 .preview-subject { font-size: 1.1rem; color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 12px; }
 .preview-body { font-size: 1rem; color: #334155; line-height: 1.6; white-space: pre-wrap; }
-.late-btn { background-color: #f59e0b; width: 100%; font-size: 1.2rem; padding: 15px; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+.late-btn { background-color: #f59e0b; width: 100%; font-size: 1.2rem; padding: 15px; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+.late-btn:hover:not(:disabled) { background-color: #d97706; }
+.print-btn { background-color: #3b82f6; font-size: 1.1rem; padding: 15px; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; flex: 1; transition: 0.2s; }
+.print-btn:hover { background-color: #2563eb; }
+
+.print-only-header { display: none; }
+
 .student-homework-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; max-height: 600px; overflow-y: auto; padding-right: 10px; }
 .hw-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 .hw-card-header { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }
@@ -187,4 +208,62 @@ const sendHomeworkEmails = async () => {
 .missing-list .hw-title { color: #dc2626; } .submitted-list .hw-title { color: #16a34a; }
 .badge { background: #e0e7ff; color: #4338ca; padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; }
 .badge.success { background: #dcfce7; color: #166534; } .badge.warning { background: #fee2e2; color: #991b1b; }
+
+/* =========================================
+   💡 專屬列印排版樣式 (@media print)
+   ========================================= */
+@media print {
+  @page { size: A4 portrait; margin: 15mm; }
+  
+  /* 隱藏不需要列印的編輯與發送信件區塊 */
+  .table-header, 
+  .homework-section > h4, 
+  .homework-section > p.help-text, 
+  .teacher-list, 
+  .email-editor-section, 
+  .email-preview-section, 
+  .action-bar {
+    display: none !important;
+  }
+
+  /* 重設外層樣式，避免列印被截斷 */
+  .homework-section {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+  }
+
+  /* 顯示列印專屬標題 */
+  .print-only-header {
+    display: block !important;
+    text-align: center;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #000;
+    padding-bottom: 10px;
+  }
+  .print-only-header h2 { margin: 0 0 5px 0; color: #000; font-size: 24px; }
+  .print-only-header p { margin: 0; color: #333; font-size: 14px; }
+
+  /* 強制網格展開為 A4 雙欄配置 */
+  .student-homework-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10mm !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  /* 防止卡片被跨頁切斷 */
+  .hw-card {
+    page-break-inside: avoid;
+    border: 1px solid #000 !important;
+    box-shadow: none !important;
+    margin-bottom: 5mm; 
+  }
+  
+  .badge { border: 1px solid #000; color: #000 !important; background: transparent !important; }
+  .hw-card-header { background: #f1f5f9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; border-bottom: 1px solid #000 !important; }
+}
 </style>
