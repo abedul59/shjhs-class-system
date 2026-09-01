@@ -14,135 +14,45 @@
 
     <div v-if="!isExamModeView" class="normal-home-content">
       
-      <!-- 📢 家長須知 (僅褐名單外顯示) -->
-      <div v-if="isNoticeBoardVisibleOnIndex && !isIpBrownlisted" class="blackboard top-board">
-        <h2 class="board-title notice-title">📢 家長須知事項</h2>
-        <div class="dashed-divider"></div>
-        
-        <div class="board-content-wrapper" :class="{ 'is-collapsed': !isNoticeExpanded }">
-          <div class="board-content">
-            <div v-if="parentNotices.length === 0" class="empty-text-italic">目前無特別須知事項</div>
-            <ul v-else class="item-list">
-              <li v-for="(notice, index) in parentNotices" :key="'n-'+index" class="rich-notice-item">
-                <span class="bullet">📌</span>
-                <div class="rich-notice-content" v-html="privacyFilter(notice)"></div>
-              </li>
-            </ul>
-          </div>
-          <div v-if="!isNoticeExpanded" class="fade-mask"></div>
-        </div>
-        
-        <div class="expand-action desktop-only" v-if="parentNotices.length > 0">
-          <button @click="isNoticeExpanded = !isNoticeExpanded" class="btn-expand">
-            {{ isNoticeExpanded ? '▲ 收起內容' : '▼ 展開完整須知' }}
-          </button>
-        </div>
-      </div>
-
-      <!-- 📌 家長公佈欄 (僅限褐名單外顯示) -->
-      <div v-if="isParentAnnouncementVisibleOnIndex && parentAnnouncements.length > 0 && !isIpBrownlisted" class="corkboard announcement-board">
-        <h2 class="board-title cork-title">📌 家長公佈欄</h2>
-        <div class="cork-divider"></div>
-        <div class="cork-cards-container">
-          <div v-for="ann in parentAnnouncements" :key="'p-ann-'+ann.id" class="cork-card">
-            <div class="pin">📍</div>
-            <div class="cork-card-header">
-              <h3 class="cork-card-title">{{ privacyFilter(ann.title) }}</h3>
-              <span class="cork-card-date">{{ formatDateTime(ann.date) }}</span>
-            </div>
-            <div class="cork-card-content" v-html="formatNL(ann.content)"></div>
-            <div v-if="ann.links && ann.links.length > 0" class="cork-card-links">
-               <a v-for="(link, i) in ann.links" :key="i" :href="link.url" target="_blank" class="cork-link">
-                 🔗 {{ privacyFilter(link.name) }}
-               </a>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 📌 班級公佈欄 (僅限褐名單內顯示) -->
-      <div v-if="isAnnouncementVisibleOnIndex && announcements.length > 0 && isIpBrownlisted" class="corkboard announcement-board">
-        <div class="board-header-clickable" @click="isClassAnnExpanded = !isClassAnnExpanded">
-          <h2 class="board-title cork-title">📌 班級公佈欄</h2>
-          <span class="toggle-icon">{{ isClassAnnExpanded ? '▲ 點擊收起' : '▼ 點擊展開全部' }}</span>
-        </div>
-        
-        <div v-show="isClassAnnExpanded">
-          <div class="cork-divider"></div>
-          <div class="cork-cards-container">
-            <div v-for="ann in announcements" :key="ann.id" class="cork-card">
-              <div class="pin">📍</div>
-              <div class="cork-card-header">
-                <h3 class="cork-card-title">{{ privacyFilter(ann.title) }}</h3>
-                <span class="cork-card-date">{{ formatDateTime(ann.date) }}</span>
-              </div>
-              <div class="cork-card-content" v-html="formatNL(ann.content)"></div>
-              <div v-if="ann.links && ann.links.length > 0" class="cork-card-links">
-                 <a v-for="(link, i) in ann.links" :key="i" :href="link.url" target="_blank" class="cork-link">
-                   🔗 {{ privacyFilter(link.name) }}
-                 </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <!-- 💡 將原本三個公佈欄抽離至 NoticeBoards 元件 -->
+      <NoticeBoards 
+        :isIpBrownlisted="isIpBrownlisted"
+        :isNoticeBoardVisibleOnIndex="isNoticeBoardVisibleOnIndex"
+        :parentNotices="parentNotices"
+        :isParentAnnouncementVisibleOnIndex="isParentAnnouncementVisibleOnIndex"
+        :parentAnnouncements="parentAnnouncements"
+        :isAnnouncementVisibleOnIndex="isAnnouncementVisibleOnIndex"
+        :announcements="announcements"
+        :privacyFilter="privacyFilter"
+        :formatDateTime="formatDateTime"
+        :formatNL="formatNL"
+      />
 
       <div class="main-split">
         <div class="left-panel">
-          <div class="control-card">
-            
-            <div class="clock-display" :style="{ fontSize: clockFontSize + 'px' }">
-              🕒 {{ currentTime }}
-              <NuxtLink v-if="unreadMsgCount > 0" to="/admin" class="icon-alert-bell" title="您有未讀私訊，點擊前往後台！">
-                🚨
-              </NuxtLink>
-            </div>
-            
-            <div v-if="scheduleDisplay" class="schedule-ticker">
-              <div class="current-class">
-                <span class="pulse-dot" v-if="scheduleDisplay.current.status === '上課中'"></span>
-                <strong>{{ scheduleDisplay.current.label }}：</strong>
-                <span class="subject-text">{{ scheduleDisplay.current.subject }}</span>
-                <span class="teacher-text" v-if="scheduleDisplay.current.teacher && (!scheduleButtonConfig.teacherOnlyInBrownlist || isIpBrownlisted)">({{ scheduleDisplay.current.teacher }})</span>
-              </div>
-              <div class="next-class" v-if="scheduleDisplay.next">
-                <strong>下節課：</strong>
-                <span>{{ scheduleDisplay.next.subject }}</span>
-              </div>
-            </div>
-
-            <button v-if="isIpBrownlisted && examData.isExamModeEnabled && examData.periods && examData.periods.length > 0" @click="isExamModeView = true" class="btn-enter-exam">
-              🎓 切換至大考看板模式
-            </button>
-
-            <div class="button-group">
-              <NuxtLink v-if="indexButtonSettings.parentBind" to="/parent-bind" class="btn btn-orange">👨‍👩‍👧 綁定</NuxtLink>
-              <NuxtLink v-if="indexButtonSettings.parentMsg" to="/parent-message" class="btn btn-green">💬 家長私訊</NuxtLink>
-              <NuxtLink v-if="indexButtonSettings.studentMsg" to="/student-message" class="btn btn-blue">💬 學生私訊</NuxtLink>
-              
-              <button v-if="isScheduleButtonVisible" @click="openLargeSchedule" class="btn btn-lime">🗓️ 顯示班級大課表</button>
-
-              <NuxtLink v-if="indexButtonSettings.assignments" to="/assignments" class="btn btn-purple">📚 作業管理</NuxtLink>
-              <NuxtLink v-if="indexButtonSettings.discipline" to="/discipline" class="btn btn-dark-blue">⚖️ 秩序管理</NuxtLink>
-              <NuxtLink v-if="indexButtonSettings.hygiene" to="/hygiene" class="btn btn-cyan">🧹 衛生管理</NuxtLink>            
-              <NuxtLink v-if="indexButtonSettings.seats" to="/seats" class="btn btn-teal">🪑 座位管理</NuxtLink>
-              <NuxtLink v-if="indexButtonSettings.schedule" to="/schedule" class="btn btn-amber">⚙️ 課表管理</NuxtLink>
-              <NuxtLink v-if="indexButtonSettings.exams" to="/exams" class="btn btn-rose">📝 大考管理</NuxtLink>
-              <button v-if="indexButtonSettings.emergency" @click="openPwdModal('emergency')" class="btn btn-red">🚨 緊急通知</button>
-              <NuxtLink v-if="indexButtonSettings.admin" to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
-              
-              <button v-if="isIpBrownlisted && seatingChart.isVisible && indexButtonSettings.seats" @click="showSeatingChartLocal = !showSeatingChartLocal" class="btn btn-indigo">
-                {{ showSeatingChartLocal ? '🙈 隱藏教室座位表' : '👀 顯示教室座位表' }}
-              </button>
-              
-              <!-- 💡 修正：加入 isIpBrownlisted 判斷，在褐名單外隱藏此按鈕 -->
-              <button v-if="isIpBrownlisted && hygieneData.isVisibleOnIndex && indexButtonSettings.hygiene" @click="showHygieneLocal = !showHygieneLocal" class="btn btn-sky">
-                {{ showHygieneLocal ? '🙈 隱藏衛生工作' : '🧹 顯示衛生工作' }}
-              </button>
-              
-              <NuxtLink v-if="isHistoryVisibleOnIndex" to="/history" class="btn btn-pink">📅 查詢近期聯絡簿</NuxtLink>
-            </div>
-          </div>
+          
+          <!-- 💡 將原本的時鐘與按鈕面板抽離至 ControlPanel 元件 -->
+          <ControlPanel 
+            :clockFontSize="clockFontSize"
+            :currentTime="currentTime"
+            :unreadMsgCount="unreadMsgCount"
+            :scheduleDisplay="scheduleDisplay"
+            :scheduleButtonConfig="scheduleButtonConfig"
+            :isIpBrownlisted="isIpBrownlisted"
+            :examData="examData"
+            :indexButtonSettings="indexButtonSettings"
+            :isScheduleButtonVisible="isScheduleButtonVisible"
+            :seatingChart="seatingChart"
+            :showSeatingChartLocal="showSeatingChartLocal"
+            :hygieneData="hygieneData"
+            :showHygieneLocal="showHygieneLocal"
+            :isHistoryVisibleOnIndex="isHistoryVisibleOnIndex"
+            @enterExam="isExamModeView = true"
+            @openLargeSchedule="openLargeSchedule"
+            @openPwd="openPwdModal"
+            @update:showSeatingChartLocal="showSeatingChartLocal = $event"
+            @update:showHygieneLocal="showHygieneLocal = $event"
+          />
 
           <AttendanceGrid 
             v-if="isIpBrownlisted"
@@ -213,113 +123,15 @@
       </div>
     </div>
 
-    <!-- 全螢幕大字體課表展示 Modal -->
-    <div v-if="showLargeSchedule" class="large-schedule-overlay">
-      <div class="large-header">
-        <h1 class="large-title">📅 班級課表</h1>
-        
-        <div class="large-controls">
-          <label class="control-label">
-            <input type="checkbox" v-model="showNonAcademicPeriods"> 顯示早/午休
-          </label>
-          <label class="control-label" v-if="!scheduleButtonConfig.teacherOnlyInBrownlist || isIpBrownlisted">
-            <input type="checkbox" v-model="showTeacherNames"> 顯示老師
-          </label>
-          <label class="control-label">
-            <input type="checkbox" v-model="isSplitLayout"> 左右雙欄顯示
-          </label>
-          <button class="btn-close-large" @click="showLargeSchedule = false">✖ 關閉</button>
-        </div>
-      </div>
-
-      <div class="large-schedule-content">
-        <!-- 桌機/平板：雙欄模式 -->
-        <div v-if="isSplitLayout" class="split-desktop-grid">
-          <div class="schedule-half">
-            <div class="desktop-grid" :class="{'dense-mode': morningPeriods.length > 5}">
-              <div class="grid-header time-header">節次 / 時間</div>
-              <div class="grid-header">星期一</div><div class="grid-header">星期二</div><div class="grid-header">星期三</div><div class="grid-header">星期四</div><div class="grid-header">星期五</div>
-              <template v-for="(period, pIdx) in morningPeriods" :key="'lg-m-'+pIdx">
-                <div class="grid-cell time-cell">
-                  <div class="p-name">{{ period.name }}</div>
-                  <div class="p-time">{{ period.startTime }} - {{ period.endTime }}</div>
-                </div>
-                <div v-for="day in 5" :key="'lgc-m-'+day" class="grid-cell subject-cell" :class="{'empty-cell': !period.days[day-1].subject}">
-                  <div class="cell-subject">{{ privacyFilter(period.days[day-1].subject) || '-' }}</div>
-                  <div class="cell-teacher" v-if="showTeacherNames && (!scheduleButtonConfig.teacherOnlyInBrownlist || isIpBrownlisted) && period.days[day-1].teacher">
-                    {{ privacyFilter(period.days[day-1].teacher) }}
-                  </div>
-                </div>
-              </template>
-            </div>
-          </div>
-          <div class="schedule-half">
-            <div class="desktop-grid" :class="{'dense-mode': afternoonPeriods.length > 5}">
-              <div class="grid-header time-header">節次 / 時間</div>
-              <div class="grid-header">星期一</div><div class="grid-header">星期二</div><div class="grid-header">星期三</div><div class="grid-header">星期四</div><div class="grid-header">星期五</div>
-              <template v-for="(period, pIdx) in afternoonPeriods" :key="'lg-a-'+pIdx">
-                <div class="grid-cell time-cell">
-                  <div class="p-name">{{ period.name }}</div>
-                  <div class="p-time">{{ period.startTime }} - {{ period.endTime }}</div>
-                </div>
-                <div v-for="day in 5" :key="'lgc-a-'+day" class="grid-cell subject-cell" :class="{'empty-cell': !period.days[day-1].subject}">
-                  <div class="cell-subject">{{ privacyFilter(period.days[day-1].subject) || '-' }}</div>
-                  <div class="cell-teacher" v-if="showTeacherNames && (!scheduleButtonConfig.teacherOnlyInBrownlist || isIpBrownlisted) && period.days[day-1].teacher">
-                    {{ privacyFilter(period.days[day-1].teacher) }}
-                  </div>
-                </div>
-              </template>
-            </div>
-          </div>
-        </div>
-
-        <!-- 桌機/平板：單欄模式 -->
-        <div v-else class="desktop-grid" :class="{'dense-mode': displayPeriods.length > 8}">
-          <div class="grid-header time-header">節次 / 時間</div>
-          <div class="grid-header">星期一</div>
-          <div class="grid-header">星期二</div>
-          <div class="grid-header">星期三</div>
-          <div class="grid-header">星期四</div>
-          <div class="grid-header">星期五</div>
-          
-          <template v-for="(period, pIdx) in displayPeriods" :key="'lg-'+pIdx">
-            <div class="grid-cell time-cell">
-              <div class="p-name">{{ period.name }}</div>
-              <div class="p-time">{{ period.startTime }} - {{ period.endTime }}</div>
-            </div>
-            <div v-for="day in 5" :key="'lgc-'+day" class="grid-cell subject-cell" :class="{'empty-cell': !period.days[day-1].subject}">
-              <div class="cell-subject">{{ privacyFilter(period.days[day-1].subject) || '-' }}</div>
-              <div class="cell-teacher" v-if="showTeacherNames && (!scheduleButtonConfig.teacherOnlyInBrownlist || isIpBrownlisted) && period.days[day-1].teacher">
-                {{ privacyFilter(period.days[day-1].teacher) }}
-              </div>
-            </div>
-          </template>
-        </div>
-
-        <!-- 手機：單日卡片清單 -->
-        <div class="mobile-view">
-          <div class="mobile-day-selector">
-             <button v-for="d in 5" :key="'btn-'+d" 
-                     :class="{active: mobileDay === d}" 
-                     @click="mobileDay = d">星期{{ ['一','二','三','四','五'][d-1] }}</button>
-          </div>
-          <div class="mobile-list">
-            <div v-for="(period, pIdx) in displayPeriods" :key="'ml-'+pIdx" class="mobile-card">
-              <div class="m-time-box">
-                <span class="m-name">{{ period.name }}</span>
-                <span class="m-time">{{ period.startTime }} - {{ period.endTime }}</span>
-              </div>
-              <div class="m-subject-box" :class="{'m-empty': !period.days[mobileDay-1].subject}">
-                 <div class="m-subject">{{ privacyFilter(period.days[mobileDay-1].subject) || '無課程' }}</div>
-                 <div class="m-teacher" v-if="showTeacherNames && (!scheduleButtonConfig.teacherOnlyInBrownlist || isIpBrownlisted) && period.days[mobileDay-1].teacher">
-                   {{ privacyFilter(period.days[mobileDay-1].teacher) }}
-                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- 💡 將大課表抽離至獨立元件 -->
+    <LargeScheduleModal 
+      v-if="showLargeSchedule"
+      :scheduleData="scheduleData"
+      :scheduleButtonConfig="scheduleButtonConfig"
+      :isIpBrownlisted="isIpBrownlisted"
+      :privacyFilter="privacyFilter"
+      @close="showLargeSchedule = false"
+    />
 
     <EmergencyModal v-if="showEmergencyModal" @close="showEmergencyModal = false" />
   </div>
@@ -333,16 +145,16 @@ import AttendanceGrid from '~~/components/home/AttendanceGrid.vue'
 import ContactBook from '~~/components/home/ContactBook.vue'
 import ClassNotes from '~~/components/home/ClassNotes.vue'
 import SeatingAndHygiene from '~~/components/home/SeatingAndHygiene.vue'
+import NoticeBoards from '~~/components/home/NoticeBoards.vue'
+import ControlPanel from '~~/components/home/ControlPanel.vue'
+import LargeScheduleModal from '~~/components/home/LargeScheduleModal.vue'
 
 const supabase = useSupabaseClient()
 
 const showEmergencyModal = ref(false)
 const showSeatingChartLocal = ref(false)
 const showHygieneLocal = ref(false)
-const isNoticeExpanded = ref(false)
 const isHistoryVisibleOnIndex = ref(false)
-
-const isClassAnnExpanded = ref(false)
 
 const isAnnouncementVisibleOnIndex = ref(true)
 const isNoticeBoardVisibleOnIndex = ref(true)
@@ -360,32 +172,8 @@ const scheduleData = ref(null)
 
 const scheduleButtonConfig = ref({ isVisible: false, visibility: 'both', teacherOnlyInBrownlist: true })
 const showLargeSchedule = ref(false)
-const mobileDay = ref(new Date().getDay() >= 1 && new Date().getDay() <= 5 ? new Date().getDay() : 1)
 
 const clockFontSize = ref(35) 
-
-const showNonAcademicPeriods = ref(false) 
-const showTeacherNames = ref(true)        
-const isSplitLayout = ref(false)          
-
-const nonAcademicKeywords = ['早修', '早掃', '午餐', '午休']
-const displayPeriods = computed(() => {
-  if (!scheduleData.value?.periods) return []
-  return scheduleData.value.periods.filter(p => {
-    if (showNonAcademicPeriods.value) return true
-    return !nonAcademicKeywords.some(kw => p.name.includes(kw))
-  })
-})
-
-const morningPeriods = computed(() => {
-  const mid = Math.ceil(displayPeriods.value.length / 2)
-  return displayPeriods.value.slice(0, mid)
-})
-
-const afternoonPeriods = computed(() => {
-  const mid = Math.ceil(displayPeriods.value.length / 2)
-  return displayPeriods.value.slice(mid)
-})
 
 const isExamModeView = ref(false)
 const examData = ref({ isExamModeEnabled: true, theme: 'midnight', title: '', periods: [] })
@@ -789,7 +577,6 @@ const isScheduleButtonVisible = computed(() => {
 
 const openLargeSchedule = () => {
   showLargeSchedule.value = true
-  mobileDay.value = new Date().getDay() >= 1 && new Date().getDay() <= 5 ? new Date().getDay() : 1
 }
 
 onMounted(() => { 
@@ -837,80 +624,8 @@ const saveClassNoteItems = async () => {
 .page-container { min-height: 100vh; background-color: #f3f4f6; padding: 20px; font-family: sans-serif; display: flex; flex-direction: column; gap: 20px; transition: 0.3s; }
 .is-exam-mode { padding: 0; background: var(--ex-bg); overflow: hidden; }
 
-.corkboard { background-color: #d1a36a; background-image: url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.12"/></svg>'); border: 10px solid #754d29; border-radius: 8px; padding: 20px 25px; box-shadow: 0 6px 12px rgba(0,0,0,0.15), inset 0 0 10px rgba(0,0,0,0.3); }
-
-.board-header-clickable { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; padding: 5px; border-radius: 8px; transition: 0.2s;}
-.board-header-clickable:hover { background: rgba(255,255,255,0.1); }
-.toggle-icon { font-weight: bold; color: #78350f; font-size: 0.95rem; background: rgba(255,255,255,0.4); padding: 5px 12px; border-radius: 20px; }
-
-.cork-title { color: #4a2b18; text-shadow: 1px 1px 0px rgba(255,255,255,0.3); font-size: 1.4rem; margin: 0; }
-.cork-divider { border-bottom: 2px dashed #92400e; margin: 15px 0; opacity: 0.5; }
-.cork-cards-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-.cork-card { background: #fef9c3; border-radius: 2px 2px 10px 2px; padding: 15px 20px; box-shadow: 2px 4px 6px rgba(0,0,0,0.15); position: relative; }
-.pin { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); font-size: 1.8rem; z-index: 2; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
-.cork-card-header { border-bottom: 1px solid #fcd34d; padding-bottom: 10px; margin-bottom: 10px; }
-.cork-card-title { margin: 0 0 5px 0; color: #92400e; font-size: 1.2rem; }
-.cork-card-date { color: #b45309; font-size: 0.85rem; font-weight: bold; }
-.cork-card-content { color: #451a03; line-height: 1.5; font-size: 1rem; margin-bottom: 15px; word-wrap: break-word;}
-.cork-card-links { display: flex; flex-direction: column; gap: 8px; }
-.cork-link { display: inline-block; background: #fbbf24; color: #92400e; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 0.95rem; border: 1px dashed #d97706; transition: 0.2s; text-align: center;}
-.cork-link:hover { background: #f59e0b; color: white; }
-
-.blackboard { background-color: #315243; border: 10px solid #754d29; border-radius: 8px; padding: 20px 25px; box-shadow: 0 6px 12px rgba(0,0,0,0.15), inset 0 0 10px rgba(0,0,0,0.3); margin-bottom: 20px;}
-.board-title { margin: 0; font-size: 1.4rem; font-weight: bold; }
-.notice-title { color: #fca5a5; }
-.dashed-divider { border-bottom: 2px dashed #94a3b8; margin: 15px 0; opacity: 0.6; }
-
-.board-content-wrapper { position: relative; transition: max-height 0.3s ease; }
-.board-content { color: white; min-height: 40px; }
-.is-collapsed { max-height: 140px; overflow: hidden; }
-.fade-mask { position: absolute; bottom: 0; left: 0; width: 100%; height: 60px; background: linear-gradient(to bottom, rgba(49, 82, 67, 0), rgba(49, 82, 67, 1)); pointer-events: none; }
-.expand-action { text-align: center; margin-top: 5px; }
-.btn-expand { background: transparent; border: 1px dashed #fca5a5; color: #fca5a5; padding: 6px 20px; border-radius: 20px; cursor: pointer; font-size: 0.95rem; transition: 0.2s; font-weight: bold;}
-.btn-expand:hover { background: rgba(252, 165, 165, 0.15); }
-.desktop-only { display: block; }
-
-.empty-text-italic { color: #94a3b8; font-style: italic; font-size: 1.1rem; }
-.item-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
-.rich-notice-item { display: flex; align-items: flex-start; gap: 8px; width: 100%; font-size: 1.15rem; letter-spacing: 0.5px; }
-.rich-notice-content { flex: 1; word-wrap: break-word; overflow-wrap: break-word; line-height: 1.5; }
-.rich-notice-content :deep(p) { margin: 0 0 5px 0; }
-.rich-notice-content :deep(a) { color: #fbbf24; text-decoration: underline; }
-.rich-notice-content :deep(ol), .rich-notice-content :deep(ul) { margin: 5px 0; padding-left: 20px; }
-
 .main-split { display: flex; gap: 20px; align-items: flex-start; }
 .left-panel { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-.control-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; text-align: center; }
-
-.clock-display { display: flex; align-items: center; justify-content: center; gap: 15px; font-weight: bold; color: #1e293b; margin-bottom: 10px; }
-.icon-alert-bell { font-size: 2.2rem; text-decoration: none; animation: shake 1.5s infinite; filter: drop-shadow(0 2px 4px rgba(239,68,68,0.5)); cursor: pointer; }
-@keyframes shake { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-15deg); } 75% { transform: rotate(15deg); } }
-
-.schedule-ticker { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 10px 15px; margin-bottom: 20px; display: flex; justify-content: center; gap: 20px; align-items: center; flex-wrap: wrap; }
-.subject-text { font-weight: bold; color: #047857;}
-.teacher-text { font-size: 0.95rem; color: #475569; }
-.next-class { color: #64748b; font-size: 1rem; border-left: 2px solid #cbd5e1; padding-left: 20px; }
-
-.button-group { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
-.btn { padding: 8px 12px; border-radius: 6px; font-size: 0.95rem; font-weight: bold; color: white; border: none; cursor: pointer; display: inline-block; text-decoration: none;}
-.btn-orange { background: #f59e0b; }
-.btn-green { background: #10b981; }
-.btn-blue { background: #3b82f6; }
-.btn-lime { background: #84cc16; color: #14532d; border: 1px solid #65a30d;}
-.btn-dark { background: #64748b; }
-.btn-purple { background: #8b5cf6; }
-.btn-red { background: #ef4444; }
-.btn-dark-blue { background: #1e3a8a; } 
-.btn-teal { background: #0f766e; } 
-.btn-cyan { background: #06b6d4; }
-.btn-indigo { background: #6366f1; } 
-.btn-sky { background: #0ea5e9; }
-.btn-pink { background: #ec4899; } 
-.btn-amber { background: #d97706; }
-.btn-rose { background: #be123c; }
-
-.btn-enter-exam { width: 100%; padding: 12px; background: #991b1b; color: white; border: none; border-radius: 6px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(153, 27, 27, 0.3); animation: subtle-pulse 2s infinite;}
-
 .right-panel { flex: 1; min-width: 0; }
 
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 9999; padding: 20px; box-sizing: border-box; }
@@ -924,101 +639,9 @@ const saveClassNoteItems = async () => {
 .confirm-btn { background: #3b82f6; color: white; }
 .cancel-btn { background: #e2e8f0; color: #475569; }
 
-.large-schedule-overlay { 
-  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
-  background: #f8fafc; z-index: 9999; display: flex; flex-direction: column;
-}
-.large-header { 
-  padding: 10px 20px; background: #1e293b; color: white; 
-  display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); flex-wrap: wrap; gap: 10px;
-}
-.large-title { margin: 0; font-size: 1.6rem; letter-spacing: 2px;}
-
-.large-controls { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; background: rgba(255,255,255,0.1); padding: 6px 12px; border-radius: 8px; }
-.control-label { display: flex; align-items: center; gap: 6px; font-size: 1rem; color: #f8fafc; cursor: pointer; font-weight: bold; }
-.control-label input { transform: scale(1.2); cursor: pointer; }
-
-.btn-close-large { background: #ef4444; color: white; border: none; padding: 6px 15px; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; margin-left: 10px; }
-
-.large-schedule-content { 
-  padding: 10px 15px; flex: 1; width: 100%; box-sizing: border-box;
-  display: flex; flex-direction: column; overflow: hidden;
-}
-
-.desktop-grid { 
-  flex: 1;
-  display: grid; 
-  grid-template-columns: 140px repeat(5, 1fr); 
-  grid-template-rows: auto; 
-  grid-auto-rows: minmax(0, 1fr); 
-  gap: 8px; 
-  min-height: 0; 
-}
-
-.grid-header { background: #e2e8f0; color: #0f172a; font-size: 1.2rem; font-weight: bold; padding: 8px; text-align: center; border-radius: 6px; display: flex; align-items: center; justify-content: center;}
-.time-header { background: #94a3b8; color: white; }
-
-.split-desktop-grid { display: flex; gap: 15px; height: 100%; width: 100%; }
-.schedule-half { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.split-desktop-grid .desktop-grid { min-height: 0; grid-template-columns: 120px repeat(5, 1fr); gap: 6px;}
-.split-desktop-grid .cell-subject { font-size: 1.5rem; }
-.split-desktop-grid .cell-teacher { font-size: 1.05rem; }
-.split-desktop-grid .p-name { font-size: 1.1rem; }
-.split-desktop-grid .p-time { font-size: 0.85rem; }
-.split-desktop-grid .grid-header { font-size: 1.05rem; padding: 6px; }
-
-.grid-cell { background: white; border: 2px solid #cbd5e1; border-radius: 6px; padding: 5px 10px; text-align: center; display: flex; flex-direction: column; justify-content: center; min-height: 0;}
-.time-cell { background: #f1f5f9; border-color: #94a3b8; }
-.p-name { font-size: 1.2rem; font-weight: bold; color: #334155; margin-bottom: 2px;}
-.p-time { font-size: 0.95rem; color: #64748b; font-family: monospace; font-weight: bold;}
-
-.subject-cell { box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-.empty-cell { background: #f8fafc; border-style: dashed; opacity: 0.6; }
-.cell-subject { font-size: 1.8rem; font-weight: bold; color: #0f766e; margin-bottom: 2px; }
-.cell-teacher { font-size: 1.1rem; color: #0369a1; font-weight: bold;}
-
-.dense-mode { gap: 6px; }
-.dense-mode .grid-cell { padding: 4px; border-width: 1px;}
-.dense-mode .cell-subject { font-size: 1.5rem; margin-bottom: 2px; }
-.dense-mode .cell-teacher { font-size: 1rem; }
-.dense-mode .p-name { font-size: 1.1rem; }
-.dense-mode .p-time { font-size: 0.85rem; }
-.dense-mode .grid-header { font-size: 1.1rem; padding: 6px; }
-
-.mobile-view { display: none; }
-
-@media (max-width: 900px) {
-  .large-schedule-content { overflow-y: auto; display: block; }
-  .desktop-grid, .split-desktop-grid { display: none; }
-  .mobile-view { display: block; }
-  
-  .mobile-day-selector { display: flex; overflow-x: auto; gap: 10px; padding-bottom: 15px; margin-bottom: 15px; border-bottom: 2px solid #e2e8f0;}
-  .mobile-day-selector button { flex: 1; min-width: 80px; padding: 12px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1.1rem; font-weight: bold; color: #475569;}
-  .mobile-day-selector button.active { background: #3b82f6; color: white; border-color: #2563eb; }
-
-  .mobile-list { display: flex; flex-direction: column; gap: 12px; padding-bottom: 30px;}
-  .mobile-card { display: flex; background: white; border: 2px solid #cbd5e1; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.05);}
-  .m-time-box { background: #f1f5f9; width: 120px; padding: 15px 10px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-right: 2px solid #cbd5e1;}
-  .m-name { font-size: 1.2rem; font-weight: bold; color: #334155; margin-bottom: 5px;}
-  .m-time { font-size: 0.95rem; color: #64748b; font-weight: bold;}
-  
-  .m-subject-box { flex: 1; padding: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center;}
-  .m-empty { background: #f8fafc; opacity: 0.6; }
-  .m-subject { font-size: 1.8rem; font-weight: bold; color: #0f766e; text-align: center;}
-  .m-teacher { font-size: 1.1rem; color: #0369a1; font-weight: bold; margin-top: 5px;}
-}
-
 @media (max-width: 1024px) { .main-split { flex-direction: column; } }
 @media (max-width: 768px) {
   .page-container { padding: 10px; }
-  .corkboard, .blackboard { padding: 15px 10px; border-width: 8px; }
-  .cork-cards-container { grid-template-columns: 1fr; gap: 15px; }
-  .cork-card { padding: 15px; }
-  .schedule-ticker { flex-direction: column; gap: 10px; text-align: center; }
-  .next-class { border-left: none; padding-left: 0; border-top: 1px dashed #cbd5e1; padding-top: 10px; width: 100%;}
-  .is-collapsed { max-height: none; overflow: visible; }
-  .fade-mask { display: none; }
-  .desktop-only { display: none; }
 }
 
 :deep(.text-sm) { font-size: 0.9rem !important; line-height: 1.5; }
