@@ -189,22 +189,29 @@
             </div>
           </div>
 
-          <div class="action-bar print-only-hide" style="margin-bottom: 25px; display: flex; gap: 15px;">
-            <button @click="triggerPrint" class="email-btn print-btn">
-              📄 產生全班報表 (列印預覽 / PDF)
+          <!-- 💡 修正：列印動作區塊，加入「產生缺交報表」按鈕 -->
+          <div class="action-bar print-only-hide" style="margin-bottom: 25px; display: flex; gap: 15px; flex-wrap: wrap;">
+            <button @click="triggerPrint('all')" class="email-btn print-btn">
+              📄 產生全班報表 (預覽列印/PDF)
             </button>
-            <button @click="sendHomeworkEmails" class="email-btn late-btn" :disabled="isSendingHomework" style="flex: 2;">
+            <button @click="triggerPrint('missing')" class="email-btn print-missing-btn">
+              ⚠️ 產生缺交報表 (預覽列印/PDF)
+            </button>
+            <button @click="sendHomeworkEmails" class="email-btn late-btn" :disabled="isSendingHomework" style="flex: 2; min-width: 300px;">
               {{ isSendingHomework ? '正在逐一發送作業報表，請稍候...' : '📧 密碼解鎖：確認無誤並一鍵發送全班作業通知' }}
             </button>
           </div>
           
+          <!-- 💡 列印專屬表頭 (動態切換標題) -->
           <div class="print-only-header">
-            <h2>📚 全班作業繳交狀態總表</h2>
+            <h2>📚 {{ printMode === 'missing' ? '全班作業缺交狀態報表' : '全班作業繳交狀態總表' }}</h2>
             <p>列印時間：{{ new Date().toLocaleString('zh-TW') }}</p>
           </div>
 
-          <div class="student-homework-grid">
-            <div v-for="stat in studentAssignmentStats" :key="stat.id" class="hw-card">
+          <!-- 💡 動態綁定 print-missing-only 類別，控制是否隱藏作業全齊的學生 -->
+          <div class="student-homework-grid" :class="{'print-missing-only': printMode === 'missing'}">
+            <!-- 💡 給作業全齊的卡片加上 is-complete 類別 -->
+            <div v-for="stat in studentAssignmentStats" :key="stat.id" class="hw-card" :class="{'is-complete': stat.missing.length === 0}">
               <div class="hw-card-header">
                 <strong>{{ stat.seat_number }}號 {{ stat.real_name }}</strong>
                 <span v-if="stat.missing.length === 0" class="badge notice success">💯 作業全齊</span>
@@ -251,6 +258,9 @@ const isSendingHomework = ref(false); const isSavingHwTemplate = ref(false)
 const excludedAssignmentIds = ref([])
 const hwEmailSubjectTemplate = ref('📚 班級作業繳交通知 - {{學生姓名}}')
 const hwEmailContentTemplate = ref(`親愛的家長您好：\n\n為您彙整 【{{學生姓名}}】 目前的各科作業繳交狀況：\n\n✅ 已交作業：\n{{已交清單}}\n\n❌ 缺交作業：\n{{缺交清單}}\n\n請您協助督促孩子盡速完成缺交作業。若有任何疑問，歡迎透過班級系統私訊聯繫。\n\n班級導師 敬上`)
+
+// 💡 列印模式控制狀態 ('all' = 全班, 'missing' = 僅缺交)
+const printMode = ref('all')
 
 // === 登入與稽核 ===
 const logRoleVisit = async (roleName) => {
@@ -485,7 +495,13 @@ const saveTeacher = async (t) => { await supabase.from('subject_teachers').updat
 const deleteTeacher = async (id) => { if(confirm('確定刪除此科目？')) { await supabase.from('subject_teachers').delete().eq('id', id); teachersList.value = teachersList.value.filter(t => t.id !== id) } }
 const saveHwEmailTemplate = async () => { isSavingHwTemplate.value = true; await supabase.from('email_templates').upsert({ template_id: 'homework_notice', subject: hwEmailSubjectTemplate.value, content: hwEmailContentTemplate.value }); alert('✅ 作業信件範本已永久儲存！'); isSavingHwTemplate.value = false }
 
-const triggerPrint = () => { window.print() }
+// 💡 觸發列印功能 (接收模式參數並等待 DOM 更新)
+const triggerPrint = (mode) => {
+  printMode.value = mode
+  setTimeout(() => {
+    window.print()
+  }, 100)
+}
 
 const sendHomeworkEmails = async () => {
   isSendingHomework.value = true
@@ -635,6 +651,10 @@ h3 { color: #334155; margin-top: 0; margin-bottom: 15px; border-bottom: 2px soli
 .print-btn { background-color: #3b82f6; font-size: 1.1rem; padding: 15px; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; flex: 1; transition: 0.2s; }
 .print-btn:hover { background-color: #2563eb; }
 
+/* 💡 產生缺交報表按鈕專屬樣式 */
+.print-missing-btn { background-color: #f43f5e; font-size: 1.1rem; padding: 15px; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; flex: 1; transition: 0.2s; }
+.print-missing-btn:hover { background-color: #e11d48; }
+
 .print-only-header { display: none; }
 
 .student-homework-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; max-height: 600px; overflow-y: auto; padding-right: 10px; }
@@ -688,6 +708,11 @@ h3 { color: #334155; margin-top: 0; margin-bottom: 15px; border-bottom: 2px soli
     margin-bottom: 5mm; 
   }
   
+  /* 💡 透過 print-missing-only 類別，在列印時隱藏作業全齊的學生卡片 */
+  .print-missing-only .is-complete {
+    display: none !important;
+  }
+
   .badge { border: 1px solid #000; color: #000 !important; background: transparent !important; }
   .hw-card-header { background: #f1f5f9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; border-bottom: 1px solid #000 !important; }
 }
