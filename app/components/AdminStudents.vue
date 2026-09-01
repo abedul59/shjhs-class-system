@@ -14,6 +14,7 @@
 
         <div class="export-actions">
           <button @click="addNewStudent" class="export-btn add-btn">➕ 新增一位學生資料</button>
+          <!-- 頂部保留全體儲存 -->
           <button @click="saveAllStudents" class="export-btn save-all-btn" :disabled="isSavingAll">
             {{ isSavingAll ? '⏳ 儲存中...' : '💾 全體儲存' }}
           </button>
@@ -24,7 +25,7 @@
       </div>
     </div>
 
-    <!-- 💡 新增：資料異動通知信設定區塊 -->
+    <!-- 💡 資料異動通知信設定區塊 -->
     <div class="notify-settings-section">
       <div class="editor-header">
         <h4 style="margin: 0; color: #1e293b;">📧 學生資料異動通知設定</h4>
@@ -74,64 +75,123 @@
       </div>
     </div>
 
-    <div class="table-responsive">
-      <table class="student-edit-table">
-        <thead>
-          <tr>
-            <th width="60">座號</th>
-            <th width="100">學號</th>
-            <th width="80">姓名</th>
-            <th width="80">隱藏名</th>
-            <th width="120">畢業國小</th>
-            <th width="70">國小班級</th>
-            <th width="90">生日(YYYYMMDD)</th>
-            <th width="100">身分證後五碼</th>
-            <th width="90">稱謂1</th><th width="110">電話1</th><th width="160">信箱1</th>
-            <th width="90">稱謂2</th><th width="110">電話2</th><th width="160">信箱2</th>
-            <th width="90">稱謂3</th><th width="110">電話3</th><th width="160">信箱3</th>
-            <th width="90" style="color: #dc2626;">不列入點名<br><span style="font-size: 0.8rem; font-weight: normal;">(休轉學/假帳號)</span></th>
-            <th width="80">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="student in adminStudents" :key="student.id" :class="{'new-row-highlight': String(student.id).startsWith('temp_')}">
-            <td><input type="number" v-model="student.seat_number" class="edit-input num-input"/></td>
-            <td><input type="text" v-model="student.student_number" class="edit-input" placeholder="例: 1150175"/></td>
-            <td><input type="text" v-model="student.real_name" class="edit-input" placeholder="姓名"/></td>
-            <td><input type="text" v-model="student.hidden_name" class="edit-input" placeholder="隱藏名"/></td>
-            <td><input type="text" v-model="student.elementary_school" class="edit-input" placeholder="例: 大新"/></td>
-            <td><input type="number" v-model="student.elementary_class" class="edit-input num-input" placeholder="班級"/></td>
-            <td><input type="text" v-model="student.birthday" class="edit-input" placeholder="YYYYMMDD"/></td>
-            <td><input type="text" v-model="student.id_last_5" class="edit-input num-input" placeholder="後五碼"/></td>
-            
-            <td><input type="text" v-model="student.p1_rel" class="edit-input small-input" placeholder="關係"/></td>
-            <td><input type="tel" v-model="student.p1_tel" class="edit-input small-input" placeholder="電話"/></td>
-            <td><input type="email" v-model="student.p1_mail" class="edit-input email-input" placeholder="信箱"/></td>
-            <td><input type="text" v-model="student.p2_rel" class="edit-input small-input" placeholder="關係"/></td>
-            <td><input type="tel" v-model="student.p2_tel" class="edit-input small-input" placeholder="電話"/></td>
-            <td><input type="email" v-model="student.p2_mail" class="edit-input email-input" placeholder="信箱"/></td>
-            <td><input type="text" v-model="student.p3_rel" class="edit-input small-input" placeholder="關係"/></td>
-            <td><input type="tel" v-model="student.p3_tel" class="edit-input small-input" placeholder="電話"/></td>
-            <td><input type="email" v-model="student.p3_mail" class="edit-input email-input" placeholder="信箱"/></td>
-            
-            <td style="text-align: center; background-color: #fef2f2;">
-              <input type="checkbox" v-model="student.hide_attendance" class="block-checkbox" title="打勾後，此學生將不會出現在首頁點名表中" />
-            </td>
-            
-            <td class="action-cell">
-              <button @click="saveStudent(student)" class="save-row-btn" title="儲存">💾</button>
-              <button @click="deleteStudent(student.id, student.real_name)" class="del-row-btn" title="刪除">🗑️</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <!-- 💡 分頁與排版優化的學生資料編輯區 -->
+    <div class="table-container-wrapper">
+      
+      <!-- 分頁標籤與儲存列 -->
+      <div class="tab-bar">
+        <button class="tab-btn" :class="{ active: activeTab === 'basic' }" @click="activeTab = 'basic'">🎓 基本與學籍資料</button>
+        <button class="tab-btn" :class="{ active: activeTab === 'parents' }" @click="activeTab = 'parents'">👨‍👩‍👦 家長聯絡資訊</button>
+        <button class="tab-btn" :class="{ active: activeTab === 'system' }" @click="activeTab = 'system'">⚙️ 系統設定</button>
+        
+        <div class="tab-spacer"></div>
+        <button @click="saveAllStudents" class="export-btn save-all-btn prominent-save-btn" :disabled="isSavingAll">
+          {{ isSavingAll ? '⏳ 處理中...' : '💾 全部儲存' }}
+        </button>
+      </div>
+
+      <div class="table-responsive">
+        <table class="student-edit-table" :class="activeTab + '-mode'">
+          <thead>
+            <tr>
+              <!-- 固定的識別欄位 -->
+              <th width="60" class="sticky-col">座號</th>
+              <th width="100" class="sticky-col-2" v-if="activeTab !== 'basic'">姓名</th>
+              
+              <!-- 基本與學籍資料 分頁 -->
+              <template v-if="activeTab === 'basic'">
+                <th width="100">學號</th>
+                <th width="80">姓名</th>
+                <th width="80">隱藏名</th>
+                <th width="120">畢業國小</th>
+                <th width="70">國小班級</th>
+                <th width="110">生日(YYYYMMDD)</th>
+                <th width="100">身分證後五碼</th>
+              </template>
+
+              <!-- 家長聯絡資訊 分頁 -->
+              <template v-if="activeTab === 'parents'">
+                <th width="70" class="group-border">稱謂1</th><th width="110">電話1</th><th width="180">信箱1</th>
+                <th width="70" class="group-border">稱謂2</th><th width="110">電話2</th><th width="180">信箱2</th>
+                <th width="70" class="group-border">稱謂3</th><th width="110">電話3</th><th width="180">信箱3</th>
+              </template>
+
+              <!-- 系統設定 分頁 -->
+              <template v-if="activeTab === 'system'">
+                <th width="160" style="color: #dc2626; text-align: center;">
+                  不列入點名<br><span style="font-size: 0.8rem; font-weight: normal;">(休轉學/假帳號)</span>
+                  <div class="micro-btn-group">
+                    <button @click="toggleAllAttendance(true)" class="micro-btn">全選</button>
+                    <button @click="toggleAllAttendance(false)" class="micro-btn">全不選</button>
+                  </div>
+                </th>
+              </template>
+
+              <!-- 固定的操作欄位 -->
+              <th width="90">單筆操作</th>
+            </tr>
+          </thead>
+          
+          <tbody>
+            <tr v-for="student in adminStudents" :key="student.id" :class="{'new-row-highlight': String(student.id).startsWith('temp_')}">
+              
+              <!-- 固定的識別欄位 -->
+              <td class="sticky-col"><input type="number" v-model="student.seat_number" class="edit-input num-input"/></td>
+              <td class="sticky-col-2" v-if="activeTab !== 'basic'">
+                <div class="readonly-name">{{ student.real_name || '未命名' }}</div>
+              </td>
+              
+              <!-- 基本與學籍資料 分頁 -->
+              <template v-if="activeTab === 'basic'">
+                <td><input type="text" v-model="student.student_number" class="edit-input" placeholder="例: 1150175"/></td>
+                <td><input type="text" v-model="student.real_name" class="edit-input" placeholder="姓名"/></td>
+                <td><input type="text" v-model="student.hidden_name" class="edit-input" placeholder="隱藏名"/></td>
+                <td><input type="text" v-model="student.elementary_school" class="edit-input" placeholder="例: 大新"/></td>
+                <td><input type="number" v-model="student.elementary_class" class="edit-input num-input" placeholder="班級"/></td>
+                <td><input type="text" v-model="student.birthday" class="edit-input" placeholder="YYYYMMDD"/></td>
+                <td><input type="text" v-model="student.id_last_5" class="edit-input num-input" placeholder="後五碼"/></td>
+              </template>
+
+              <!-- 家長聯絡資訊 分頁 -->
+              <template v-if="activeTab === 'parents'">
+                <td class="group-border"><input type="text" v-model="student.p1_rel" class="edit-input small-input" placeholder="關係"/></td>
+                <td><input type="tel" v-model="student.p1_tel" class="edit-input small-input" placeholder="電話"/></td>
+                <td><input type="email" v-model="student.p1_mail" class="edit-input email-input" placeholder="信箱"/></td>
+                <td class="group-border"><input type="text" v-model="student.p2_rel" class="edit-input small-input" placeholder="關係"/></td>
+                <td><input type="tel" v-model="student.p2_tel" class="edit-input small-input" placeholder="電話"/></td>
+                <td><input type="email" v-model="student.p2_mail" class="edit-input email-input" placeholder="信箱"/></td>
+                <td class="group-border"><input type="text" v-model="student.p3_rel" class="edit-input small-input" placeholder="關係"/></td>
+                <td><input type="tel" v-model="student.p3_tel" class="edit-input small-input" placeholder="電話"/></td>
+                <td><input type="email" v-model="student.p3_mail" class="edit-input email-input" placeholder="信箱"/></td>
+              </template>
+
+              <!-- 系統設定 分頁 -->
+              <template v-if="activeTab === 'system'">
+                <td style="text-align: center; background-color: #fef2f2;">
+                  <input type="checkbox" v-model="student.hide_attendance" class="block-checkbox" title="打勾後，此學生將不會出現在首頁點名表中" />
+                </td>
+              </template>
+
+              <!-- 固定的操作欄位 -->
+              <td class="action-cell">
+                <button @click="saveStudent(student)" class="save-row-btn" title="單筆儲存">💾</button>
+                <button @click="deleteStudent(student.id, student.real_name)" class="del-row-btn" title="單筆刪除">🗑️</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
+
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 const supabase = useSupabaseClient()
+
+const activeTab = ref('basic') // 控制當前顯示的分頁
+
 const adminStudents = ref([])
 const selectedFile = ref(null)
 const fileInput = ref(null)
@@ -140,7 +200,7 @@ const isSavingAll = ref(false)
 
 const sortBy = ref('seat_number') 
 
-// 💡 異動通知設定狀態
+// 異動通知設定狀態
 const notifyEmail = ref('')
 const notifySubject = ref('🔔 班級系統通知：學生資料已{{異動類型}} ({{學生姓名}})')
 const notifyContent = ref(`導師您好：\n\n系統於 {{當下時間}} 發生了一筆學生資料變動。\n\n【變動內容】\n- 動作：{{異動類型}}\n- 影響學生：{{學生姓名}}\n\n此致\n系統自動通知`)
@@ -179,18 +239,15 @@ const notifyTeacher = async (actionType, studentName) => {
 }
 
 const fetchData = async () => {
-  // 載入通知信箱設定
   const { data: emailData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'teacher_notify_email').maybeSingle()
   if (emailData && emailData.setting_value) notifyEmail.value = emailData.setting_value
 
-  // 載入通知信範本
   const { data: tmplData } = await supabase.from('email_templates').select('*').eq('template_id', 'student_data_change_notice').maybeSingle()
   if (tmplData) {
     notifySubject.value = tmplData.subject
     notifyContent.value = tmplData.content
   }
 
-  // 載入學生與家長資料
   const { data: sData } = await supabase.from('students').select('*').order(sortBy.value)
   const { data: pData } = await supabase.from('parents').select('*')
   
@@ -212,9 +269,7 @@ onMounted(() => fetchData())
 const saveNotifySettings = async () => {
   isSavingNotifySettings.value = true
   try {
-    // 存信箱
     await supabase.from('system_settings').upsert({ setting_key: 'teacher_notify_email', setting_value: notifyEmail.value }, { onConflict: 'setting_key' })
-    // 存範本 (純文字)
     await supabase.from('email_templates').upsert({ template_id: 'student_data_change_notice', subject: notifySubject.value, content: notifyContent.value })
     alert('✅ 通知設定與範本已儲存！')
   } catch (error) {
@@ -224,46 +279,41 @@ const saveNotifySettings = async () => {
   }
 }
 
-const applySort = () => {
-  fetchData()
-}
+const applySort = () => { fetchData() }
 
 const addNewStudent = () => {
   const maxSeat = adminStudents.value.length > 0 
-    ? Math.max(...adminStudents.value.map(s => parseInt(s.seat_number) || 0)) 
-    : 0
+    ? Math.max(...adminStudents.value.map(s => parseInt(s.seat_number) || 0)) : 0
 
   adminStudents.value.unshift({
     id: 'temp_' + Date.now(),
     seat_number: maxSeat + 1,
-    student_number: '',
-    real_name: '',
-    hidden_name: '',
-    elementary_school: '',
-    elementary_class: null,
-    birthday: '',
-    id_last_5: '',
-    hide_attendance: false,
-    p1_rel: '', p1_tel: '', p1_mail: '',
-    p2_rel: '', p2_tel: '', p2_mail: '',
-    p3_rel: '', p3_tel: '', p3_mail: ''
+    student_number: '', real_name: '', hidden_name: '', elementary_school: '',
+    elementary_class: null, birthday: '', id_last_5: '', hide_attendance: false,
+    p1_rel: '', p1_tel: '', p1_mail: '', p2_rel: '', p2_tel: '', p2_mail: '', p3_rel: '', p3_tel: '', p3_mail: ''
   })
 
-  alert('✨ 已在清單最上方新增一筆空白列，請填妥學號、座號等資料後點擊「💾」進行儲存！')
+  // 如果新增，自動切換回基本資料分頁方便填寫
+  activeTab.value = 'basic'
+  alert('✨ 已在清單最上方新增一筆空白列，請填寫完成後點擊「儲存」！')
+}
+
+// 💡 快速全選 / 全不選「不列入點名」
+const toggleAllAttendance = (status) => {
+  adminStudents.value.forEach(s => {
+    s.hide_attendance = status
+  })
 }
 
 const saveStudent = async (student, showAlert = true) => {
   try {
     const isNew = String(student.id).startsWith('temp_')
-    
     const sNum = String(student.student_number || '').trim() || `T${Date.now().toString().slice(-6)}`
     const rName = String(student.real_name || '').trim() || '未命名學生'
     
     const studentPayload = {
       seat_number: parseInt(student.seat_number) || 99, 
-      student_number: sNum,
-      student_id: sNum, 
-      real_name: rName, 
+      student_number: sNum, student_id: sNum, real_name: rName, 
       hidden_name: String(student.hidden_name || '').trim() || rName,
       elementary_school: String(student.elementary_school || '').trim(),
       elementary_class: parseInt(student.elementary_class) || null,
@@ -273,9 +323,7 @@ const saveStudent = async (student, showAlert = true) => {
     }
 
     if (isNew) {
-      studentPayload.school_name = '新化國中'
-      studentPayload.enroll_year = 115
-      studentPayload.class_name = '7'
+      studentPayload.school_name = '新化國中'; studentPayload.enroll_year = 115; studentPayload.class_name = '7'
     }
 
     let currentStudentId = student.id
@@ -301,11 +349,8 @@ const saveStudent = async (student, showAlert = true) => {
       if (pErr) throw pErr
     }
     
-    if (showAlert) {
-      alert(`✅ ${rName} 資料儲存成功！`)
-    }
+    if (showAlert) alert(`✅ ${rName} 資料儲存成功！`)
 
-    // 💡 呼叫通知函式
     const actionStr = isNew ? '新增' : '更新'
     notifyTeacher(actionStr, rName)
       
@@ -316,25 +361,20 @@ const saveStudent = async (student, showAlert = true) => {
 }
 
 const saveAllStudents = async () => {
-  if (!confirm('⚠️ 確定要儲存畫面上所有的修改嗎？這將會更新全體資料。')) return
+  if (!confirm('⚠️ 確定要將畫面上所有的修改進行儲存嗎？')) return
   isSavingAll.value = true
   
   let successCount = 0;
 
   try {
     for (const student of adminStudents.value) {
-      if (String(student.id).startsWith('temp_') && !student.student_number && !student.real_name) {
-        continue;
-      }
+      if (String(student.id).startsWith('temp_') && !student.student_number && !student.real_name) continue;
       await saveStudent(student, false)
       successCount++;
     }
     
     alert('✅ 全體資料儲存成功！')
-    
-    if (successCount > 0) {
-       notifyTeacher('批次全體儲存', `共 ${successCount} 筆學生`)
-    }
+    if (successCount > 0) notifyTeacher('批次全體儲存', `共更新了 ${successCount} 筆資料`)
 
     await fetchData()
   } catch (err) {
@@ -358,14 +398,10 @@ const deleteStudent = async (id, name) => {
       if (error) throw error
 
       alert(`✅ 學生 ${name || ''} 刪除成功。`)
-
-      // 💡 呼叫通知函式
       notifyTeacher('遭刪除', name || '未知學生')
 
       await fetchData() 
-    } catch (err) {
-      alert(`❌ 刪除失敗：${err.message}`)
-    }
+    } catch (err) { alert(`❌ 刪除失敗：${err.message}`) }
   } 
 }
 
@@ -384,23 +420,17 @@ const deleteAllStudents = async () => {
       if (error) throw error
 
       alert('✅ 所有學生資料已徹底清空。')
-
       notifyTeacher('極端操作', '全體學生資料已被清空')
 
       await fetchData() 
-    } catch (err) {
-      alert(`❌ 清空失敗：${err.message}`)
-    }
+    } catch (err) { alert(`❌ 清空失敗：${err.message}`) }
   } else if (confirmText !== null) {
     alert('❌ 輸入的文字不符，已取消刪除動作。')
   }
 }
 
 const exportStudents = (type) => {
-  if (adminStudents.value.length === 0) {
-    alert('⚠️ 目前沒有學生資料可供匯出。')
-    return
-  }
+  if (adminStudents.value.length === 0) return alert('⚠️ 目前沒有學生資料可供匯出。')
 
   const dataToExport = adminStudents.value.filter(s => !String(s.id).startsWith('temp_'))
 
@@ -409,9 +439,7 @@ const exportStudents = (type) => {
     const blob = new Blob([dataStr], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.href = url
-    link.download = 'students_export.json'
-    link.click()
+    link.href = url; link.download = 'students_export.json'; link.click()
     URL.revokeObjectURL(url)
   } else if (type === 'csv') {
     if(dataToExport.length === 0) return;
@@ -432,17 +460,12 @@ const exportStudents = (type) => {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.href = url
-    link.download = 'students_export.csv'
-    link.click()
+    link.href = url; link.download = 'students_export.csv'; link.click()
     URL.revokeObjectURL(url)
   }
 }
 
-const handleFileUpload = (e) => { 
-  const file = e.target.files[0]; 
-  if (file) selectedFile.value = file 
-}
+const handleFileUpload = (e) => { const file = e.target.files[0]; if (file) selectedFile.value = file }
 
 const processImport = async () => {
   if (!selectedFile.value) return
@@ -481,40 +504,27 @@ const processImport = async () => {
           if (!studentObj.enroll_year) studentObj.enroll_year = 115
           if (!studentObj.class_name) studentObj.class_name = '7'
           if (!studentObj.student_id) studentObj.student_id = studentObj.student_number 
-          
           studentsToUpsert.push(studentObj)
         }
       }
 
       if (studentsToUpsert.length === 0) throw new Error('沒有找到有效的學生資料 (可能缺少 student_number 欄位)')
 
-      const { error } = await supabase
-        .from('students')
-        .upsert(studentsToUpsert, { onConflict: 'student_number' })
-
+      const { error } = await supabase.from('students').upsert(studentsToUpsert, { onConflict: 'student_number' })
       if (error) throw error
 
       alert(`✅ 成功匯入 ${studentsToUpsert.length} 筆學生資料！`)
-      
       notifyTeacher('批次匯入 CSV', `共匯入了 ${studentsToUpsert.length} 筆資料`)
       
       selectedFile.value = null
       if (fileInput.value) fileInput.value.value = ''
       await fetchData()
 
-    } catch (err) {
-      console.error(err)
-      alert(`❌ 匯入發生錯誤：${err.message}`)
-    } finally {
-      isImporting.value = false
-    }
+    } catch (err) { alert(`❌ 匯入發生錯誤：${err.message}`) } 
+    finally { isImporting.value = false }
   }
   
-  reader.onerror = () => {
-    alert('❌ 讀取檔案失敗。')
-    isImporting.value = false
-  }
-
+  reader.onerror = () => { alert('❌ 讀取檔案失敗。'); isImporting.value = false }
   reader.readAsText(selectedFile.value, 'utf-8')
 }
 </script>
@@ -540,7 +550,7 @@ const processImport = async () => {
 .danger-btn { background-color: #ef4444; }
 .danger-btn:hover { background-color: #dc2626; }
 
-/* 💡 通知設定區塊樣式 */
+/* 通知設定區塊樣式 */
 .notify-settings-section { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 .editor-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 10px; }
 .save-template-btn { background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
@@ -561,11 +571,33 @@ const processImport = async () => {
 .import-btn { background: #3b82f6; color: white; font-weight: bold; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; transition: 0.2s; }
 .import-btn:disabled { background: #94a3b8; cursor: not-allowed; }
 .import-tips { font-size: 0.9rem; color: #64748b; margin-left: 10px; }
-.table-responsive { overflow-x: auto; padding-bottom: 15px; }
 
-.student-edit-table { min-width: 2100px; border-collapse: separate; border-spacing: 0; background: white; font-size: 0.95rem; }
+/* 💡 排版優化：分頁標籤與表格容器 */
+.table-container-wrapper { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; overflow: hidden; }
+
+.tab-bar { display: flex; gap: 5px; background: #f1f5f9; padding: 10px 15px; border-bottom: 2px solid #cbd5e1; align-items: center; flex-wrap: wrap;}
+.tab-btn { padding: 10px 18px; border: none; background: transparent; color: #475569; font-weight: bold; font-size: 1rem; border-radius: 6px; cursor: pointer; transition: 0.2s; }
+.tab-btn:hover { background: #e2e8f0; }
+.tab-btn.active { background: #3b82f6; color: white; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3); }
+.tab-spacer { flex: 1; }
+
+.prominent-save-btn { font-size: 1.05rem; padding: 10px 20px; box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4); animation: gentle-pulse 2s infinite;}
+@keyframes gentle-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
+
+.table-responsive { overflow-x: auto; max-height: 700px; }
+
+/* 讓寬度可以根據分頁自適應，不再強制 2100px */
+.student-edit-table { width: 100%; border-collapse: separate; border-spacing: 0; background: white; font-size: 0.95rem; }
 .student-edit-table th, .student-edit-table td { padding: 8px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
-.student-edit-table th { background-color: #f8fafc; color: #64748b; font-weight: bold; position: sticky; top: 0; z-index: 10; text-align: left; }
+.student-edit-table th { background-color: #f8fafc; color: #64748b; font-weight: bold; position: sticky; top: 0; z-index: 10; text-align: center; }
+
+/* 固定左側兩欄 */
+.sticky-col { position: sticky; left: 0; background: #fff; z-index: 5; border-right: 1px solid #e2e8f0; text-align: center;}
+.sticky-col-2 { position: sticky; left: 60px; background: #fff; z-index: 5; border-right: 2px solid #cbd5e1; text-align: center;}
+.student-edit-table th.sticky-col, .student-edit-table th.sticky-col-2 { background-color: #f8fafc; z-index: 15; }
+
+.group-border { border-left: 2px dashed #cbd5e1; }
+.readonly-name { font-weight: bold; color: #1e293b; white-space: nowrap;}
 
 .new-row-highlight td { background-color: #fefce8; }
 
@@ -575,6 +607,12 @@ const processImport = async () => {
 .small-input { width: 100%; }
 .email-input { font-family: monospace; font-size: 0.8rem; }
 .textarea-input { resize: vertical; font-family: inherit; line-height: 1.5; }
+
+/* 💡 新增的微型按鈕 */
+.micro-btn-group { display: flex; justify-content: center; gap: 5px; margin-top: 5px;}
+.micro-btn { font-size: 0.75rem; padding: 2px 8px; background: white; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer; color: #475569;}
+.micro-btn:hover { background: #f1f5f9; border-color: #94a3b8; }
+
 .action-cell { display: flex; gap: 5px; justify-content: center; }
 .save-row-btn { background: #3b82f6; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 1rem;}
 .save-row-btn:hover { background: #2563eb; }
@@ -585,5 +623,7 @@ const processImport = async () => {
 
 @media (max-width: 768px) {
   .email-flex-container { flex-direction: column; }
+  .tab-bar { flex-direction: column; align-items: stretch; }
+  .tab-spacer { display: none; }
 }
 </style>
