@@ -1008,7 +1008,7 @@ const saveClassNoteItems = async () => {
   .m-subject-box { flex: 1; padding: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center;}
   .m-empty { background: #f8fafc; opacity: 0.6; }
   .m-subject { font-size: 1.8rem; font-weight: bold; color: #0f766e; text-align: center;}
-  .m-teacher { font-size: 1.1rem; color: #0369a1; font-weight: margin-top: 5px;}
+  .m-teacher { font-size: 1.1rem; color: #0369a1; font-weight: bold; margin-top: 5px;}
 }
 
 @media (max-width: 1024px) { .main-split { flex-direction: column; } }
