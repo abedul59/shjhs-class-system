@@ -13,7 +13,7 @@
       </div>
     </div>
 
-    <!-- 💡 新增：資料庫異動通知設定區塊 (寄給導師自己) -->
+    <!-- 💡 資料庫異動通知設定區塊 (寄給導師自己) -->
     <div class="notify-settings-section">
       <div class="editor-header">
         <h4 style="margin: 0; color: #1e293b;">📧 系統私訊異動通知設定 (寄給導師)</h4>
@@ -109,8 +109,14 @@
         </div>
       </div>
       
+      <!-- 💡 修正：將單行 input 改為支援多行換行的 textarea，並移除 @keyup.enter 綁定 -->
       <div class="reply-box">
-        <input v-model="replyContent" type="text" placeholder="輸入您的回覆..." @keyup.enter="sendReply" />
+        <textarea 
+          v-model="replyContent" 
+          placeholder="輸入您的回覆... (按 Enter 可換行，點擊右方按鈕傳送)" 
+          rows="3"
+          class="reply-textarea"
+        ></textarea>
         <button @click="sendReply" class="send-reply-btn" :disabled="isSending">📤 傳送私訊</button>
       </div>
 
@@ -191,7 +197,6 @@ const isSending = ref(false)
 const editingMsgId = ref(null)
 const editContentTemp = ref('')
 
-// 💡 異動通知設定狀態 (寄給導師自己)
 const notifyEmail = ref('')
 const notifySubject = ref('🔔 班級系統通知：私訊紀錄已{{異動類型}} ({{相關對象}})')
 const notifyContent = ref(`導師您好：\n\n系統於 {{當下時間}} 發生了一筆私訊紀錄變動。\n\n【變動內容】\n- 動作：{{異動類型}}\n- 相關對象：{{相關對象}}\n\n此致\n系統自動通知`)
@@ -207,7 +212,6 @@ const previewNotifyContent = computed(() => {
   return notifyContent.value.replace(/{{異動類型}}/g, '新增回覆').replace(/{{相關對象}}/g, '1號 王小明 的家長').replace(/{{當下時間}}/g, nowStr)
 })
 
-// 推播給家長的狀態
 const isSendingEmail = ref(false)
 const isSavingNoticeTemplate = ref(false)
 const noticeEmailSubjectTemplate = ref('💬 班級系統通知：您有一則來自導師的新私訊')
@@ -222,14 +226,12 @@ const fetchData = async () => {
   const { data: m } = await supabase.from('private_messages').select('*').order('created_at')
   allMessages.value = m || []
   
-  // 載入推播給家長的範本
   const { data: tmplData } = await supabase.from('email_templates').select('*').eq('template_id', 'message_reply_notice').maybeSingle()
   if (tmplData) { 
     noticeEmailSubjectTemplate.value = tmplData.subject
     noticeEmailContentTemplate.value = tmplData.content.replace(/<br\s*\/?>/ig, '\n').replace(/<[^>]+>/g, '') 
   }
 
-  // 💡 載入導師通知設定
   const { data: emailData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'teacher_msg_notify_email').maybeSingle()
   if (emailData && emailData.setting_value) notifyEmail.value = emailData.setting_value
 
@@ -321,7 +323,6 @@ const formatTime = (isoString) => {
   return d.toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-// 💡 取得當前對話目標名稱
 const getTargetName = () => {
   if (!activeChatThread.value) return '未知對象'
   const [targetId, targetType] = activeChatThread.value.split('_')
@@ -330,7 +331,6 @@ const getTargetName = () => {
   return '未知對象'
 }
 
-// 💡 寄送通知給導師
 const notifyTeacher = async (actionType, targetName) => {
   if (!notifyEmail.value || !notifyEmail.value.includes('@')) return; 
   try {
@@ -352,7 +352,6 @@ const notifyTeacher = async (actionType, targetName) => {
   }
 }
 
-// 💡 儲存導師通知設定
 const saveNotifySettings = async () => {
   isSavingNotifySettings.value = true
   try {
@@ -367,7 +366,7 @@ const saveNotifySettings = async () => {
 }
 
 const sendReply = async () => {
-  if (!replyContent.value || !activeChatThread.value) return
+  if (!replyContent.value.trim() || !activeChatThread.value) return
   isSending.value = true
   const [targetId, targetType] = activeChatThread.value.split('_')
   
@@ -383,7 +382,6 @@ const sendReply = async () => {
   await fetchData()
   scrollToBottom()
   
-  // 💡 發送通知給導師自己
   notifyTeacher('新增回覆', getTargetName())
   
   isSending.value = false
@@ -469,8 +467,6 @@ const saveEdit = async (id) => {
   await supabase.from('private_messages').update({ content: editContentTemp.value }).eq('id', id)
   cancelEdit()
   await fetchData()
-  
-  // 💡 發送通知給導師自己
   notifyTeacher('修改訊息', getTargetName())
 }
 
@@ -478,8 +474,6 @@ const deleteMsg = async (id) => {
   if (confirm("確定要刪除這則訊息嗎？(刪除後無法復原)")) {
     await supabase.from('private_messages').delete().eq('id', id)
     await fetchData()
-    
-    // 💡 發送通知給導師自己
     notifyTeacher('刪除訊息', getTargetName())
   }
 }
@@ -581,7 +575,7 @@ const importData = (e) => {
 .btn-outline-small { background: white; border: 1px solid #cbd5e1; color: #475569; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 0.85rem;}
 .btn-outline-small:hover { background: #f1f5f9; }
 
-/* 💡 通知設定區塊樣式 */
+/* 通知設定區塊樣式 */
 .notify-settings-section { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 .editor-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 10px; }
 .save-template-btn { background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
@@ -620,9 +614,11 @@ const importData = (e) => {
 .edit-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .cancel-btn { background: white; color: #64748b; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem;}
 .save-btn { background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: bold;}
+
+/* 💡 修正：多行輸入框樣式 */
 .reply-box { display: flex; padding: 15px; background: white; border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; gap: 15px; align-items: stretch; }
-.reply-box input { flex: 1; padding: 12px 15px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1.1rem; transition: 0.2s;}
-.reply-box input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+.reply-textarea { flex: 1; padding: 12px 15px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1.1rem; transition: 0.2s; resize: vertical; font-family: inherit; line-height: 1.5; }
+.reply-textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
 .send-reply-btn { background: #3b82f6; color: white; border: none; padding: 0 25px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1.1rem; transition: 0.2s; white-space: nowrap;}
 .send-reply-btn:hover:not(:disabled) { background: #2563eb; }
 .send-reply-btn:disabled { background: #94a3b8; cursor: not-allowed; }
