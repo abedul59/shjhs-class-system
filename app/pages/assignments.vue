@@ -37,8 +37,23 @@
             <div class="add-form">
               <input v-model="newAssignment.title" type="text" placeholder="作業名稱 (例：數學習作 P.10-12)" class="edit-input" />
               <input v-model="newAssignment.deadline" type="date" class="edit-input" />
-              <button @click="addAssignment" class="submit-btn" :disabled="!newAssignment.title">➕ 新增作業</button>
+              
+              <!-- 💡 修改為並排的按鈕：新增作業 與 暫存常態作業 -->
+              <div class="add-actions">
+                <button @click="addAssignment" class="submit-btn" :disabled="!newAssignment.title">➕ 新增作業</button>
+                <button @click="addRoutineAssignment" class="routine-btn" :disabled="!newAssignment.title" title="將此名稱暫存為常態作業，方便未來快速點選">⭐ 暫存常態作業</button>
+              </div>
             </div>
+
+            <!-- 💡 新增：常態作業快速選擇區 -->
+            <div class="routine-tags" v-if="routineAssignments.length > 0">
+              <span class="routine-label">📌 常態作業：</span>
+              <div v-for="(routine, idx) in routineAssignments" :key="'rt-'+idx" class="routine-tag" @click="newAssignment.title = routine">
+                {{ routine }}
+                <button @click.stop="removeRoutineAssignment(idx)" class="remove-routine-btn" title="移除此暫存">×</button>
+              </div>
+            </div>
+
             <hr class="divider"/>
           </div>
 
@@ -49,7 +64,7 @@
                  :class="['assign-item', { active: currentAssignment?.id === assign.id }]"
                  @click="selectAssignment(assign)">
               
-              <!-- 💡 正常檢視模式 -->
+              <!-- 正常檢視模式 -->
               <template v-if="editingAssignmentId !== assign.id">
                 <div class="assign-info">
                   <strong>
@@ -58,14 +73,15 @@
                   </strong>
                   <span class="deadline">期限: {{ assign.deadline || '無' }}</span>
                 </div>
-                <div class="assign-actions">
-                  <!-- 💡 僅導師與科任老師可見編輯按鈕 -->
-                  <button v-if="activeRole !== '小老師'" @click.stop="startEditAssignment(assign)" class="action-btn" title="編輯作業">✏️</button>
+                
+                <!-- 💡 嚴格限制：小老師完全看不見編輯與刪除按鈕 -->
+                <div class="assign-actions" v-if="activeRole !== '小老師'">
+                  <button @click.stop="startEditAssignment(assign)" class="action-btn" title="編輯作業">✏️</button>
                   <button @click.stop="deleteAssignment(assign.id, assign.title)" class="action-btn del-btn" title="刪除作業">🗑️</button>
                 </div>
               </template>
 
-              <!-- 💡 編輯模式 (內聯編輯表單) -->
+              <!-- 編輯模式 (內聯編輯表單) -->
               <div v-else class="assign-edit-wrapper" @click.stop>
                 <input v-model="editAssignmentData.title" type="text" placeholder="作業名稱" class="edit-input-small" />
                 <input v-model="editAssignmentData.deadline" type="date" class="edit-input-small" />
@@ -120,11 +136,14 @@ const students = ref([]); const assignments = ref([]); const allSubmissions = re
 const currentAssignment = ref(null)
 const newAssignment = ref({ title: '', deadline: '' })
 
-// 💡 編輯狀態變數
+// 編輯狀態變數
 const editingAssignmentId = ref(null)
 const editAssignmentData = ref({ title: '', deadline: '' })
 
-// 💡 登入成功寫入日誌的共用函式
+// 💡 常態作業清單狀態
+const routineAssignments = ref([])
+
+// 登入成功寫入日誌的共用函式
 const logRoleVisit = async (roleName) => {
   try {
     const ipRes = await fetch('https://api.ipify.org?format=json')
@@ -152,6 +171,34 @@ const logAction = async (actionType, details) => {
 const fetchTeachers = async () => {
   const { data } = await supabase.from('subject_teachers').select('*').order('subject_name')
   if (data) teachersList.value = data
+}
+
+// 💡 讀取目前科目的常態作業 (存在瀏覽器 LocalStorage)
+const loadRoutineAssignments = () => {
+  if (selectedSubject.value && selectedSubject.value !== '導師') {
+    const saved = localStorage.getItem(`routine_assign_${selectedSubject.value}`)
+    if (saved) {
+      routineAssignments.value = JSON.parse(saved)
+    } else {
+      routineAssignments.value = []
+    }
+  }
+}
+
+// 💡 新增常態作業
+const addRoutineAssignment = () => {
+  const title = newAssignment.value.title.trim()
+  if (!title) return
+  if (!routineAssignments.value.includes(title)) {
+    routineAssignments.value.push(title)
+    localStorage.setItem(`routine_assign_${selectedSubject.value}`, JSON.stringify(routineAssignments.value))
+  }
+}
+
+// 💡 移除常態作業
+const removeRoutineAssignment = (idx) => {
+  routineAssignments.value.splice(idx, 1)
+  localStorage.setItem(`routine_assign_${selectedSubject.value}`, JSON.stringify(routineAssignments.value))
 }
 
 // 雙重密碼驗證 (加入導師與精準身分紀錄邏輯)
@@ -200,6 +247,7 @@ const verifyPassword = async () => {
     activeRole.value = '科任老師' // 維持UI判定使用
     isUnlocked.value = true; 
     await fetchDashboardData(); 
+    loadRoutineAssignments(); // 載入常態作業
     logAction('系統登入', `${teacherInfo.subject_name} 科任老師登入成功`)
     await logRoleVisit(`${teacherInfo.subject_name} 科任老師`)
     
@@ -207,6 +255,7 @@ const verifyPassword = async () => {
     activeRole.value = '小老師' // 維持UI判定使用
     isUnlocked.value = true; 
     await fetchDashboardData(); 
+    loadRoutineAssignments(); // 載入常態作業
     logAction('系統登入', `${teacherInfo.subject_name} 小老師登入成功`)
     await logRoleVisit(`${teacherInfo.subject_name} 小老師`)
     
@@ -244,7 +293,7 @@ const addAssignment = async () => {
   }
 }
 
-// 💡 編輯作業相關邏輯
+// 編輯作業相關邏輯
 const startEditAssignment = (assign) => {
   editingAssignmentId.value = assign.id
   editAssignmentData.value = { title: assign.title, deadline: assign.deadline || '' }
@@ -354,8 +403,23 @@ onMounted(() => fetchTeachers())
 
 h3 { color: #334155; margin-top: 0; margin-bottom: 15px; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; }
 .edit-input { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; margin-bottom: 10px; box-sizing: border-box; }
-.submit-btn { background: #10b981; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; width: 100%; cursor: pointer; }
-.submit-btn:disabled { background: #9ca3af; cursor: not-allowed; }
+
+/* 💡 新增：排版與常態按鈕樣式 */
+.add-actions { display: flex; gap: 10px; }
+.submit-btn { flex: 2; background: #10b981; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s;}
+.submit-btn:disabled { background: #a7f3d0; cursor: not-allowed; color: #064e3b; }
+.routine-btn { flex: 1; background: #f59e0b; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; white-space: nowrap;}
+.routine-btn:hover:not(:disabled) { background: #d97706; }
+.routine-btn:disabled { background: #fde68a; cursor: not-allowed; color: #78350f; }
+
+/* 💡 新增：常態作業標籤樣式 */
+.routine-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; align-items: center; }
+.routine-label { font-size: 0.9rem; color: #64748b; font-weight: bold; }
+.routine-tag { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; padding: 5px 12px; border-radius: 20px; font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: 0.2s; font-weight: bold; }
+.routine-tag:hover { background: #fef3c7; border-color: #fcd34d; }
+.remove-routine-btn { background: transparent; border: none; color: #d97706; font-size: 1.2rem; cursor: pointer; padding: 0; line-height: 1; margin-left: 2px;}
+.remove-routine-btn:hover { color: #b45309; transform: scale(1.2); }
+
 .divider { border: 0; border-top: 2px dashed #cbd5e1; margin: 20px 0; }
 
 .assignment-list { display: flex; flex-direction: column; gap: 10px; max-height: 500px; overflow-y: auto; }
@@ -366,12 +430,10 @@ h3 { color: #334155; margin-top: 0; margin-bottom: 15px; border-bottom: 2px soli
 .subject-tag { color: #d946ef; font-size: 0.9rem; margin-right: 4px; }
 .deadline { font-size: 0.85rem; color: #64748b; }
 
-/* 💡 新增操作區塊與按鈕樣式 */
 .assign-actions { display: flex; gap: 8px; align-items: center; }
 .action-btn { background: transparent; border: none; cursor: pointer; font-size: 1.2rem; opacity: 0.5; transition: 0.2s; padding: 0; }
 .action-btn:hover { opacity: 1; transform: scale(1.1); }
 
-/* 💡 編輯模式專屬樣式 */
 .assign-edit-wrapper { display: flex; flex-direction: column; gap: 8px; width: 100%; }
 .edit-input-small { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.95rem; }
 .edit-input-small:focus { border-color: #8b5cf6; outline: none; }
