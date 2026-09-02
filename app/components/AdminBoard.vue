@@ -14,7 +14,6 @@
       <div class="view-tabs">
         <button :class="['tab-btn', { active: activeTab === 'manage' }]" @click="activeTab = 'manage'">📝 發布與管理</button>
         <button :class="['tab-btn', { active: activeTab === 'email' }]" @click="activeTab = 'email'">📧 信件推播設定</button>
-        <!-- 💡 新增：紙本列印設定分頁 -->
         <button :class="['tab-btn', { active: activeTab === 'print' }]" @click="activeTab = 'print'">🖨️ 紙本列印設定</button>
         <button :class="['tab-btn', { active: activeTab === 'history' }]" @click="activeTab = 'history'">📅 歷史紀錄查詢</button>
       </div>
@@ -160,7 +159,7 @@
 
       </div>
 
-      <!-- ==================== 🖨️ 紙本列印設定 (全新功能) ==================== -->
+      <!-- ==================== 🖨️ 紙本列印設定 ==================== -->
       <div v-show="activeTab === 'print'" class="email-editor-section">
         <div class="editor-header">
           <h4>🖨️ 編輯紙本列印範本</h4>
@@ -180,7 +179,6 @@
         <div class="email-preview-section">
           <h5>👀 單張須知單預覽</h5>
           <div class="preview-box plain-text-preview">
-            <!-- 💡 將換行符號轉為 <br> 以便正確預覽 -->
             <div class="preview-body" v-html="formatNL(printPreviewContent)"></div>
           </div>
         </div>
@@ -286,7 +284,6 @@ const isSavingNoticeTemplate = ref(false)
 const noticeEmailSubjectTemplate = ref('📢 班級須知推播 ({{今日日期}})')
 const noticeEmailContentTemplate = ref(`各位家長您好，今日班級重要須知推播如下：\n\n{{須知清單}}\n\n(若此信件進入垃圾郵件，請將導師信箱加入通訊錄或標示為非垃圾郵件)\n\n班級導師 敬上`)
 
-// 💡 紙本列印設定變數
 const isSavingPrintTemplate = ref(false)
 const printContentTemplate = ref(`【家長聯絡事項單】\n發布日期：{{今日日期}}\n\n親愛的家長您好，今日班級重要須知如下：\n\n{{須知清單}}\n\n煩請您詳閱並於下方簽名，讓孩子明日繳回，感謝您的配合！\n\n家長簽名：_________________________`)
 
@@ -300,7 +297,6 @@ const isEditingHistory = ref(false)
 const isSavingHistory = ref(false)
 const editHistoryNotices = ref([])
 
-// 共用語法：將 \n 轉為 <br>
 const formatNL = (txt) => String(txt || '').replace(/\n/g, '<br>')
 
 const updateNewNoticeRichText = (event) => { newNotice.value.content = event.target.innerHTML }
@@ -320,7 +316,6 @@ const fetchData = async () => {
     noticeEmailContentTemplate.value = tmplData.content.replace(/<br\s*\/?>/ig, '\n').replace(/<[^>]+>/g, '') 
   }
 
-  // 💡 載入紙本列印範本
   const { data: printTmplData } = await supabase.from('email_templates').select('*').eq('template_id', 'notice_print_template').maybeSingle()
   if (printTmplData) {
     printContentTemplate.value = printTmplData.content.replace(/<br\s*\/?>/ig, '\n').replace(/<[^>]+>/g, '') 
@@ -429,7 +424,6 @@ const activeNoticesPlainText = computed(() => {
 const noticePreviewSubject = computed(() => noticeEmailSubjectTemplate.value.replace(/{{今日日期}}/g, todayDisplay))
 const noticePreviewContent = computed(() => noticeEmailContentTemplate.value.replace(/{{須知清單}}/g, activeNoticesPlainText.value))
 
-// 💡 紙本預覽文字計算
 const printPreviewContent = computed(() => {
   return printContentTemplate.value
     .replace(/{{今日日期}}/g, todayDisplay)
@@ -543,7 +537,6 @@ const saveNoticeEmailTemplate = async () => {
   isSavingNoticeTemplate.value = false
 }
 
-// 💡 儲存與觸發列印
 const savePrintTemplate = async () => {
   isSavingPrintTemplate.value = true
   const safeHtmlContent = printContentTemplate.value.replace(/\n/g, '<br>')
@@ -766,7 +759,10 @@ const importJSON = (event) => {
 .print-only-container { display: none; }
 
 @media print {
-  @page { size: A4 portrait; margin: 10mm; }
+  @page { 
+    size: A4 portrait; 
+    margin: 0; /* 💡 將邊界設為 0，可強制隱藏瀏覽器預設的網址、日期與頁碼 */
+  }
   
   .print-hide { display: none !important; }
   
@@ -775,6 +771,8 @@ const importJSON = (event) => {
     flex-wrap: wrap;
     justify-content: space-between;
     width: 100%;
+    padding: 15mm; /* 💡 把原本的邊界加到容器內，避免文字太靠邊被切掉 */
+    box-sizing: border-box;
   }
 
   /* 調整每張小紙條的大小，讓它自動適應 A4 (一頁大約可印 2 或 4 張) */
