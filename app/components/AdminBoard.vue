@@ -1,8 +1,8 @@
 <template>
   <div class="admin-board-container">
-    <div class="table-header"><h3>📢 家長須知管理中心</h3></div>
+    <div class="table-header print-hide"><h3>📢 家長須知管理中心</h3></div>
 
-    <div class="visibility-control-box">
+    <div class="visibility-control-box print-hide">
       <label class="toggle-label">
         <input type="checkbox" v-model="isVisibleOnIndex" @change="toggleVisibility" />
         ✅ 允許在首頁顯示「家長須知事項」區塊 (前台已設定為僅限學校 IP 外可見)
@@ -10,10 +10,12 @@
       <span v-if="isSavingVis" class="saving-text">⏳ 狀態儲存中...</span>
     </div>
 
-    <div class="board-editor-container">
+    <div class="board-editor-container print-hide">
       <div class="view-tabs">
         <button :class="['tab-btn', { active: activeTab === 'manage' }]" @click="activeTab = 'manage'">📝 發布與管理</button>
         <button :class="['tab-btn', { active: activeTab === 'email' }]" @click="activeTab = 'email'">📧 信件推播設定</button>
+        <!-- 💡 新增：紙本列印設定分頁 -->
+        <button :class="['tab-btn', { active: activeTab === 'print' }]" @click="activeTab = 'print'">🖨️ 紙本列印設定</button>
         <button :class="['tab-btn', { active: activeTab === 'history' }]" @click="activeTab = 'history'">📅 歷史紀錄查詢</button>
       </div>
 
@@ -90,7 +92,7 @@
         </div>
       </div>
 
-      <!-- ==================== 📧 信件推播設定 (重大更新) ==================== -->
+      <!-- ==================== 📧 信件推播設定 ==================== -->
       <div v-show="activeTab === 'email'" class="email-editor-section">
         
         <div class="editor-header">
@@ -113,7 +115,6 @@
           <textarea v-model="noticeEmailContentTemplate" rows="6" class="edit-input textarea-input"></textarea>
         </div>
         
-        <!-- 💡 預覽區 -->
         <div class="email-preview-section">
           <h5>👀 純文字信件預覽 (家長實際看到的模樣)</h5>
           <div class="preview-box plain-text-preview">
@@ -124,7 +125,6 @@
 
         <hr class="cork-divider" style="margin: 30px 0;">
 
-        <!-- 💡 新增：寄件對象選擇器 -->
         <div class="recipient-selector-section">
           <div class="editor-header" style="border:none;">
             <h4>👥 選擇推播對象</h4>
@@ -149,7 +149,6 @@
           </div>
         </div>
 
-        <!-- 執行推播按鈕 -->
         <div class="send-action-bar">
           <div class="send-summary">
             即將發送給 <strong>{{ selectedRecipientsCount }}</strong> 個信箱
@@ -159,6 +158,38 @@
           </button>
         </div>
 
+      </div>
+
+      <!-- ==================== 🖨️ 紙本列印設定 (全新功能) ==================== -->
+      <div v-show="activeTab === 'print'" class="email-editor-section">
+        <div class="editor-header">
+          <h4>🖨️ 編輯紙本列印範本</h4>
+          <button @click="savePrintTemplate" class="save-template-btn small-btn" :disabled="isSavingPrintTemplate">
+            {{ isSavingPrintTemplate ? '儲存中...' : '💾 存為列印範本' }}
+          </button>
+        </div>
+        <p class="help-text">
+          系統將自動複製此內容並產生 <strong>26 張</strong>相同的須知單，讓您直接使用 A4 紙列印後裁剪，發給全班學生。
+        </p>
+        
+        <div class="form-group">
+          <label>紙本須知單內容：(變數: <span v-pre>{{須知清單}}</span>、<span v-pre>{{今日日期}}</span>)</label>
+          <textarea v-model="printContentTemplate" rows="8" class="edit-input textarea-input"></textarea>
+        </div>
+        
+        <div class="email-preview-section">
+          <h5>👀 單張須知單預覽</h5>
+          <div class="preview-box plain-text-preview">
+            <!-- 💡 將換行符號轉為 <br> 以便正確預覽 -->
+            <div class="preview-body" v-html="formatNL(printPreviewContent)"></div>
+          </div>
+        </div>
+
+        <div class="send-action-bar">
+          <button @click="triggerPrint" class="email-btn print-btn">
+            📄 產生預覽列印 / 匯出 PDF (共 26 張)
+          </button>
+        </div>
       </div>
 
       <!-- ==================== 歷史紀錄查詢 ==================== -->
@@ -219,6 +250,14 @@
       </div>
 
     </div>
+
+    <!-- 💡 列印專屬區塊 (僅在列印時顯示，並自動重複 26 份) -->
+    <div class="print-only-container">
+      <div v-for="n in 26" :key="'print-'+n" class="print-slip">
+        <div class="slip-content" v-html="formatNL(printPreviewContent)"></div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -230,7 +269,6 @@ const activeTab = ref('manage')
 const isLoading = ref(true)
 const isSaving = ref(false)
 
-// 首頁顯示狀態
 const isVisibleOnIndex = ref(true)
 const isSavingVis = ref(false)
 
@@ -241,18 +279,17 @@ const todayDisplay = d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'lo
 const notices = ref([])
 const editingNoticeId = ref(null)
 const newNoticeEditorRef = ref(null)
-const newNotice = ref({
-  content: '',
-  startDate: todayISO,
-  endDate: ''
-})
+const newNotice = ref({ content: '', startDate: todayISO, endDate: '' })
 
 const isSendingEmail = ref(false)
 const isSavingNoticeTemplate = ref(false)
 const noticeEmailSubjectTemplate = ref('📢 班級須知推播 ({{今日日期}})')
 const noticeEmailContentTemplate = ref(`各位家長您好，今日班級重要須知推播如下：\n\n{{須知清單}}\n\n(若此信件進入垃圾郵件，請將導師信箱加入通訊錄或標示為非垃圾郵件)\n\n班級導師 敬上`)
 
-// 寄件對象名單狀態
+// 💡 紙本列印設定變數
+const isSavingPrintTemplate = ref(false)
+const printContentTemplate = ref(`【家長聯絡事項單】\n發布日期：{{今日日期}}\n\n親愛的家長您好，今日班級重要須知如下：\n\n{{須知清單}}\n\n煩請您詳閱並於下方簽名，讓孩子明日繳回，感謝您的配合！\n\n家長簽名：_________________________`)
+
 const availableRecipients = ref([])
 const isLoadingEmails = ref(true)
 
@@ -263,26 +300,32 @@ const isEditingHistory = ref(false)
 const isSavingHistory = ref(false)
 const editHistoryNotices = ref([])
 
+// 共用語法：將 \n 轉為 <br>
+const formatNL = (txt) => String(txt || '').replace(/\n/g, '<br>')
+
 const updateNewNoticeRichText = (event) => { newNotice.value.content = event.target.innerHTML }
 const updateEditHistoryRichText = (event, index) => { editHistoryNotices.value[index] = event.target.innerHTML }
 
 const fetchData = async () => {
   isLoading.value = true
   
-  // 載入須知資料
   const { data: boardData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'parent_notices_data').maybeSingle()
   if (boardData?.setting_value) { 
     notices.value = (boardData.setting_value || []).sort((a, b) => Number(a.id) - Number(b.id))
   }
   
-  // 載入信件範本
   const { data: tmplData } = await supabase.from('email_templates').select('*').eq('template_id', 'notice_board').maybeSingle()
   if (tmplData) { 
     noticeEmailSubjectTemplate.value = tmplData.subject
     noticeEmailContentTemplate.value = tmplData.content.replace(/<br\s*\/?>/ig, '\n').replace(/<[^>]+>/g, '') 
   }
 
-  // 載入首頁顯示開關
+  // 💡 載入紙本列印範本
+  const { data: printTmplData } = await supabase.from('email_templates').select('*').eq('template_id', 'notice_print_template').maybeSingle()
+  if (printTmplData) {
+    printContentTemplate.value = printTmplData.content.replace(/<br\s*\/?>/ig, '\n').replace(/<[^>]+>/g, '') 
+  }
+
   const { data: visData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'parent_notices_board_visible').maybeSingle()
   if (visData && visData.setting_value !== null) {
     isVisibleOnIndex.value = visData.setting_value
@@ -291,42 +334,37 @@ const fetchData = async () => {
   isLoading.value = false
 }
 
-// 載入寄件對象 (抓取家長與學生信箱)
 const fetchRecipients = async () => {
   isLoadingEmails.value = true
   let rawList = []
 
   try {
-    // 抓取家長信箱
     const { data: parents } = await supabase.from('parents').select('email, relationship, student_id, students(seat_number, real_name)')
     if (parents) {
       parents.forEach(p => {
         if (p.email && String(p.email).includes('@')) {
           const sName = p.students?.real_name || `未知學生(${p.student_id})`
           const sNum = p.students?.seat_number ? `${p.students.seat_number}號 ` : ''
-          rawList.push({ email: p.email, name: `${sNum}${sName} 的家長`, role: p.relationship || '家長', selected: true }) // 家長預設打勾
+          rawList.push({ email: p.email, name: `${sNum}${sName} 的家長`, role: p.relationship || '家長', selected: true }) 
         }
       })
     }
 
-    // 抓取學生信箱
     const { data: students } = await supabase.from('students').select('seat_number, real_name, email, parent_email, parent_mail, guardian_email')
     if (students) {
       students.forEach(s => {
         const sEmail = s.parent_email || s.parent_mail || s.email || s.guardian_email
         if (sEmail && String(sEmail).includes('@')) {
-          rawList.push({ email: sEmail, name: `${s.seat_number}號 ${s.real_name}`, role: '學生(或備用信箱)', selected: false }) // 學生預設不勾
+          rawList.push({ email: sEmail, name: `${s.seat_number}號 ${s.real_name}`, role: '學生(或備用信箱)', selected: false }) 
         }
       })
     }
 
-    // 過濾重複的信箱
     const uniqueMap = new Map()
     rawList.forEach(item => {
       if (!uniqueMap.has(item.email)) uniqueMap.set(item.email, item)
     })
     
-    // 依座號排序
     availableRecipients.value = Array.from(uniqueMap.values()).sort((a, b) => {
       const numA = parseInt(a.name) || 999; const numB = parseInt(b.name) || 999;
       return numA - numB
@@ -345,15 +383,8 @@ onMounted(async () => {
   await fetchRecipients() 
 })
 
-// 全選/全不選功能
-const selectAllRecipients = (val) => {
-  availableRecipients.value.forEach(p => p.selected = val)
-}
-
-// 計算目前選取的數量
-const selectedRecipientsCount = computed(() => {
-  return availableRecipients.value.filter(p => p.selected).length
-})
+const selectAllRecipients = (val) => { availableRecipients.value.forEach(p => p.selected = val) }
+const selectedRecipientsCount = computed(() => availableRecipients.value.filter(p => p.selected).length)
 
 const toggleVisibility = async () => {
   isSavingVis.value = true
@@ -398,6 +429,13 @@ const activeNoticesPlainText = computed(() => {
 const noticePreviewSubject = computed(() => noticeEmailSubjectTemplate.value.replace(/{{今日日期}}/g, todayDisplay))
 const noticePreviewContent = computed(() => noticeEmailContentTemplate.value.replace(/{{須知清單}}/g, activeNoticesPlainText.value))
 
+// 💡 紙本預覽文字計算
+const printPreviewContent = computed(() => {
+  return printContentTemplate.value
+    .replace(/{{今日日期}}/g, todayDisplay)
+    .replace(/{{須知清單}}/g, activeNoticesPlainText.value)
+})
+
 const editNotice = (notice) => {
   editingNoticeId.value = notice.id
   newNotice.value = { ...notice }
@@ -421,12 +459,7 @@ const addNotice = async () => {
     const idx = updatedNotices.findIndex(n => n.id === editingNoticeId.value)
     if (idx !== -1) updatedNotices[idx] = { ...newNotice.value, id: editingNoticeId.value }
   } else {
-    updatedNotices.push({
-      id: Date.now().toString(),
-      content: newNotice.value.content,
-      startDate: newNotice.value.startDate,
-      endDate: newNotice.value.endDate
-    })
+    updatedNotices.push({ id: Date.now().toString(), content: newNotice.value.content, startDate: newNotice.value.startDate, endDate: newNotice.value.endDate })
   }
   
   updatedNotices.sort((a, b) => Number(a.id) - Number(b.id))
@@ -508,6 +541,23 @@ const saveNoticeEmailTemplate = async () => {
   await supabase.from('email_templates').upsert({ template_id: 'notice_board', subject: noticeEmailSubjectTemplate.value, content: safeHtmlContent })
   alert('✅ 推播信件範本已儲存！')
   isSavingNoticeTemplate.value = false
+}
+
+// 💡 儲存與觸發列印
+const savePrintTemplate = async () => {
+  isSavingPrintTemplate.value = true
+  const safeHtmlContent = printContentTemplate.value.replace(/\n/g, '<br>')
+  await supabase.from('email_templates').upsert({ 
+    template_id: 'notice_print_template', 
+    subject: '紙本列印範本', 
+    content: safeHtmlContent 
+  })
+  alert('✅ 紙本列印範本已儲存！')
+  isSavingPrintTemplate.value = false
+}
+
+const triggerPrint = () => {
+  window.print()
 }
 
 const fetchHistory = async () => {
@@ -687,9 +737,13 @@ const importJSON = (event) => {
 .send-action-bar { margin-top: 30px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .send-summary { font-size: 1.1rem; color: #334155; }
 .send-summary strong { color: #dc2626; font-size: 1.3rem; }
-.email-btn { background: #f59e0b; color: white; border: none; padding: 15px 40px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; max-width: 400px; font-size: 1.2rem; transition: 0.2s;}
+.email-btn { background: #f59e0b; color: white; border: none; padding: 15px 40px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; max-width: 400px; font-size: 1.2rem; transition: 0.2s; text-align: center;}
 .email-btn:hover:not(:disabled) { background: #d97706; }
 .email-btn:disabled { background: #cbd5e1; cursor: not-allowed; }
+
+/* 💡 新增的藍色列印按鈕 */
+.print-btn { background: #3b82f6; max-width: 500px; }
+.print-btn:hover:not(:disabled) { background: #2563eb; }
 
 .history-calendar-container { background: white; padding: 25px; border-radius: 8px; border: 1px solid #e2e8f0; }
 .query-box { margin-bottom: 20px; background: #f1f5f9; padding: 20px; border-radius: 8px; border: 1px dashed #cbd5e1;}
@@ -705,6 +759,41 @@ const importJSON = (event) => {
 
 .edit-actions-row { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px dashed #cbd5e1;}
 .save-btn { background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+
+/* =========================================
+   💡 列印排版樣式 (隱藏後台介面，自動展開 26 份)
+   ========================================= */
+.print-only-container { display: none; }
+
+@media print {
+  @page { size: A4 portrait; margin: 10mm; }
+  
+  .print-hide { display: none !important; }
+  
+  .print-only-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  /* 調整每張小紙條的大小，讓它自動適應 A4 (一頁大約可印 2 或 4 張) */
+  .print-slip {
+    width: 48%; 
+    border: 1px dashed #94a3b8;
+    padding: 20px;
+    margin-bottom: 15px;
+    box-sizing: border-box;
+    page-break-inside: avoid; /* 防止單據被跨頁切斷 */
+  }
+
+  .slip-content {
+    font-family: "微軟正黑體", "Microsoft JhengHei", sans-serif;
+    font-size: 12pt;
+    line-height: 1.6;
+    color: #000;
+  }
+}
 
 @media (max-width: 768px) {
   .admin-board-container { padding-bottom: 20px; }
