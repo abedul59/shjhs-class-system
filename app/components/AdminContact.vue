@@ -16,7 +16,7 @@
 
         <p class="help-text">用於記錄每日作業、明日攜帶物品。前台可由股長登入編輯。</p>
         <div class="notice-edit-list">
-          <div v-for="(item, index) in contactBookItems" :key="'c-'+index" class="edit-item">
+          <div v-for="(item, index) in contactBookItems" :key="'c-'+index" class="edit-input-wrapper edit-item">
             <span class="bullet">✏️</span>
             <input v-model="contactBookItems[index]" type="text" class="edit-input notice-input" placeholder="請輸入聯絡簿事項..." />
             <button @click="removeContactItem(index)" class="del-row-btn">🗑️</button>
@@ -99,7 +99,7 @@
             <div v-else class="history-edit-mode">
               <div class="history-section">
                 <div class="notice-edit-list">
-                  <div v-for="(c, i) in editHistoryContactItems" :key="'ehc-'+i" class="edit-item">
+                  <div v-for="(c, i) in editHistoryContactItems" :key="'ehc-'+i" class="edit-input-wrapper edit-item">
                     <span class="bullet">✏️</span>
                     <input v-model="editHistoryContactItems[i]" type="text" class="edit-input notice-input" />
                     <button @click="removeHistoryContactItem(i)" class="del-row-btn">🗑️</button>
@@ -191,11 +191,29 @@ const saveBoard = async () => {
   await fetchMonthRecords()
 }
 
+// 💡 修正了當月天數計算錯誤的問題
 const fetchMonthRecords = async () => {
-  const y = calYear.value; const m = String(calMonth.value + 1).padStart(2, '0')
-  const startDate = `${y}-${m}-01`; const endDate = `${y}-${m}-31`
-  const { data } = await supabase.from('contact_books').select('record_date, contact_items').gte('record_date', startDate).lte('record_date', endDate)
+  const y = calYear.value; 
+  const m = String(calMonth.value + 1).padStart(2, '0')
+  
+  // 動態取得該月份的最後一天 (避免 9月傳送 31號 導致資料庫報錯)
+  const lastDay = new Date(y, calMonth.value + 1, 0).getDate()
+  
+  const startDate = `${y}-${m}-01`; 
+  const endDate = `${y}-${m}-${String(lastDay).padStart(2, '0')}`
+  
+  const { data } = await supabase.from('contact_books')
+    .select('record_date, contact_items')
+    .gte('record_date', startDate)
+    .lte('record_date', endDate)
+    
   monthRecords.value = data || []
+
+  // 如果目前有選中某個日期，確保它的詳細內容會跟著 monthRecords 同步更新
+  if (selectedHistoryDate.value) {
+    const match = monthRecords.value.find(r => r.record_date === selectedHistoryDate.value)
+    selectedHistoryContactItems.value = match ? (match.contact_items || []) : []
+  }
 }
 
 const calendarDays = computed(() => {
