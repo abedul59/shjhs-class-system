@@ -86,7 +86,7 @@
             :key="student.id" 
             :class="['status-tag', getTagClass(student.id)]"
           >
-            {{ student.seat_number }}號 {{ student.real_name }} ({{ getStatusLabel(student.id) }})
+            {{ student.seat_number }}號 {{ student.real_name }} ({{ getStatusDisplay(student.id) }})
           </span>
           <span v-if="targetStudentsList.length === 0" class="all-present-msg">🎉 恭喜！今日需發送通知的學生皆已處理完畢 (全數已到或請假)。</span>
         </div>
@@ -173,7 +173,7 @@
                   <option value="遲到">遲到</option>
                 </select>
 
-                <!-- 💡 新增：若選擇「遲到」，自動顯示遲到時間選擇器 -->
+                <!-- 💡 遲到時間輸入框 -->
                 <input 
                   v-if="historyAttendances[student.id] === '遲到'" 
                   type="time" 
@@ -210,7 +210,7 @@ const calMonth = ref(dDate.getMonth())
 const monthAttendanceDates = ref(new Set())
 const selectedHistoryDate = ref('')
 const historyAttendances = ref({}) 
-const historyLateTimes = ref({}) // 💡 儲存各學生的遲到時間
+const historyLateTimes = ref({}) // 儲存各學生的遲到時間
 const isSavingHistory = ref(false)
 
 // 鎖定時間與模擬器狀態
@@ -278,24 +278,20 @@ const handleSimStudentClick = async (student) => {
   const hours = simulatedDateTime.getHours()
   const minutes = simulatedDateTime.getMinutes()
 
-  // 1. 週末防護測試
   if (day === 0 || day === 6) {
     alert('🛑 測試情境：被系統封鎖！(週六與週日無法進行點名)')
     return
   }
 
-  // 2. 判斷是否超過鎖定時間
   const [lockH, lockM] = lockTime.value.split(':').map(Number)
   const isLockedTime = hours > lockH || (hours === lockH && minutes >= lockM)
 
   if (isLockedTime && !isUnlockedSim.value) {
     const inputPwd = prompt(`🔒 測試情境：已超過設定的 ${lockTime.value}，系統自動彈出密碼框。\n\n若需手動修改點名狀態，請輸入「導師密碼」解鎖：`)
-    
-    if (inputPwd === null) return // 使用者按取消
+    if (inputPwd === null) return 
 
     try {
       const { data: pwdData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'admin_password').maybeSingle()
-      
       let expectedPwd = '168168168'
       if (pwdData?.setting_value) {
         if (pwdData.setting_value.type === 'dynamic') {
@@ -313,31 +309,21 @@ const handleSimStudentClick = async (student) => {
         alert('❌ 密碼錯誤，無法解鎖！')
         return
       }
-
       isUnlockedSim.value = true
       alert('✅ 解鎖成功！您現在可以點擊修改模擬狀態了。')
-    } catch (error) {
-      alert('❌ 系統異常。')
-      return
-    }
+    } catch (error) { return }
   }
 
-  // 成功解鎖或未達時間，切換模擬狀態
   const currentStatus = simAttendances.value[student.id] || '未到'
   let nextStatus = '已到'
   if (currentStatus === '未到') nextStatus = '已到'
   else if (currentStatus === '已到') nextStatus = '請假'
   else if (currentStatus === '請假') nextStatus = '遲到'
   else if (currentStatus === '遲到') nextStatus = '未到'
-  
   simAttendances.value[student.id] = nextStatus
 }
 
-// 取得模擬卡片的狀態與樣式
-const getSimAttendanceStatus = (studentId) => {
-  return simAttendances.value[studentId] || '未到'
-}
-
+const getSimAttendanceStatus = (studentId) => { return simAttendances.value[studentId] || '未到' }
 const getSimAttendanceClass = (studentId) => {
   const status = getSimAttendanceStatus(studentId)
   if (status === '已到') return 'present-card'
@@ -346,16 +332,26 @@ const getSimAttendanceClass = (studentId) => {
   return 'absent-card'
 }
 
-// 計算五格統計人數
+// 💡 計算五格統計人數 (過濾附加的時間標籤)
 const expectedCount = computed(() => adminStudents.value.length)
-const presentCount = computed(() => todayAttendances.value.filter(a => a.status === '已到').length)
-const leaveCount = computed(() => todayAttendances.value.filter(a => a.status === '請假').length)
-const lateCount = computed(() => todayAttendances.value.filter(a => a.status === '遲到').length)
+const presentCount = computed(() => todayAttendances.value.filter(a => a.status && a.status.split('_')[0] === '已到').length)
+const leaveCount = computed(() => todayAttendances.value.filter(a => a.status && a.status.split('_')[0] === '請假').length)
+const lateCount = computed(() => todayAttendances.value.filter(a => a.status && a.status.split('_')[0] === '遲到').length)
 const absentCount = computed(() => expectedCount.value - presentCount.value - leaveCount.value - lateCount.value)
 
+// 💡 取得基礎狀態 (不含時間)
 const getStatusLabel = (studentId) => {
   const record = todayAttendances.value.find(a => a.student_id === studentId)
-  return record ? record.status : '未到'
+  return record ? (record.status || '未到').split('_')[0] : '未到'
+}
+
+// 💡 取得包含時間的顯示狀態
+const getStatusDisplay = (studentId) => {
+  const record = todayAttendances.value.find(a => a.student_id === studentId)
+  if (!record || !record.status) return '未到'
+  const parts = record.status.split('_')
+  if (parts[0] === '遲到' && parts[1]) return `遲到 (${parts[1]})`
+  return parts[0]
 }
 
 const targetStudentsList = computed(() => {
@@ -417,7 +413,7 @@ const sendLateEmails = async () => {
     const cont = emailContentTemplate.value.replace(/{{學生姓名}}/g, s.real_name).replace(/{{今日日期}}/g, todayDisplay).replace(/{{當下時間}}/g, nowTime)
     try {
       await fetch('/api/send-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bcc: emails, subject: subj, content: cont }) })
-      await supabase.from('communication_logs').insert({ student_id: s.id, notification_type: `出缺席通知 (${getStatusLabel(s.id)})`, sent_by: '導師', recipient_emails: emails.join(','), message_content: cont })
+      await supabase.from('communication_logs').insert({ student_id: s.id, notification_type: `出缺席通知 (${getStatusDisplay(s.id)})`, sent_by: '導師', recipient_emails: emails.join(','), message_content: cont })
       successCount++
     } catch (e) {}
   }
@@ -426,19 +422,12 @@ const sendLateEmails = async () => {
   await fetchData()
 }
 
-// --- 月曆歷史紀錄邏輯 ---
 const fetchMonthRecords = async () => {
   const y = calYear.value; const m = String(calMonth.value + 1).padStart(2, '0')
   const startDate = `${y}-${m}-01`; const endDate = `${y}-${m}-31`
-  
   const { data } = await supabase.from('attendances')
-    .select('record_date')
-    .gte('record_date', startDate)
-    .lte('record_date', endDate)
-    
-  if (data) {
-    monthAttendanceDates.value = new Set(data.map(d => d.record_date))
-  }
+    .select('record_date').gte('record_date', startDate).lte('record_date', endDate)
+  if (data) monthAttendanceDates.value = new Set(data.map(d => d.record_date))
 }
 
 const calendarDays = computed(() => {
@@ -448,9 +437,7 @@ const calendarDays = computed(() => {
   for (let i = 0; i < firstDayOfWeek; i++) { days.push({ empty: true }) }
   for (let i = 1; i <= daysInMonth; i++) {
     const dateStr = `${calYear.value}-${String(calMonth.value + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`
-    days.push({
-      empty: false, day: i, dateStr: dateStr, hasRecord: monthAttendanceDates.value.has(dateStr)
-    })
+    days.push({ empty: false, day: i, dateStr: dateStr, hasRecord: monthAttendanceDates.value.has(dateStr) })
   }
   return days
 })
@@ -471,20 +458,19 @@ const viewHistory = async (day) => {
   const { data } = await supabase.from('attendances').select('*').eq('record_date', day.dateStr)
   
   const newHistory = {}
-  const newLateTimes = {} // 💡 初始化當日遲到時間的物件
+  const newLateTimes = {} 
 
-  // 先將所有人預設為未到
   adminStudents.value.forEach(s => {
     newHistory[s.id] = '未到'
     newLateTimes[s.id] = ''
   }) 
 
-  // 將資料庫真實結果覆蓋上去
+  // 💡 自動剖析資料庫中的 `遲到_08:15` 格式
   if (data) {
     data.forEach(a => {
-      newHistory[a.student_id] = a.status
-      // 若資料庫有記錄遲到時間 late_time，則提取顯示
-      newLateTimes[a.student_id] = a.late_time || '' 
+      const parts = (a.status || '').split('_')
+      newHistory[a.student_id] = parts[0] || '未到'
+      newLateTimes[a.student_id] = parts[1] || '' 
     })
   }
   
@@ -505,25 +491,21 @@ const saveHistory = async () => {
     const { data: existing } = await supabase.from('attendances').select('id, student_id').eq('record_date', selectedHistoryDate.value)
     
     for (const student of adminStudents.value) {
-      const status = historyAttendances.value[student.id]
+      const baseStatus = historyAttendances.value[student.id] || '未到'
+      
+      // 💡 寫入時，若為遲到且有時間，則存入 `遲到_08:15`，完美迴避資料庫欄位問題
+      let finalStatus = baseStatus
+      if (baseStatus === '遲到' && historyLateTimes.value[student.id]) {
+        finalStatus = `${baseStatus}_${historyLateTimes.value[student.id]}`
+      }
+      
       const existRecord = existing ? existing.find(e => e.student_id === student.id) : null
       
-      // 💡 只有狀態為遲到時，才寫入遲到時間，否則設為 null
-      const finalLateTime = status === '遲到' ? (historyLateTimes.value[student.id] || null) : null
-      
       if (existRecord) {
-        await supabase.from('attendances').update({ 
-          status: status, 
-          late_time: finalLateTime 
-        }).eq('id', existRecord.id)
+        await supabase.from('attendances').update({ status: finalStatus }).eq('id', existRecord.id)
       } else {
-        if (status !== '未到') {
-           await supabase.from('attendances').insert({ 
-             student_id: student.id, 
-             record_date: selectedHistoryDate.value, 
-             status: status,
-             late_time: finalLateTime
-           })
+        if (finalStatus !== '未到') {
+           await supabase.from('attendances').insert({ student_id: student.id, record_date: selectedHistoryDate.value, status: finalStatus })
         }
       }
     }
@@ -547,10 +529,9 @@ const exportHistory = async (type) => {
   const enhancedData = data.map(record => {
     const student = adminStudents.value.find(s => s.id === record.student_id)
     
-    // 💡 匯出時，如果狀態是遲到且有時間，就在狀態後面加上括號時間
-    const displayStatus = record.status === '遲到' && record.late_time 
-      ? `遲到 (${record.late_time})` 
-      : record.status
+    // 💡 匯出時自動將 `遲到_08:15` 轉成 `遲到 (08:15)`
+    const parts = (record.status || '').split('_')
+    const displayStatus = parts[0] === '遲到' && parts[1] ? `遲到 (${parts[1]})` : parts[0]
 
     return {
       紀錄日期: record.record_date,
@@ -572,10 +553,7 @@ const exportHistory = async (type) => {
   } else if (type === 'csv') {
     let csvContent = '\uFEFF'
     csvContent += '紀錄日期,座號,姓名,狀態,操作打卡時間\n'
-    
-    enhancedData.forEach(row => {
-       csvContent += `"${row.紀錄日期}","${row.座號}","${row.姓名}","${row.狀態}","${row.操作打卡時間}"\n`
-    })
+    enhancedData.forEach(row => { csvContent += `"${row.紀錄日期}","${row.座號}","${row.姓名}","${row.狀態}","${row.操作打卡時間}"\n` })
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -595,7 +573,6 @@ const exportHistory = async (type) => {
 .btn-export-json { background: #8b5cf6; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
 .btn-export-csv { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
 
-/* 鎖定設定與測試區樣式 */
 .lock-test-section { background: #e0f2fe; border-radius: 12px; padding: 20px; border: 2px solid #14b8a6; margin-bottom: 30px; box-shadow: 0 4px 6px rgba(15, 118, 110, 0.15);}
 .lock-settings-container { display: flex; flex-direction: column; gap: 20px; }
 .setting-box, .test-box { background: white; padding: 20px; border-radius: 8px; border: 1px dashed #0f766e; box-shadow: 0 2px 4px rgba(0,0,0,0.05);}
@@ -612,7 +589,6 @@ const exportHistory = async (type) => {
 .unlock-checkbox { display: flex; align-items: center; gap: 8px; cursor: pointer; color: #0ea5e9; font-weight: bold;}
 .unlock-checkbox input { transform: scale(1.3); cursor: pointer; }
 
-/* 模擬器網格專屬樣式 */
 .sim-grid-container { margin-top: 20px; border-top: 2px dashed #bae6fd; padding-top: 15px; }
 .sim-grid-title { font-weight: bold; color: #0284c7; margin-bottom: 15px; font-size: 1.05rem;}
 
@@ -666,9 +642,8 @@ const exportHistory = async (type) => {
 .preview-box { background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
 .preview-subject { font-size: 1.1rem; color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 12px; }
 .preview-body { font-size: 1rem; color: #334155; line-height: 1.6; white-space: pre-wrap; }
-.late-btn { background-color: #ef4444; width: 100%; font-size: 1.2rem; padding: 15px; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+.late-btn { background: #ef4444; width: 100%; font-size: 1.2rem; padding: 15px; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
 
-/* 月曆與歷史紀錄樣式 */
 .history-calendar-container { background: white; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0; }
 .section-title { margin: 0 0 20px 0; color: #1e293b; font-size: 1.3rem; border-bottom: 2px solid #f1f5f9; padding-bottom: 15px;}
 .calendar-layout { display: flex; gap: 20px; flex-wrap: wrap; }
@@ -700,7 +675,7 @@ const exportHistory = async (type) => {
 .stu-seat { color: #64748b; font-size: 0.9rem;}
 .status-select { padding: 4px; border-radius: 4px; border: 1px solid #cbd5e1; font-weight: bold; text-align: center; outline: none; background: white; transition: 0.2s color;}
 
-/* 💡 新增遲到時間輸入框樣式 */
+/* 💡 遲到時間輸入框樣式 */
 .late-time-input { margin-top: 2px; padding: 4px; border: 1px solid #cbd5e1; border-radius: 4px; outline: none; font-family: monospace; text-align: center; width: 100%; box-sizing: border-box;}
 
 .card-absent { background: #ffe4e6; border-color: #fca5a5; }
