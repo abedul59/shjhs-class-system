@@ -165,12 +165,22 @@
                   <span class="stu-seat">{{ student.seat_number }}</span>
                   <span class="stu-name">{{ student.real_name }}</span>
                 </div>
+                
                 <select v-model="historyAttendances[student.id]" class="status-select">
                   <option value="未到">未到</option>
                   <option value="已到">已到</option>
                   <option value="請假">請假</option>
                   <option value="遲到">遲到</option>
                 </select>
+
+                <!-- 💡 新增：若選擇「遲到」，自動顯示遲到時間選擇器 -->
+                <input 
+                  v-if="historyAttendances[student.id] === '遲到'" 
+                  type="time" 
+                  v-model="historyLateTimes[student.id]" 
+                  class="late-time-input"
+                  title="設定遲到時間" 
+                />
               </div>
             </div>
 
@@ -200,9 +210,10 @@ const calMonth = ref(dDate.getMonth())
 const monthAttendanceDates = ref(new Set())
 const selectedHistoryDate = ref('')
 const historyAttendances = ref({}) 
+const historyLateTimes = ref({}) // 💡 儲存各學生的遲到時間
 const isSavingHistory = ref(false)
 
-// 💡 鎖定時間與模擬器狀態
+// 鎖定時間與模擬器狀態
 const lockTime = ref('08:10')
 const isSavingLockTime = ref(false)
 const simDate = ref(todayISO)
@@ -255,7 +266,7 @@ const saveLockTime = async () => {
   }
 }
 
-// 💡 互動式模擬點擊邏輯
+// 互動式模擬點擊邏輯
 const handleSimStudentClick = async (student) => {
   if (!simDate.value || !simTime.value) {
     alert('請先設定模擬的日期與時間！')
@@ -334,7 +345,6 @@ const getSimAttendanceClass = (studentId) => {
   if (status === '遲到') return 'late-card'
   return 'absent-card'
 }
-
 
 // 計算五格統計人數
 const expectedCount = computed(() => adminStudents.value.length)
@@ -461,11 +471,25 @@ const viewHistory = async (day) => {
   const { data } = await supabase.from('attendances').select('*').eq('record_date', day.dateStr)
   
   const newHistory = {}
-  adminStudents.value.forEach(s => newHistory[s.id] = '未到') 
+  const newLateTimes = {} // 💡 初始化當日遲到時間的物件
+
+  // 先將所有人預設為未到
+  adminStudents.value.forEach(s => {
+    newHistory[s.id] = '未到'
+    newLateTimes[s.id] = ''
+  }) 
+
+  // 將資料庫真實結果覆蓋上去
   if (data) {
-    data.forEach(a => newHistory[a.student_id] = a.status)
+    data.forEach(a => {
+      newHistory[a.student_id] = a.status
+      // 若資料庫有記錄遲到時間 late_time，則提取顯示
+      newLateTimes[a.student_id] = a.late_time || '' 
+    })
   }
+  
   historyAttendances.value = newHistory
+  historyLateTimes.value = newLateTimes
 }
 
 const getHistoryCardClass = (status) => {
@@ -484,11 +508,22 @@ const saveHistory = async () => {
       const status = historyAttendances.value[student.id]
       const existRecord = existing ? existing.find(e => e.student_id === student.id) : null
       
+      // 💡 只有狀態為遲到時，才寫入遲到時間，否則設為 null
+      const finalLateTime = status === '遲到' ? (historyLateTimes.value[student.id] || null) : null
+      
       if (existRecord) {
-        await supabase.from('attendances').update({ status }).eq('id', existRecord.id)
+        await supabase.from('attendances').update({ 
+          status: status, 
+          late_time: finalLateTime 
+        }).eq('id', existRecord.id)
       } else {
         if (status !== '未到') {
-           await supabase.from('attendances').insert({ student_id: student.id, record_date: selectedHistoryDate.value, status })
+           await supabase.from('attendances').insert({ 
+             student_id: student.id, 
+             record_date: selectedHistoryDate.value, 
+             status: status,
+             late_time: finalLateTime
+           })
         }
       }
     }
@@ -511,11 +546,17 @@ const exportHistory = async (type) => {
 
   const enhancedData = data.map(record => {
     const student = adminStudents.value.find(s => s.id === record.student_id)
+    
+    // 💡 匯出時，如果狀態是遲到且有時間，就在狀態後面加上括號時間
+    const displayStatus = record.status === '遲到' && record.late_time 
+      ? `遲到 (${record.late_time})` 
+      : record.status
+
     return {
       紀錄日期: record.record_date,
       座號: student ? student.seat_number : '未知',
       姓名: student ? student.real_name : '未知',
-      狀態: record.status,
+      狀態: displayStatus,
       操作打卡時間: new Date(record.created_at).toLocaleString('zh-TW', { hour12: false })
     }
   })
@@ -554,7 +595,7 @@ const exportHistory = async (type) => {
 .btn-export-json { background: #8b5cf6; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
 .btn-export-csv { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
 
-/* 💡 鎖定設定與測試區樣式 (改為上下排版，容納互動網格) */
+/* 鎖定設定與測試區樣式 */
 .lock-test-section { background: #e0f2fe; border-radius: 12px; padding: 20px; border: 2px solid #14b8a6; margin-bottom: 30px; box-shadow: 0 4px 6px rgba(15, 118, 110, 0.15);}
 .lock-settings-container { display: flex; flex-direction: column; gap: 20px; }
 .setting-box, .test-box { background: white; padding: 20px; border-radius: 8px; border: 1px dashed #0f766e; box-shadow: 0 2px 4px rgba(0,0,0,0.05);}
@@ -571,7 +612,7 @@ const exportHistory = async (type) => {
 .unlock-checkbox { display: flex; align-items: center; gap: 8px; cursor: pointer; color: #0ea5e9; font-weight: bold;}
 .unlock-checkbox input { transform: scale(1.3); cursor: pointer; }
 
-/* 💡 模擬器網格專屬樣式 */
+/* 模擬器網格專屬樣式 */
 .sim-grid-container { margin-top: 20px; border-top: 2px dashed #bae6fd; padding-top: 15px; }
 .sim-grid-title { font-weight: bold; color: #0284c7; margin-bottom: 15px; font-size: 1.05rem;}
 
@@ -658,6 +699,9 @@ const exportHistory = async (type) => {
 .stu-info { display: flex; justify-content: space-between; align-items: center; font-weight: bold;}
 .stu-seat { color: #64748b; font-size: 0.9rem;}
 .status-select { padding: 4px; border-radius: 4px; border: 1px solid #cbd5e1; font-weight: bold; text-align: center; outline: none; background: white; transition: 0.2s color;}
+
+/* 💡 新增遲到時間輸入框樣式 */
+.late-time-input { margin-top: 2px; padding: 4px; border: 1px solid #cbd5e1; border-radius: 4px; outline: none; font-family: monospace; text-align: center; width: 100%; box-sizing: border-box;}
 
 .card-absent { background: #ffe4e6; border-color: #fca5a5; }
 .card-absent .stu-name { color: #e11d48; }
