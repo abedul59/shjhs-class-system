@@ -33,7 +33,7 @@
           <button @click="currentTab = 'settings'" :class="{ active: currentTab === 'settings' }">⚙️ 系統密碼設定</button>
           <button @click="currentTab = 'backup'" :class="{ active: currentTab === 'backup' }">📦 系統備份</button>
           <button @click="currentTab = 'indexButtons'" :class="{ active: currentTab === 'indexButtons' }">🎛️ 首頁按鈕控制</button>
-          
+          <button @click="currentTab = 'visitor'" :class="{ active: currentTab === 'visitor' }">📦 訪客足跡追蹤</button>
           <button @click="handleLogout" class="logout-btn">🚪 導師登出</button>
           <NuxtLink to="/" class="back-btn">⬅️ 返回前台</NuxtLink>
         </div>
@@ -55,6 +55,8 @@
         <AdminCommunication v-if="currentTab === 'communication'" />
         <AdminOfficers v-if="currentTab === 'officers'" />
         <AdminIndexButtons v-if="currentTab === 'indexButtons'" />
+        <!-- 💡 直接把這行加進去，並在選單加一個新按鈕即可 -->
+        <AdminVisitorTracking v-if="currentTab === 'visitor'" />
         <AdminSettings v-if="currentTab === 'settings'" />
         <AdminBackup v-if="currentTab === 'backup'" />
       </main>
