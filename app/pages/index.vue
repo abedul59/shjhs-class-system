@@ -244,6 +244,20 @@ const logRoleVisit = async (roleName) => {
   try { await supabase.from('visitor_logs').insert([{ ip_address: currentIpStr.value || '未知IP', device_info: navigator.userAgent, role: roleName }]) } catch (e) { console.error(e) }
 }
 
+// 💡 新增：統一寫入「系統稽核中心」的專屬函式
+const logAudit = async (actionType, details) => {
+  try {
+    await supabase.from('assignment_audit_logs').insert({
+      subject_name: '首頁黑板', 
+      action_type: actionType,
+      operator_role: currentEditorRole.value || '導師',
+      details: details
+    })
+  } catch (e) {
+    console.error('稽核寫入失敗', e)
+  }
+}
+
 const privacyFilter = (txt) => {
   let result = String(txt || '')
   if (!isIpWhitelisted.value && allStudents.value.length > 0) {
@@ -425,7 +439,6 @@ const submitPwd = async () => {
 const allStudents = ref([])
 const todayAttendances = ref([])
 
-// 💡 修正：計算人數時，改用 startsWith 支援「遲到_07:44」這類帶有精準時間的字串！
 const expectedCount = computed(() => allStudents.value.length)
 const presentCount = computed(() => todayAttendances.value.filter(a => a.status === '已到').length)
 const leaveCount = computed(() => todayAttendances.value.filter(a => a.status === '請假').length)
@@ -436,7 +449,6 @@ const toggleAttendance = async (student) => {
   const currentStatus = todayAttendances.value.find(a => a.student_id === student.id)?.status || '未到'
   let nextStatus = '已到'
   
-  // 💡 修正：狀態切換循環也要支援 startsWith
   if (currentStatus === '未到') nextStatus = '已到'; 
   else if (currentStatus === '已到') nextStatus = '請假'; 
   else if (currentStatus === '請假') nextStatus = '遲到'; 
@@ -593,9 +605,15 @@ const addContactItem = () => { editingContactItems.value.push('') }
 const removeContactItem = (idx) => { editingContactItems.value.splice(idx, 1) }
 const updateEditingContactItem = (index, value) => { editingContactItems.value[index] = value }
 
+// 💡 修正：聯絡簿儲存時寫入稽核紀錄
 const saveContactItems = async () => {
   try {
     await supabase.from('contact_books').upsert({ record_date: todayISO, contact_items: editingContactItems.value }, { onConflict: 'record_date' })
+    
+    // 寫入系統稽核中心
+    const itemsStr = editingContactItems.value.length > 0 ? editingContactItems.value.join('、') : '清空無事項'
+    await logAudit('修改聯絡簿', `將今日聯絡簿更新為：${itemsStr}`)
+
     alert("✅ 聯絡簿已成功更新發布！")
     contactBookItems.value = [...editingContactItems.value]; isEditingContact.value = false
   } catch (error) { alert("❌ 聯絡簿儲存失敗：" + error.message) }
@@ -605,6 +623,7 @@ const addClassNoteItem = () => { editingClassNoteItems.value.push('') }
 const removeClassNoteItem = (idx) => { editingClassNoteItems.value.splice(idx, 1) }
 const updateEditingClassNoteItem = (index, value) => { editingClassNoteItems.value[index] = value }
 
+// 💡 修正：班級注意事項儲存時寫入稽核紀錄
 const saveClassNoteItems = async () => {
   try {
     const { data: currentSettings } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'class_notes_data').maybeSingle()
@@ -616,6 +635,10 @@ const saveClassNoteItems = async () => {
       setting_key: 'class_notes_data',
       setting_value: updatedData
     }, { onConflict: 'setting_key' })
+
+    // 寫入系統稽核中心
+    const itemsStr = editingClassNoteItems.value.length > 0 ? editingClassNoteItems.value.join('、') : '清空無事項'
+    await logAudit('修改注意事項', `將今日班級注意事項更新為：${itemsStr}`)
 
     alert("✅ 注意事項已成功更新發布！")
     classNoteItems.value = [...editingClassNoteItems.value]
