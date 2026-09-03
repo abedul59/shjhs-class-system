@@ -1,4 +1,5 @@
-<div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
+<template>
+  <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
     
     <ExamDashboard 
       v-if="isExamModeView && isIpBrownlisted" 
@@ -133,7 +134,6 @@
     <EmergencyModal v-if="showEmergencyModal" @close="showEmergencyModal = false" />
   </div>
 </template>
-
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
