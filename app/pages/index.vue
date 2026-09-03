@@ -14,7 +14,6 @@
 
     <div v-if="!isExamModeView" class="normal-home-content">
       
-      <!-- 💡 將原本三個公佈欄抽離至 NoticeBoards 元件 -->
       <NoticeBoards 
         :isIpBrownlisted="isIpBrownlisted"
         :isNoticeBoardVisibleOnIndex="isNoticeBoardVisibleOnIndex"
@@ -31,7 +30,6 @@
       <div class="main-split">
         <div class="left-panel">
           
-          <!-- 💡 將原本的時鐘與按鈕面板抽離至 ControlPanel 元件 -->
           <ControlPanel 
             :clockFontSize="clockFontSize"
             :currentTime="currentTime"
@@ -123,7 +121,7 @@
       </div>
     </div>
 
-    <!-- 💡 將大課表抽離至獨立元件 -->
+    <!-- 將大課表抽離至獨立元件 -->
     <LargeScheduleModal 
       v-if="showLargeSchedule"
       :scheduleData="scheduleData"
@@ -427,16 +425,22 @@ const submitPwd = async () => {
 const allStudents = ref([])
 const todayAttendances = ref([])
 
+// 💡 修正：計算人數時，改用 startsWith 支援「遲到_07:44」這類帶有精準時間的字串！
 const expectedCount = computed(() => allStudents.value.length)
 const presentCount = computed(() => todayAttendances.value.filter(a => a.status === '已到').length)
 const leaveCount = computed(() => todayAttendances.value.filter(a => a.status === '請假').length)
-const lateCount = computed(() => todayAttendances.value.filter(a => a.status === '遲到').length)
+const lateCount = computed(() => todayAttendances.value.filter(a => a.status && a.status.startsWith('遲到')).length)
 const absentCount = computed(() => expectedCount.value - presentCount.value - leaveCount.value - lateCount.value)
 
 const toggleAttendance = async (student) => {
   const currentStatus = todayAttendances.value.find(a => a.student_id === student.id)?.status || '未到'
   let nextStatus = '已到'
-  if (currentStatus === '未到') nextStatus = '已到'; else if (currentStatus === '已到') nextStatus = '請假'; else if (currentStatus === '請假') nextStatus = '遲到'; else if (currentStatus === '遲到') nextStatus = '未到'
+  
+  // 💡 修正：狀態切換循環也要支援 startsWith
+  if (currentStatus === '未到') nextStatus = '已到'; 
+  else if (currentStatus === '已到') nextStatus = '請假'; 
+  else if (currentStatus === '請假') nextStatus = '遲到'; 
+  else if (currentStatus.startsWith('遲到')) nextStatus = '未到';
 
   let record = todayAttendances.value.find(a => a.student_id === student.id)
   if (record) { record.status = nextStatus } else { todayAttendances.value.push({ student_id: student.id, record_date: todayISO, status: nextStatus }) }
