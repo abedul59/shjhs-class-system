@@ -235,16 +235,31 @@ const logVisit = async () => {
     const ua = navigator.userAgent
     let role = '匿名來訪者'
     if (sessionStorage.getItem('schedule_admin_logged_in') === 'true' || sessionStorage.getItem('exams_admin_logged_in') === 'true') role = '導師'
-    await supabase.from('visitor_logs').insert([{ ip_address: currentIpStr.value || '未知IP', device_info: ua, role: role }])
+    
+    await supabase.from('visitor_logs').insert([{ 
+      ip_address: currentIpStr.value || '未知IP', 
+      device_info: ua, 
+      role: role,
+      action_details: '👁️ 瀏覽頁面：班級首頁' 
+    }])
+    
     sessionStorage.setItem('visit_logged', 'true')
   } catch (e) {}
 }
 
 const logRoleVisit = async (roleName) => {
-  try { await supabase.from('visitor_logs').insert([{ ip_address: currentIpStr.value || '未知IP', device_info: navigator.userAgent, role: roleName }]) } catch (e) { console.error(e) }
+  try { 
+    await supabase.from('visitor_logs').insert([{ 
+      ip_address: currentIpStr.value || '未知IP', 
+      device_info: navigator.userAgent, 
+      role: roleName,
+      action_details: `🔑 解鎖身分：${roleName}` 
+    }]) 
+  } catch (e) { 
+    console.error(e) 
+  }
 }
 
-// 💡 新增：統一寫入「系統稽核中心」的專屬函式
 const logAudit = async (actionType, details) => {
   try {
     await supabase.from('assignment_audit_logs').insert({
@@ -605,12 +620,10 @@ const addContactItem = () => { editingContactItems.value.push('') }
 const removeContactItem = (idx) => { editingContactItems.value.splice(idx, 1) }
 const updateEditingContactItem = (index, value) => { editingContactItems.value[index] = value }
 
-// 💡 修正：聯絡簿儲存時寫入稽核紀錄
 const saveContactItems = async () => {
   try {
     await supabase.from('contact_books').upsert({ record_date: todayISO, contact_items: editingContactItems.value }, { onConflict: 'record_date' })
     
-    // 寫入系統稽核中心
     const itemsStr = editingContactItems.value.length > 0 ? editingContactItems.value.join('、') : '清空無事項'
     await logAudit('修改聯絡簿', `將今日聯絡簿更新為：${itemsStr}`)
 
@@ -623,7 +636,6 @@ const addClassNoteItem = () => { editingClassNoteItems.value.push('') }
 const removeClassNoteItem = (idx) => { editingClassNoteItems.value.splice(idx, 1) }
 const updateEditingClassNoteItem = (index, value) => { editingClassNoteItems.value[index] = value }
 
-// 💡 修正：班級注意事項儲存時寫入稽核紀錄
 const saveClassNoteItems = async () => {
   try {
     const { data: currentSettings } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'class_notes_data').maybeSingle()
@@ -636,7 +648,6 @@ const saveClassNoteItems = async () => {
       setting_value: updatedData
     }, { onConflict: 'setting_key' })
 
-    // 寫入系統稽核中心
     const itemsStr = editingClassNoteItems.value.length > 0 ? editingClassNoteItems.value.join('、') : '清空無事項'
     await logAudit('修改注意事項', `將今日班級注意事項更新為：${itemsStr}`)
 
