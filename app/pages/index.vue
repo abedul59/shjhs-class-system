@@ -20,107 +20,113 @@
         <button @click="changeIdentity" class="change-id-btn">切換/綁定身分</button>
       </div>
 
-      <NoticeBoards 
-        :isIpBrownlisted="isIpBrownlisted"
-        :isNoticeBoardVisibleOnIndex="isNoticeBoardVisibleOnIndex"
-        :parentNotices="parentNotices"
-        :isParentAnnouncementVisibleOnIndex="isParentAnnouncementVisibleOnIndex"
-        :parentAnnouncements="parentAnnouncements"
-        :isAnnouncementVisibleOnIndex="isAnnouncementVisibleOnIndex"
-        :announcements="announcements"
-        :privacyFilter="privacyFilter"
-        :formatDateTime="formatDateTime"
-        :formatNL="formatNL"
-      />
+      <div v-if="isContentVisible">
+        <NoticeBoards 
+          :isIpBrownlisted="isIpBrownlisted"
+          :isNoticeBoardVisibleOnIndex="isNoticeBoardVisibleOnIndex"
+          :parentNotices="parentNotices"
+          :isParentAnnouncementVisibleOnIndex="isParentAnnouncementVisibleOnIndex"
+          :parentAnnouncements="parentAnnouncements"
+          :isAnnouncementVisibleOnIndex="isAnnouncementVisibleOnIndex"
+          :announcements="announcements"
+          :privacyFilter="privacyFilter"
+          :formatDateTime="formatDateTime"
+          :formatNL="formatNL"
+        />
 
-      <div class="main-split">
-        <div class="left-panel">
-          
-          <ControlPanel 
-            :clockFontSize="clockFontSize"
-            :currentTime="currentTime"
-            :unreadMsgCount="unreadMsgCount"
-            :scheduleDisplay="scheduleDisplay"
-            :scheduleButtonConfig="scheduleButtonConfig"
-            :isIpBrownlisted="isIpBrownlisted"
-            :examData="examData"
-            :indexButtonSettings="indexButtonSettings"
-            :isScheduleButtonVisible="isScheduleButtonVisible"
-            :seatingChart="seatingChart"
-            :showSeatingChartLocal="showSeatingChartLocal"
-            :hygieneData="hygieneData"
-            :showHygieneLocal="showHygieneLocal"
-            :isHistoryVisibleOnIndex="isHistoryVisibleOnIndex"
-            @enterExam="isExamModeView = true"
-            @openLargeSchedule="openLargeSchedule"
-            @openPwd="openPwdModal"
-            @update:showSeatingChartLocal="showSeatingChartLocal = $event"
-            @update:showHygieneLocal="showHygieneLocal = $event"
-          />
+        <div class="main-split">
+          <div class="left-panel">
+            
+            <ControlPanel 
+              :clockFontSize="clockFontSize"
+              :currentTime="currentTime"
+              :unreadMsgCount="unreadMsgCount"
+              :scheduleDisplay="scheduleDisplay"
+              :scheduleButtonConfig="scheduleButtonConfig"
+              :isIpBrownlisted="isIpBrownlisted"
+              :examData="examData"
+              :indexButtonSettings="indexButtonSettings"
+              :isScheduleButtonVisible="isScheduleButtonVisible"
+              :seatingChart="seatingChart"
+              :showSeatingChartLocal="showSeatingChartLocal"
+              :hygieneData="hygieneData"
+              :showHygieneLocal="showHygieneLocal"
+              :isHistoryVisibleOnIndex="isHistoryVisibleOnIndex"
+              @enterExam="isExamModeView = true"
+              @openLargeSchedule="openLargeSchedule"
+              @openPwd="openPwdModal"
+              @update:showSeatingChartLocal="showSeatingChartLocal = $event"
+              @update:showHygieneLocal="showHygieneLocal = $event"
+            />
 
-          <!-- 💡 修正：週末依然顯示點名版，但操作會被攔截 -->
-          <AttendanceGrid 
-            v-if="isIpBrownlisted"
-            :allStudents="allStudents"
-            :todayAttendances="todayAttendances"
-            :expectedCount="expectedCount"
-            :presentCount="presentCount"
-            :leaveCount="leaveCount"
-            :lateCount="lateCount"
-            :absentCount="absentCount"
-            :privacyFilter="privacyFilter"
-            @toggle-attendance="toggleAttendance"
-          />
+            <AttendanceGrid 
+              v-if="isIpBrownlisted"
+              :allStudents="allStudents"
+              :todayAttendances="todayAttendances"
+              :expectedCount="expectedCount"
+              :presentCount="presentCount"
+              :leaveCount="leaveCount"
+              :lateCount="lateCount"
+              :absentCount="absentCount"
+              :privacyFilter="privacyFilter"
+              @toggle-attendance="toggleAttendance"
+            />
 
-          <!-- 💡 週末的專屬提示 -->
-          <div v-if="isIpBrownlisted && !isWeekday" class="weekend-prompt">
-            🌴 今天是週末，點名版僅供查閱，點擊需輸入導師密碼解鎖。
+            <div v-if="isIpBrownlisted && !isWeekday" class="weekend-prompt">
+              🌴 今天是週末，點名版僅供查閱，點擊需輸入導師密碼解鎖。
+            </div>
+          </div>
+
+          <div class="right-panel">
+            <ClassNotes 
+              :classNoteItems="classNoteItems"
+              :editingClassNoteItems="editingClassNoteItems"
+              :isEditingClassNotes="isEditingClassNotes"
+              :todayDisplay="todayDisplay"
+              :privacyFilter="privacyFilter"
+              @open-pwd="openPwdModal('classNotes')"
+              @cancel-edit="isEditingClassNotes = false"
+              @save-items="saveClassNoteItems"
+              @add-item="addClassNoteItem"
+              @remove-item="removeClassNoteItem"
+              @update-item="updateEditingClassNoteItem"
+            />
+
+            <ContactBook 
+              :contactBookItems="contactBookItems"
+              :editingContactItems="editingContactItems"
+              :isEditingContact="isEditingContact"
+              :todayDisplay="todayDisplay"
+              :privacyFilter="privacyFilter"
+              @open-pwd="openPwdModal('contact')"
+              @cancel-edit="isEditingContact = false"
+              @save-items="saveContactItems"
+              @add-item="addContactItem"
+              @remove-item="removeContactItem"
+              @update-item="updateEditingContactItem"
+            />
           </div>
         </div>
-
-        <div class="right-panel">
-          <ClassNotes 
-            :classNoteItems="classNoteItems"
-            :editingClassNoteItems="editingClassNoteItems"
-            :isEditingClassNotes="isEditingClassNotes"
-            :todayDisplay="todayDisplay"
-            :privacyFilter="privacyFilter"
-            @open-pwd="openPwdModal('classNotes')"
-            @cancel-edit="isEditingClassNotes = false"
-            @save-items="saveClassNoteItems"
-            @add-item="addClassNoteItem"
-            @remove-item="removeClassNoteItem"
-            @update-item="updateEditingClassNoteItem"
-          />
-
-          <ContactBook 
-            :contactBookItems="contactBookItems"
-            :editingContactItems="editingContactItems"
-            :isEditingContact="isEditingContact"
-            :todayDisplay="todayDisplay"
-            :privacyFilter="privacyFilter"
-            @open-pwd="openPwdModal('contact')"
-            @cancel-edit="isEditingContact = false"
-            @save-items="saveContactItems"
-            @add-item="addContactItem"
-            @remove-item="removeContactItem"
-            @update-item="updateEditingContactItem"
-          />
-        </div>
+        
+        <SeatingAndHygiene 
+          :seatingChart="seatingChart"
+          :showSeatingChartLocal="showSeatingChartLocal"
+          :indexButtonSettings="indexButtonSettings"
+          :hygieneData="hygieneData"
+          :showHygieneLocal="showHygieneLocal"
+          :privacyFilter="privacyFilter"
+          :formatNL="formatNL"
+        />
       </div>
       
-      <SeatingAndHygiene 
-        :seatingChart="seatingChart"
-        :showSeatingChartLocal="showSeatingChartLocal"
-        :indexButtonSettings="indexButtonSettings"
-        :hygieneData="hygieneData"
-        :showHygieneLocal="showHygieneLocal"
-        :privacyFilter="privacyFilter"
-        :formatNL="formatNL"
-      />
+      <div v-else class="unverified-placeholder">
+        <div class="spinner-icon">🛡️</div>
+        <h2>系統安全鎖定中</h2>
+        <p>為保護班級資訊，請於驗證畫面選擇身分後進入。</p>
+      </div>
+
     </div> 
 
-    <!-- 原有密碼解鎖彈窗 -->
     <div v-if="showPwdModal" class="modal-overlay" @click.self="closePwdModal">
       <div class="pwd-modal-content">
         <h3>{{ pwdModalTitle }}</h3>
@@ -133,7 +139,6 @@
       </div>
     </div>
 
-    <!-- 外部 IP 強制身分驗證彈窗 -->
     <div v-if="showIdentityModal" class="modal-overlay">
       <div class="pwd-modal-content identity-modal">
         <h3>🛡️ 資訊安全身分驗證</h3>
@@ -147,29 +152,25 @@
         </div>
 
         <div v-if="idType === 'teacher'" class="id-form-group">
-          <!-- 💡 修正：拔除密碼明文提示 -->
           <input type="password" v-model="idPwd" class="pwd-input" placeholder="請輸入導師密碼" @keyup.enter="submitIdentity" />
         </div>
 
         <div v-if="idType === 'subject_teacher'" class="id-form-group">
-          <!-- 💡 修正：改為輸入三碼分機 -->
-          <input type="text" v-model="idPwd" class="pwd-input" placeholder="請輸入辦公室分機號碼 (3碼)" @keyup.enter="submitIdentity" maxlength="3" />
+          <input type="text" v-model="idPwd" class="pwd-input" placeholder="請輸入辦公室分機號碼" @keyup.enter="submitIdentity" maxlength="3" />
         </div>
 
         <div v-if="idType === 'parent'" class="id-form-group">
           <select v-model="idStudent" class="pwd-input select-input">
             <option value="" disabled selected>請選擇您的孩子...</option>
-            <!-- 💡 修正：家長選單套用 privacyFilter 隱藏姓名 -->
-            <option v-for="s in allStudents" :key="s.id" :value="s.id">{{ s.seat_number }}號 {{ privacyFilter(s.real_name) }}</option>
+            <option v-for="s in allStudentsForLogin" :key="s.id" :value="s.id">{{ s.seat_number }}號 {{ privacyFilter(s.real_name) }}</option>
           </select>
-          <p class="info-text">👨‍👩‍👦 家長免密碼。系統將綁定此設備，未來無須重選。</p>
+          <p class="info-text">👨‍👩‍👦 家長們免密碼。系統將綁定此設備，未來無須重選。</p>
         </div>
 
         <div v-if="idType === 'student'" class="id-form-group">
           <select v-model="idStudent" class="pwd-input select-input" style="margin-bottom: 10px;">
-            <option value="" disabled selected>請選擇您的姓名...</option>
-            <!-- 💡 修正：學生選單套用 privacyFilter 隱藏姓名 -->
-            <option v-for="s in allStudents" :key="s.id" :value="s.id">{{ s.seat_number }}號 {{ privacyFilter(s.real_name) }}</option>
+            <option value="" disabled selected>請選擇您（學生本人）的姓名...</option>
+            <option v-for="s in allStudentsForLogin" :key="s.id" :value="s.id">{{ s.seat_number }}號 {{ privacyFilter(s.real_name) }}</option>
           </select>
           <input type="password" v-model="idPwd" class="pwd-input" placeholder="請輸入西元年出生8碼 (例: 20120508)" @keyup.enter="submitIdentity" />
         </div>
@@ -275,7 +276,6 @@ const defaultHygieneData = {
 }
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
-// 外部身分驗證相關變數
 const showIdentityModal = ref(false)
 const idType = ref('parent')
 const idStudent = ref('')
@@ -285,6 +285,11 @@ const currentIdentity = ref('匿名來訪者')
 const expectedTeacherPwd = ref('168168168')
 
 watch(idType, () => { idPwd.value = ''; idError.value = '' })
+
+// 🛡️ 實體隔離計算屬性：未達安全條件前，元件根本不會被掛載
+const isContentVisible = computed(() => {
+  return isIpBrownlisted.value || currentIdentity.value !== '匿名來訪者'
+})
 
 const loadTeacherPwd = async () => {
   const { data } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'admin_password').maybeSingle()
@@ -318,7 +323,6 @@ const submitIdentity = () => {
     }
     finalIdentity = '導師'
   } else if (idType.value === 'subject_teacher') {
-    // 💡 修正：嚴格檢查 3 碼數字分機
     if (!/^\d{3}$/.test(idPwd.value)) {
       idError.value = '❌ 請輸入 3 碼數字的分機號碼！'
       return
@@ -326,11 +330,13 @@ const submitIdentity = () => {
     finalIdentity = `分機 ${idPwd.value} 任課老師`
   } else if (idType.value === 'parent') {
     if (!idStudent.value) { idError.value = '❌ 請選擇您的孩子！'; return }
-    const stu = allStudents.value.find(s => s.id === idStudent.value)
+    // 💡 修正：改向 allStudentsForLogin 搜尋，確保假帳號也能登入
+    const stu = allStudentsForLogin.value.find(s => s.id === idStudent.value)
     finalIdentity = `${stu.seat_number}號 ${stu.real_name} 家長`
   } else if (idType.value === 'student') {
     if (!idStudent.value) { idError.value = '❌ 請選擇您的姓名！'; return }
-    const stu = allStudents.value.find(s => s.id === idStudent.value)
+    // 💡 修正：改向 allStudentsForLogin 搜尋
+    const stu = allStudentsForLogin.value.find(s => s.id === idStudent.value)
     if (!stu.birthday) {
       idError.value = '❌ 系統尚無您的生日資料，請聯繫導師。'
       return
@@ -412,7 +418,7 @@ const logAudit = async (actionType, details) => {
 
 const privacyFilter = (txt) => {
   let result = String(txt || '')
-  if (!isIpWhitelisted.value && allStudents.value.length > 0) {
+  if (!isIpWhitelisted.value && allStudents.value && allStudents.value.length > 0) {
     const sortedStudents = [...allStudents.value].sort((a, b) => (b.real_name || '').length - (a.real_name || '').length)
     sortedStudents.forEach(stu => {
       if (stu.real_name && stu.hidden_name && stu.real_name.trim() !== '') { result = result.split(stu.real_name).join(stu.hidden_name) }
@@ -590,6 +596,8 @@ const submitPwd = async () => {
 }
 
 const allStudents = ref([])
+// 💡 新增：登入選單專用名單 (保留包含隱藏點名屬性的帳號，如 27號)
+const allStudentsForLogin = ref([])
 const todayAttendances = ref([])
 
 const expectedCount = computed(() => allStudents.value.length)
@@ -599,7 +607,6 @@ const lateCount = computed(() => todayAttendances.value.filter(a => a.status && 
 const absentCount = computed(() => expectedCount.value - presentCount.value - leaveCount.value - lateCount.value)
 
 const toggleAttendance = async (student) => {
-  // 💡 修正：週末攔截邏輯，需要輸入正確密碼才能強制點名
   if (!isWeekday) {
     const pwd = prompt("🌴 週末預設不開放點名。\n若需強制修改，請輸入導師密碼：")
     if (pwd !== expectedTeacherPwd.value && pwd !== '168168168' && pwd !== '1681681681') {
@@ -729,6 +736,9 @@ const fetchData = async () => {
   const { data: sData } = await supabase.from('students').select('*').order('seat_number')
   
   if (sData) {
+    // 💡 登入名單不隱藏假帳號
+    allStudentsForLogin.value = sData
+    // 點名網格仍維持過濾隱藏學生
     allStudents.value = sData.filter(s => !s.hide_attendance)
   }
 
@@ -855,6 +865,13 @@ const saveClassNoteItems = async () => {
 .confirm-btn:hover { background: #2563eb; }
 .cancel-btn { background: #e2e8f0; color: #475569; transition: 0.2s;}
 .cancel-btn:hover { background: #cbd5e1; }
+
+/* 🛡️ 新增：實體隔離鎖定防護畫面 */
+.unverified-placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: white; padding: 80px 20px; border-radius: 12px; border: 1px dashed #cbd5e1; margin-top: 20px; }
+.spinner-icon { font-size: 4rem; animation: pulse 2s infinite; margin-bottom: 20px; }
+.unverified-placeholder h2 { color: #334155; margin-bottom: 10px; }
+.unverified-placeholder p { color: #64748b; font-size: 1.1rem; }
+@keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
 
 .weekend-prompt { text-align: center; padding: 15px; background: #fef3c7; border: 2px dashed #fde68a; border-radius: 8px; color: #d97706; font-size: 1rem; font-weight: bold; margin-top: 10px;}
 
