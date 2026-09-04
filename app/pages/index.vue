@@ -1,4 +1,4 @@
-<template>
+<template><template>
   <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
     
     <ExamDashboard 
@@ -52,8 +52,9 @@
             @update:showHygieneLocal="showHygieneLocal = $event"
           />
 
+          <!-- 💡 修正：加上 isWeekday 的判斷，只有平日才顯示點名表 -->
           <AttendanceGrid 
-            v-if="isIpBrownlisted"
+            v-if="isIpBrownlisted && isWeekday"
             :allStudents="allStudents"
             :todayAttendances="todayAttendances"
             :expectedCount="expectedCount"
@@ -64,6 +65,11 @@
             :privacyFilter="privacyFilter"
             @toggle-attendance="toggleAttendance"
           />
+
+          <!-- 💡 新增：週末專屬的休息提示畫面 -->
+          <div v-if="isIpBrownlisted && !isWeekday" class="weekend-prompt">
+            🌴 今天是週末，好好休息，無須進行點名！
+          </div>
         </div>
 
         <div class="right-panel">
@@ -173,8 +179,7 @@ const showLargeSchedule = ref(false)
 
 const clockFontSize = ref(35) 
 
-// 💡 新增：自動背景更新的相關變數
-const autoRefreshSeconds = ref(60) // 預設每 60 秒無感刷新一次
+const autoRefreshSeconds = ref(60) 
 let dataRefreshTimer = null
 
 const isExamModeView = ref(false)
@@ -298,6 +303,9 @@ const dDate = new Date()
 const todayISO = `${dDate.getFullYear()}-${String(dDate.getMonth()+1).padStart(2,'0')}-${String(dDate.getDate()).padStart(2,'0')}`
 const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
 const todayDisplay = `${dDate.getFullYear()}年${dDate.getMonth()+1}月${dDate.getDate()}日${days[dDate.getDay()]}`
+
+// 💡 新增：判斷是否為平日（0 是週日，6 是週六）
+const isWeekday = dDate.getDay() !== 0 && dDate.getDay() !== 6
 
 const currentTime = ref('')
 const nowTick = ref(Date.now())
@@ -541,7 +549,6 @@ const fetchData = async () => {
       clockFontSize.value = Number(clockSetting.setting_value) || 35
     }
     
-    // 💡 讀取後台自動更新秒數設定
     const refreshSetting = sysData.find(s => s.setting_key === 'index_auto_refresh_seconds')
     if (refreshSetting && refreshSetting.setting_value !== undefined) {
       autoRefreshSeconds.value = Number(refreshSetting.setting_value) || 60
@@ -608,18 +615,15 @@ const fetchData = async () => {
   }
 }
 
-// 💡 新增：啟動靜默自動更新的函式
 const startAutoRefresh = () => {
   if (dataRefreshTimer) clearInterval(dataRefreshTimer)
   if (autoRefreshSeconds.value > 0) {
     dataRefreshTimer = setInterval(() => {
-      // 在背景安靜地更新資料，不會閃爍或打斷使用者輸入
       fetchData()
     }, autoRefreshSeconds.value * 1000)
   }
 }
 
-// 監聽秒數變更（例如從資料庫載入最新設定後）
 watch(autoRefreshSeconds, () => {
   startAutoRefresh()
 })
@@ -642,7 +646,6 @@ onMounted(() => {
   checkIpRules().then(() => { 
     logVisit(); 
     fetchData().then(() => {
-      // 確保第一次抓完資料後，再啟動自動更新計時器
       startAutoRefresh()
     })
   }) 
@@ -650,7 +653,7 @@ onMounted(() => {
 
 onUnmounted(() => { 
   if (timer) clearInterval(timer) 
-  if (dataRefreshTimer) clearInterval(dataRefreshTimer) // 離開首頁時清除計時器
+  if (dataRefreshTimer) clearInterval(dataRefreshTimer) 
 })
 
 const addContactItem = () => { editingContactItems.value.push('') }
@@ -713,6 +716,9 @@ const saveClassNoteItems = async () => {
 .pwd-actions button { padding: 10px 25px; border-radius: 8px; font-weight: bold; font-size: 1.05rem; cursor: pointer; border: none;}
 .confirm-btn { background: #3b82f6; color: white; }
 .cancel-btn { background: #e2e8f0; color: #475569; }
+
+/* 💡 新增的週末提示樣式 */
+.weekend-prompt { text-align: center; padding: 40px; background: #f0fdf4; border: 2px dashed #5eead4; border-radius: 8px; color: #0f766e; font-size: 1.2rem; font-weight: bold; margin-top: 20px;}
 
 @media (max-width: 1024px) { .main-split { flex-direction: column; } }
 @media (max-width: 768px) {
