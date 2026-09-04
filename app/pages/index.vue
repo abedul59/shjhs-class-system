@@ -136,7 +136,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 
 import ExamDashboard from '~~/components/home/ExamDashboard.vue'
 import AttendanceGrid from '~~/components/home/AttendanceGrid.vue'
@@ -172,6 +172,10 @@ const scheduleButtonConfig = ref({ isVisible: false, visibility: 'both', teacher
 const showLargeSchedule = ref(false)
 
 const clockFontSize = ref(35) 
+
+// 💡 新增：自動背景更新的相關變數
+const autoRefreshSeconds = ref(60) // 預設每 60 秒無感刷新一次
+let dataRefreshTimer = null
 
 const isExamModeView = ref(false)
 const examData = ref({ isExamModeEnabled: true, theme: 'midnight', title: '', periods: [] })
@@ -490,7 +494,7 @@ const fetchData = async () => {
       'class_schedule_data', 'exam_schedule_data', 'parent_notices_data', 
       'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible',
       'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings',
-      'index_clock_size'
+      'index_clock_size', 'index_auto_refresh_seconds'
     ])
   
   if (sysData) {
@@ -535,6 +539,12 @@ const fetchData = async () => {
     const clockSetting = sysData.find(s => s.setting_key === 'index_clock_size')
     if (clockSetting && clockSetting.setting_value) {
       clockFontSize.value = Number(clockSetting.setting_value) || 35
+    }
+    
+    // 💡 讀取後台自動更新秒數設定
+    const refreshSetting = sysData.find(s => s.setting_key === 'index_auto_refresh_seconds')
+    if (refreshSetting && refreshSetting.setting_value !== undefined) {
+      autoRefreshSeconds.value = Number(refreshSetting.setting_value) || 60
     }
 
     const exSetting = sysData.find(s => s.setting_key === 'exam_schedule_data')
@@ -598,6 +608,22 @@ const fetchData = async () => {
   }
 }
 
+// 💡 新增：啟動靜默自動更新的函式
+const startAutoRefresh = () => {
+  if (dataRefreshTimer) clearInterval(dataRefreshTimer)
+  if (autoRefreshSeconds.value > 0) {
+    dataRefreshTimer = setInterval(() => {
+      // 在背景安靜地更新資料，不會閃爍或打斷使用者輸入
+      fetchData()
+    }, autoRefreshSeconds.value * 1000)
+  }
+}
+
+// 監聽秒數變更（例如從資料庫載入最新設定後）
+watch(autoRefreshSeconds, () => {
+  startAutoRefresh()
+})
+
 const isScheduleButtonVisible = computed(() => {
   if (!scheduleButtonConfig.value.isVisible) return false
   if (scheduleButtonConfig.value.visibility === 'both') return true
@@ -611,10 +637,21 @@ const openLargeSchedule = () => {
 }
 
 onMounted(() => { 
-  updateTime(); timer = setInterval(updateTime, 1000); 
-  checkIpRules().then(() => { logVisit(); fetchData() }) 
+  updateTime(); 
+  timer = setInterval(updateTime, 1000); 
+  checkIpRules().then(() => { 
+    logVisit(); 
+    fetchData().then(() => {
+      // 確保第一次抓完資料後，再啟動自動更新計時器
+      startAutoRefresh()
+    })
+  }) 
 })
-onUnmounted(() => { if (timer) clearInterval(timer) })
+
+onUnmounted(() => { 
+  if (timer) clearInterval(timer) 
+  if (dataRefreshTimer) clearInterval(dataRefreshTimer) // 離開首頁時清除計時器
+})
 
 const addContactItem = () => { editingContactItems.value.push('') }
 const removeContactItem = (idx) => { editingContactItems.value.splice(idx, 1) }
