@@ -14,7 +14,6 @@
 
     <div v-if="!isExamModeView" class="normal-home-content">
       
-      <!-- 💡 新增：外部 IP 專屬的身分狀態列 -->
       <div v-if="!isIpBrownlisted" class="identity-banner">
         <span v-if="currentIdentity !== '匿名來訪者'">✅ 目前驗證身分：{{ currentIdentity }}</span>
         <span v-else>⚠️ 尚未驗證身分</span>
@@ -59,8 +58,9 @@
             @update:showHygieneLocal="showHygieneLocal = $event"
           />
 
+          <!-- 💡 修正：週末依然顯示點名版，但操作會被攔截 -->
           <AttendanceGrid 
-            v-if="isIpBrownlisted && isWeekday"
+            v-if="isIpBrownlisted"
             :allStudents="allStudents"
             :todayAttendances="todayAttendances"
             :expectedCount="expectedCount"
@@ -72,8 +72,9 @@
             @toggle-attendance="toggleAttendance"
           />
 
+          <!-- 💡 週末的專屬提示 -->
           <div v-if="isIpBrownlisted && !isWeekday" class="weekend-prompt">
-            🌴 今天是週末，好好休息，無須進行點名！
+            🌴 今天是週末，點名版僅供查閱，點擊需輸入導師密碼解鎖。
           </div>
         </div>
 
@@ -132,7 +133,7 @@
       </div>
     </div>
 
-    <!-- 💡 新增：外部 IP 強制身分驗證彈窗 -->
+    <!-- 外部 IP 強制身分驗證彈窗 -->
     <div v-if="showIdentityModal" class="modal-overlay">
       <div class="pwd-modal-content identity-modal">
         <h3>🛡️ 資訊安全身分驗證</h3>
@@ -146,17 +147,20 @@
         </div>
 
         <div v-if="idType === 'teacher'" class="id-form-group">
+          <!-- 💡 修正：拔除密碼明文提示 -->
           <input type="password" v-model="idPwd" class="pwd-input" placeholder="請輸入導師密碼" @keyup.enter="submitIdentity" />
         </div>
 
         <div v-if="idType === 'subject_teacher'" class="id-form-group">
-          <p class="info-text">👨‍🏫 任課老師身分：免密碼直接登入。</p>
+          <!-- 💡 修正：改為輸入三碼分機 -->
+          <input type="text" v-model="idPwd" class="pwd-input" placeholder="請輸入辦公室分機號碼 (3碼)" @keyup.enter="submitIdentity" maxlength="3" />
         </div>
 
         <div v-if="idType === 'parent'" class="id-form-group">
           <select v-model="idStudent" class="pwd-input select-input">
             <option value="" disabled selected>請選擇您的孩子...</option>
-            <option v-for="s in allStudents" :key="s.id" :value="s.id">{{ s.seat_number }}號 {{ s.real_name }}</option>
+            <!-- 💡 修正：家長選單套用 privacyFilter 隱藏姓名 -->
+            <option v-for="s in allStudents" :key="s.id" :value="s.id">{{ s.seat_number }}號 {{ privacyFilter(s.real_name) }}</option>
           </select>
           <p class="info-text">👨‍👩‍👦 家長免密碼。系統將綁定此設備，未來無須重選。</p>
         </div>
@@ -164,7 +168,8 @@
         <div v-if="idType === 'student'" class="id-form-group">
           <select v-model="idStudent" class="pwd-input select-input" style="margin-bottom: 10px;">
             <option value="" disabled selected>請選擇您的姓名...</option>
-            <option v-for="s in allStudents" :key="s.id" :value="s.id">{{ s.seat_number }}號 {{ s.real_name }}</option>
+            <!-- 💡 修正：學生選單套用 privacyFilter 隱藏姓名 -->
+            <option v-for="s in allStudents" :key="s.id" :value="s.id">{{ s.seat_number }}號 {{ privacyFilter(s.real_name) }}</option>
           </select>
           <input type="password" v-model="idPwd" class="pwd-input" placeholder="請輸入西元年出生8碼 (例: 20120508)" @keyup.enter="submitIdentity" />
         </div>
@@ -270,7 +275,7 @@ const defaultHygieneData = {
 }
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
-// 💡 外部身分驗證相關變數
+// 外部身分驗證相關變數
 const showIdentityModal = ref(false)
 const idType = ref('parent')
 const idStudent = ref('')
@@ -295,7 +300,6 @@ const loadTeacherPwd = async () => {
 
 const checkIdentity = () => {
   currentIdentity.value = localStorage.getItem('visitor_known_identity') || '匿名來訪者'
-  // 若為外部 IP 且未驗證過身分，強制顯示驗證彈窗
   if (!isIpBrownlisted.value && currentIdentity.value === '匿名來訪者') {
     showIdentityModal.value = true
   }
@@ -314,7 +318,12 @@ const submitIdentity = () => {
     }
     finalIdentity = '導師'
   } else if (idType.value === 'subject_teacher') {
-    finalIdentity = '任課老師'
+    // 💡 修正：嚴格檢查 3 碼數字分機
+    if (!/^\d{3}$/.test(idPwd.value)) {
+      idError.value = '❌ 請輸入 3 碼數字的分機號碼！'
+      return
+    }
+    finalIdentity = `分機 ${idPwd.value} 任課老師`
   } else if (idType.value === 'parent') {
     if (!idStudent.value) { idError.value = '❌ 請選擇您的孩子！'; return }
     const stu = allStudents.value.find(s => s.id === idStudent.value)
@@ -334,12 +343,10 @@ const submitIdentity = () => {
     finalIdentity = `${stu.seat_number}號 ${stu.real_name} 學生`
   }
 
-  // 儲存至本機
   localStorage.setItem('visitor_known_identity', finalIdentity)
   currentIdentity.value = finalIdentity
   showIdentityModal.value = false
   
-  // 寫入初始綁定紀錄
   supabase.from('visitor_logs').insert([{ 
     ip_address: currentIpStr.value || '未知IP', 
     device_info: navigator.userAgent, 
@@ -370,7 +377,6 @@ const logVisit = async () => {
   if (sessionStorage.getItem('visit_logged')) return
   try {
     const ua = navigator.userAgent
-    // 💡 讀取已綁定的身分作為紀錄
     let role = localStorage.getItem('visitor_known_identity') || '匿名來訪者'
     if (sessionStorage.getItem('schedule_admin_logged_in') === 'true' || sessionStorage.getItem('exams_admin_logged_in') === 'true') role = '導師'
     
@@ -593,6 +599,15 @@ const lateCount = computed(() => todayAttendances.value.filter(a => a.status && 
 const absentCount = computed(() => expectedCount.value - presentCount.value - leaveCount.value - lateCount.value)
 
 const toggleAttendance = async (student) => {
+  // 💡 修正：週末攔截邏輯，需要輸入正確密碼才能強制點名
+  if (!isWeekday) {
+    const pwd = prompt("🌴 週末預設不開放點名。\n若需強制修改，請輸入導師密碼：")
+    if (pwd !== expectedTeacherPwd.value && pwd !== '168168168' && pwd !== '1681681681') {
+      if (pwd !== null) alert("❌ 密碼錯誤，無法變更點名狀態！")
+      return
+    }
+  }
+
   const currentStatus = todayAttendances.value.find(a => a.student_id === student.id)?.status || '未到'
   let nextStatus = '已到'
   
@@ -764,9 +779,9 @@ onMounted(() => {
   updateTime(); 
   timer = setInterval(updateTime, 1000); 
   checkIpRules().then(() => { 
-    loadTeacherPwd() // 載入導師密碼供外部驗證使用
+    loadTeacherPwd() 
     fetchData().then(() => {
-      checkIdentity() // 檢查外部 IP 是否需要驗證身分
+      checkIdentity() 
       logVisit(); 
       startAutoRefresh()
     })
@@ -841,9 +856,8 @@ const saveClassNoteItems = async () => {
 .cancel-btn { background: #e2e8f0; color: #475569; transition: 0.2s;}
 .cancel-btn:hover { background: #cbd5e1; }
 
-.weekend-prompt { text-align: center; padding: 40px; background: #f0fdf4; border: 2px dashed #5eead4; border-radius: 8px; color: #0f766e; font-size: 1.2rem; font-weight: bold; margin-top: 20px;}
+.weekend-prompt { text-align: center; padding: 15px; background: #fef3c7; border: 2px dashed #fde68a; border-radius: 8px; color: #d97706; font-size: 1rem; font-weight: bold; margin-top: 10px;}
 
-/* 💡 新增：外部身分切換與驗證彈窗的專屬樣式 */
 .identity-banner { background: #e0f2fe; color: #0369a1; padding: 12px 20px; text-align: center; font-weight: bold; border-radius: 8px; display: flex; justify-content: center; align-items: center; gap: 15px; border: 1px solid #bae6fd; margin-bottom: -5px;}
 .change-id-btn { background: #0ea5e9; color: white; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.95rem; font-weight: bold; transition: 0.2s; }
 .change-id-btn:hover { background: #0284c7; }
