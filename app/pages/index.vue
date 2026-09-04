@@ -146,7 +146,7 @@
         </div>
 
         <div v-if="idType === 'teacher'" class="id-form-group">
-          <input type="password" v-model="idPwd" class="pwd-input" placeholder="請輸入導師動態密碼或 168168168" @keyup.enter="submitIdentity" />
+          <input type="password" v-model="idPwd" class="pwd-input" placeholder="請輸入導師密碼" @keyup.enter="submitIdentity" />
         </div>
 
         <div v-if="idType === 'subject_teacher'" class="id-form-group">
