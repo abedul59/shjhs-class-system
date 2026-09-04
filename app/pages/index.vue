@@ -14,6 +14,13 @@
 
     <div v-if="!isExamModeView" class="normal-home-content">
       
+      <!-- 💡 新增：外部 IP 專屬的身分狀態列 -->
+      <div v-if="!isIpBrownlisted" class="identity-banner">
+        <span v-if="currentIdentity !== '匿名來訪者'">✅ 目前驗證身分：{{ currentIdentity }}</span>
+        <span v-else>⚠️ 尚未驗證身分</span>
+        <button @click="changeIdentity" class="change-id-btn">切換/綁定身分</button>
+      </div>
+
       <NoticeBoards 
         :isIpBrownlisted="isIpBrownlisted"
         :isNoticeBoardVisibleOnIndex="isNoticeBoardVisibleOnIndex"
@@ -52,7 +59,6 @@
             @update:showHygieneLocal="showHygieneLocal = $event"
           />
 
-          <!-- 💡 修正：加上 isWeekday 的判斷，只有平日才顯示點名表 -->
           <AttendanceGrid 
             v-if="isIpBrownlisted && isWeekday"
             :allStudents="allStudents"
@@ -66,7 +72,6 @@
             @toggle-attendance="toggleAttendance"
           />
 
-          <!-- 💡 新增：週末專屬的休息提示畫面 -->
           <div v-if="isIpBrownlisted && !isWeekday" class="weekend-prompt">
             🌴 今天是週末，好好休息，無須進行點名！
           </div>
@@ -114,7 +119,7 @@
       />
     </div> 
 
-    <!-- 密碼彈窗 -->
+    <!-- 原有密碼解鎖彈窗 -->
     <div v-if="showPwdModal" class="modal-overlay" @click.self="closePwdModal">
       <div class="pwd-modal-content">
         <h3>{{ pwdModalTitle }}</h3>
@@ -127,7 +132,52 @@
       </div>
     </div>
 
-    <!-- 將大課表抽離至獨立元件 -->
+    <!-- 💡 新增：外部 IP 強制身分驗證彈窗 -->
+    <div v-if="showIdentityModal" class="modal-overlay">
+      <div class="pwd-modal-content identity-modal">
+        <h3>🛡️ 資訊安全身分驗證</h3>
+        <p class="pwd-desc">為了增強資訊安全與紀錄足跡，請選擇您的身分登入系統：</p>
+        
+        <div class="id-type-selector">
+          <label><input type="radio" v-model="idType" value="teacher"> 導師</label>
+          <label><input type="radio" v-model="idType" value="subject_teacher"> 任課老師</label>
+          <label><input type="radio" v-model="idType" value="parent"> 家長</label>
+          <label><input type="radio" v-model="idType" value="student"> 學生</label>
+        </div>
+
+        <div v-if="idType === 'teacher'" class="id-form-group">
+          <input type="password" v-model="idPwd" class="pwd-input" placeholder="請輸入導師動態密碼或 168168168" @keyup.enter="submitIdentity" />
+        </div>
+
+        <div v-if="idType === 'subject_teacher'" class="id-form-group">
+          <p class="info-text">👨‍🏫 任課老師身分：免密碼直接登入。</p>
+        </div>
+
+        <div v-if="idType === 'parent'" class="id-form-group">
+          <select v-model="idStudent" class="pwd-input select-input">
+            <option value="" disabled selected>請選擇您的孩子...</option>
+            <option v-for="s in allStudents" :key="s.id" :value="s.id">{{ s.seat_number }}號 {{ s.real_name }}</option>
+          </select>
+          <p class="info-text">👨‍👩‍👦 家長免密碼。系統將綁定此設備，未來無須重選。</p>
+        </div>
+
+        <div v-if="idType === 'student'" class="id-form-group">
+          <select v-model="idStudent" class="pwd-input select-input" style="margin-bottom: 10px;">
+            <option value="" disabled selected>請選擇您的姓名...</option>
+            <option v-for="s in allStudents" :key="s.id" :value="s.id">{{ s.seat_number }}號 {{ s.real_name }}</option>
+          </select>
+          <input type="password" v-model="idPwd" class="pwd-input" placeholder="請輸入西元年出生8碼 (例: 20120508)" @keyup.enter="submitIdentity" />
+        </div>
+
+        <p v-if="idError" class="error-msg">{{ idError }}</p>
+
+        <div class="pwd-actions id-actions">
+          <button v-if="currentIdentity !== '匿名來訪者'" @click="showIdentityModal = false" class="cancel-btn">取消</button>
+          <button @click="submitIdentity" class="confirm-btn" style="flex: 1;">驗證並登入</button>
+        </div>
+      </div>
+    </div>
+
     <LargeScheduleModal 
       v-if="showLargeSchedule"
       :scheduleData="scheduleData"
@@ -220,6 +270,84 @@ const defaultHygieneData = {
 }
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
+// 💡 外部身分驗證相關變數
+const showIdentityModal = ref(false)
+const idType = ref('parent')
+const idStudent = ref('')
+const idPwd = ref('')
+const idError = ref('')
+const currentIdentity = ref('匿名來訪者')
+const expectedTeacherPwd = ref('168168168')
+
+watch(idType, () => { idPwd.value = ''; idError.value = '' })
+
+const loadTeacherPwd = async () => {
+  const { data } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'admin_password').maybeSingle()
+  if (data?.setting_value) {
+    if (data.setting_value.type === 'dynamic') {
+      const d = new Date(); const yy = String(d.getFullYear()).slice(2); const mm = String(d.getMonth() + 1).padStart(2, '0'); const dd = String(d.getDate()).padStart(2, '0')
+      expectedTeacherPwd.value = `${yy}${mm}${dd}59`
+    } else {
+      expectedTeacherPwd.value = data.setting_value.custom_pwd || '168168168'
+    }
+  }
+}
+
+const checkIdentity = () => {
+  currentIdentity.value = localStorage.getItem('visitor_known_identity') || '匿名來訪者'
+  // 若為外部 IP 且未驗證過身分，強制顯示驗證彈窗
+  if (!isIpBrownlisted.value && currentIdentity.value === '匿名來訪者') {
+    showIdentityModal.value = true
+  }
+}
+
+const changeIdentity = () => { showIdentityModal.value = true }
+
+const submitIdentity = () => {
+  idError.value = ''
+  let finalIdentity = ''
+
+  if (idType.value === 'teacher') {
+    if (idPwd.value !== expectedTeacherPwd.value && idPwd.value !== '168168168') {
+      idError.value = '❌ 導師密碼錯誤！'
+      return
+    }
+    finalIdentity = '導師'
+  } else if (idType.value === 'subject_teacher') {
+    finalIdentity = '任課老師'
+  } else if (idType.value === 'parent') {
+    if (!idStudent.value) { idError.value = '❌ 請選擇您的孩子！'; return }
+    const stu = allStudents.value.find(s => s.id === idStudent.value)
+    finalIdentity = `${stu.seat_number}號 ${stu.real_name} 家長`
+  } else if (idType.value === 'student') {
+    if (!idStudent.value) { idError.value = '❌ 請選擇您的姓名！'; return }
+    const stu = allStudents.value.find(s => s.id === idStudent.value)
+    if (!stu.birthday) {
+      idError.value = '❌ 系統尚無您的生日資料，請聯繫導師。'
+      return
+    }
+    const bdayStr = stu.birthday.replace(/-/g, '')
+    if (idPwd.value !== bdayStr) {
+      idError.value = '❌ 生日密碼錯誤！請輸入西元年出生 8 碼 (例如 20120508)'
+      return
+    }
+    finalIdentity = `${stu.seat_number}號 ${stu.real_name} 學生`
+  }
+
+  // 儲存至本機
+  localStorage.setItem('visitor_known_identity', finalIdentity)
+  currentIdentity.value = finalIdentity
+  showIdentityModal.value = false
+  
+  // 寫入初始綁定紀錄
+  supabase.from('visitor_logs').insert([{ 
+    ip_address: currentIpStr.value || '未知IP', 
+    device_info: navigator.userAgent, 
+    role: finalIdentity,
+    action_details: `🔑 綁定設備身分：${finalIdentity}` 
+  }]).then(() => {})
+}
+
 const currentThemeStyles = computed(() => {
   const t = examThemes[examData.value.theme] || examThemes.midnight
   return { '--ex-bg': t.bg, '--ex-border': t.border, '--ex-title': t.title, '--ex-clock': t.clock, '--ex-text': t.text, '--ex-accent': t.accent, '--ex-success': t.success, '--ex-danger': t.danger, '--ex-panel-bg': t.panelBg }
@@ -242,7 +370,8 @@ const logVisit = async () => {
   if (sessionStorage.getItem('visit_logged')) return
   try {
     const ua = navigator.userAgent
-    let role = '匿名來訪者'
+    // 💡 讀取已綁定的身分作為紀錄
+    let role = localStorage.getItem('visitor_known_identity') || '匿名來訪者'
     if (sessionStorage.getItem('schedule_admin_logged_in') === 'true' || sessionStorage.getItem('exams_admin_logged_in') === 'true') role = '導師'
     
     await supabase.from('visitor_logs').insert([{ 
@@ -262,24 +391,17 @@ const logRoleVisit = async (roleName) => {
       ip_address: currentIpStr.value || '未知IP', 
       device_info: navigator.userAgent, 
       role: roleName,
-      action_details: `🔑 解鎖身分：${roleName}` 
+      action_details: `🔑 解鎖後台：${roleName}` 
     }]) 
-  } catch (e) { 
-    console.error(e) 
-  }
+  } catch (e) { console.error(e) }
 }
 
 const logAudit = async (actionType, details) => {
   try {
     await supabase.from('assignment_audit_logs').insert({
-      subject_name: '首頁黑板', 
-      action_type: actionType,
-      operator_role: currentEditorRole.value || '導師',
-      details: details
+      subject_name: '首頁黑板', action_type: actionType, operator_role: currentEditorRole.value || '導師', details: details
     })
-  } catch (e) {
-    console.error('稽核寫入失敗', e)
-  }
+  } catch (e) { console.error('稽核寫入失敗', e) }
 }
 
 const privacyFilter = (txt) => {
@@ -304,7 +426,6 @@ const todayISO = `${dDate.getFullYear()}-${String(dDate.getMonth()+1).padStart(2
 const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
 const todayDisplay = `${dDate.getFullYear()}年${dDate.getMonth()+1}月${dDate.getDate()}日${days[dDate.getDay()]}`
 
-// 💡 新增：判斷是否為平日（0 是週日，6 是週六）
 const isWeekday = dDate.getDay() !== 0 && dDate.getDay() !== 6
 
 const currentTime = ref('')
@@ -332,8 +453,7 @@ const scheduleDisplay = computed(() => {
     if (!p.startTime || !p.endTime) continue
     const [sh, sm] = p.startTime.split(':').map(Number)
     const [eh, em] = p.endTime.split(':').map(Number)
-    const startMins = sh * 60 + sm
-    const endMins = eh * 60 + em
+    const startMins = sh * 60 + sm; const endMins = eh * 60 + em
     
     const dayData = p.days[currentDayIndex]
     if (!dayData || !dayData.subject) continue
@@ -644,8 +764,10 @@ onMounted(() => {
   updateTime(); 
   timer = setInterval(updateTime, 1000); 
   checkIpRules().then(() => { 
-    logVisit(); 
+    loadTeacherPwd() // 載入導師密碼供外部驗證使用
     fetchData().then(() => {
+      checkIdentity() // 檢查外部 IP 是否需要驗證身分
+      logVisit(); 
       startAutoRefresh()
     })
   }) 
@@ -714,15 +836,31 @@ const saveClassNoteItems = async () => {
 .pwd-input:focus { border-color: #3b82f6; outline: none; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
 .pwd-actions { display: flex; justify-content: center; gap: 15px; }
 .pwd-actions button { padding: 10px 25px; border-radius: 8px; font-weight: bold; font-size: 1.05rem; cursor: pointer; border: none;}
-.confirm-btn { background: #3b82f6; color: white; }
-.cancel-btn { background: #e2e8f0; color: #475569; }
+.confirm-btn { background: #3b82f6; color: white; transition: 0.2s;}
+.confirm-btn:hover { background: #2563eb; }
+.cancel-btn { background: #e2e8f0; color: #475569; transition: 0.2s;}
+.cancel-btn:hover { background: #cbd5e1; }
 
-/* 💡 新增的週末提示樣式 */
 .weekend-prompt { text-align: center; padding: 40px; background: #f0fdf4; border: 2px dashed #5eead4; border-radius: 8px; color: #0f766e; font-size: 1.2rem; font-weight: bold; margin-top: 20px;}
+
+/* 💡 新增：外部身分切換與驗證彈窗的專屬樣式 */
+.identity-banner { background: #e0f2fe; color: #0369a1; padding: 12px 20px; text-align: center; font-weight: bold; border-radius: 8px; display: flex; justify-content: center; align-items: center; gap: 15px; border: 1px solid #bae6fd; margin-bottom: -5px;}
+.change-id-btn { background: #0ea5e9; color: white; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.95rem; font-weight: bold; transition: 0.2s; }
+.change-id-btn:hover { background: #0284c7; }
+
+.identity-modal { max-width: 480px; text-align: left; }
+.id-type-selector { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px dashed #cbd5e1; }
+.id-type-selector label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: bold; color: #334155; font-size: 1.05rem; padding: 5px;}
+.id-form-group { margin-bottom: 20px; min-height: 50px;}
+.select-input { text-align: left; }
+.info-text { font-size: 0.95rem; color: #059669; font-weight: bold; margin: 0; background: #dcfce7; padding: 10px; border-radius: 6px;}
+.error-msg { color: #dc2626; font-weight: bold; text-align: center; margin-bottom: 15px; background: #fee2e2; padding: 8px; border-radius: 6px;}
+.id-actions { display: flex; gap: 10px; }
 
 @media (max-width: 1024px) { .main-split { flex-direction: column; } }
 @media (max-width: 768px) {
   .page-container { padding: 10px; }
+  .id-type-selector { flex-direction: column; gap: 12px; }
 }
 
 :deep(.text-sm) { font-size: 0.9rem !important; line-height: 1.5; }
