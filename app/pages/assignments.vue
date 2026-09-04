@@ -117,6 +117,9 @@
                    @click="toggleSubmission(student.id, student.seat_number, student.real_name)">
                 <span class="seat-num">{{ student.seat_number }}</span>
                 <span class="stu-name">{{ student.real_name }}</span>
+                <!-- 💡 顯示繳交時間，未交時使用隱藏區塊維持高度一致 -->
+                <span v-if="isSubmitted(student.id)" class="sub-time">{{ getSubmissionTimeText(student.id) }}</span>
+                <span v-else class="sub-time" style="visibility: hidden;">00/00 00:00</span>
               </div>
             </div>
           </div>
@@ -189,7 +192,6 @@
             </div>
           </div>
 
-          <!-- 💡 修正：列印動作區塊，加入「產生缺交報表」按鈕 -->
           <div class="action-bar print-only-hide" style="margin-bottom: 25px; display: flex; gap: 15px; flex-wrap: wrap;">
             <button @click="triggerPrint('all')" class="email-btn print-btn">
               📄 產生全班報表 (預覽列印/PDF)
@@ -202,15 +204,12 @@
             </button>
           </div>
           
-          <!-- 💡 列印專屬表頭 (動態切換標題) -->
           <div class="print-only-header">
             <h2>📚 {{ printMode === 'missing' ? '全班作業缺交狀態報表' : '全班作業繳交狀態總表' }}</h2>
             <p>列印時間：{{ new Date().toLocaleString('zh-TW') }}</p>
           </div>
 
-          <!-- 💡 動態綁定 print-missing-only 類別，控制是否隱藏作業全齊的學生 -->
           <div class="student-homework-grid" :class="{'print-missing-only': printMode === 'missing'}">
-            <!-- 💡 給作業全齊的卡片加上 is-complete 類別 -->
             <div v-for="stat in studentAssignmentStats" :key="stat.id" class="hw-card" :class="{'is-complete': stat.missing.length === 0}">
               <div class="hw-card-header">
                 <strong>{{ stat.seat_number }}號 {{ stat.real_name }}</strong>
@@ -259,7 +258,7 @@ const excludedAssignmentIds = ref([])
 const hwEmailSubjectTemplate = ref('📚 班級作業繳交通知 - {{學生姓名}}')
 const hwEmailContentTemplate = ref(`親愛的家長您好：\n\n為您彙整 【{{學生姓名}}】 目前的各科作業繳交狀況：\n\n✅ 已交作業：\n{{已交清單}}\n\n❌ 缺交作業：\n{{缺交清單}}\n\n請您協助督促孩子盡速完成缺交作業。若有任何疑問，歡迎透過班級系統私訊聯繫。\n\n班級導師 敬上`)
 
-// 💡 列印模式控制狀態 ('all' = 全班, 'missing' = 僅缺交)
+// 列印模式控制狀態
 const printMode = ref('all')
 
 // === 登入與稽核 ===
@@ -282,7 +281,7 @@ const fetchTeachers = async () => {
   if (data) teachersList.value = data
 }
 
-// 雙重密碼驗證 (加入導師與精準身分紀錄邏輯)
+// 雙重密碼驗證
 const verifyPassword = async () => {
   if (!selectedSubject.value || !passwordInput.value) return
   
@@ -342,7 +341,6 @@ const logout = () => {
 }
 
 const fetchDashboardData = async () => {
-  // 取得學生與家長信箱 (合併寫法)
   const { data: sData } = await supabase.from('students').select('*').order('seat_number')
   const { data: pData } = await supabase.from('parents').select('*')
   if (sData) {
@@ -352,7 +350,6 @@ const fetchDashboardData = async () => {
     })
   }
 
-  // 取得作業與繳交紀錄 (導師抓全部，科任/小老師抓單科)
   let query = supabase.from('assignments').select('*').order('created_at', { ascending: false })
   if (activeRole.value !== '導師') query = query.eq('subject_name', selectedSubject.value)
   const { data: aData } = await query
@@ -361,7 +358,6 @@ const fetchDashboardData = async () => {
   const { data: subData } = await supabase.from('assignment_submissions').select('*')
   if (subData) allSubmissions.value = subData
 
-  // 導師額外取得範本與過濾設定
   if (activeRole.value === '導師') {
     const { data: tmpl } = await supabase.from('email_templates').select('*').eq('template_id', 'homework_notice').maybeSingle()
     if (tmpl) { hwEmailSubjectTemplate.value = tmpl.subject; hwEmailContentTemplate.value = tmpl.content }
@@ -441,6 +437,14 @@ const currentSubmissions = computed(() => {
 })
 const isSubmitted = (studentId) => currentSubmissions.value.some(sub => sub.student_id === studentId)
 
+// 💡 取得已繳交的時間文字
+const getSubmissionTimeText = (studentId) => {
+  const sub = currentSubmissions.value.find(s => s.student_id === studentId)
+  if (!sub || !sub.created_at) return ''
+  const d = new Date(sub.created_at)
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 const toggleSubmission = async (studentId, seatNumber, realName) => {
   if (!currentAssignment.value) return
   const submitted = isSubmitted(studentId)
@@ -449,8 +453,17 @@ const toggleSubmission = async (studentId, seatNumber, realName) => {
     allSubmissions.value = allSubmissions.value.filter(sub => !(sub.assignment_id === currentAssignment.value.id && sub.student_id === studentId))
     logAction('變更繳交狀態', `將 ${seatNumber}號 ${realName} 的【${currentAssignment.value.title}】狀態改為：❌ 缺交`)
   } else {
-    const { data } = await supabase.from('assignment_submissions').insert({ assignment_id: currentAssignment.value.id, student_id: studentId }).select().single()
-    if (data) allSubmissions.value.push(data)
+    const { data } = await supabase.from('assignment_submissions').insert({ 
+      assignment_id: currentAssignment.value.id, 
+      student_id: studentId 
+    }).select().single()
+    
+    // 確保存入全域變數中供 UI 即時顯示時間
+    if (data) {
+      if (!data.created_at) data.created_at = new Date().toISOString()
+      allSubmissions.value.push(data)
+    }
+    
     logAction('變更繳交狀態', `將 ${seatNumber}號 ${realName} 的【${currentAssignment.value.title}】狀態改為：✅ 已交`)
   }
 }
@@ -495,12 +508,9 @@ const saveTeacher = async (t) => { await supabase.from('subject_teachers').updat
 const deleteTeacher = async (id) => { if(confirm('確定刪除此科目？')) { await supabase.from('subject_teachers').delete().eq('id', id); teachersList.value = teachersList.value.filter(t => t.id !== id) } }
 const saveHwEmailTemplate = async () => { isSavingHwTemplate.value = true; await supabase.from('email_templates').upsert({ template_id: 'homework_notice', subject: hwEmailSubjectTemplate.value, content: hwEmailContentTemplate.value }); alert('✅ 作業信件範本已永久儲存！'); isSavingHwTemplate.value = false }
 
-// 💡 觸發列印功能 (接收模式參數並等待 DOM 更新)
 const triggerPrint = (mode) => {
   printMode.value = mode
-  setTimeout(() => {
-    window.print()
-  }, 100)
+  setTimeout(() => { window.print() }, 100)
 }
 
 const sendHomeworkEmails = async () => {
@@ -613,6 +623,8 @@ h3 { color: #334155; margin-top: 0; margin-bottom: 15px; border-bottom: 2px soli
 .stu-name { font-size: 0.95rem; font-weight: bold; }
 .is-submitted { background: #dcfce7; border-color: #22c55e; color: #166534; }
 .is-missing { background: #fee2e2; border-color: #ef4444; color: #991b1b; }
+/* 💡 新增的繳交時間戳記 CSS */
+.sub-time { font-size: 0.75rem; margin-top: 4px; font-weight: normal; opacity: 0.85; font-family: monospace; }
 
 /* 導師後台管理區塊 CSS */
 .mt-20 { margin-top: 20px; }
@@ -650,8 +662,6 @@ h3 { color: #334155; margin-top: 0; margin-bottom: 15px; border-bottom: 2px soli
 .late-btn:hover:not(:disabled) { background-color: #d97706; }
 .print-btn { background-color: #3b82f6; font-size: 1.1rem; padding: 15px; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; flex: 1; transition: 0.2s; }
 .print-btn:hover { background-color: #2563eb; }
-
-/* 💡 產生缺交報表按鈕專屬樣式 */
 .print-missing-btn { background-color: #f43f5e; font-size: 1.1rem; padding: 15px; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; flex: 1; transition: 0.2s; }
 .print-missing-btn:hover { background-color: #e11d48; }
 
@@ -708,7 +718,6 @@ h3 { color: #334155; margin-top: 0; margin-bottom: 15px; border-bottom: 2px soli
     margin-bottom: 5mm; 
   }
   
-  /* 💡 透過 print-missing-only 類別，在列印時隱藏作業全齊的學生卡片 */
   .print-missing-only .is-complete {
     display: none !important;
   }
