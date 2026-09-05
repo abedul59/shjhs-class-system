@@ -1,7 +1,7 @@
 <template>
   <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
     
-    <!-- 💡 抽離 1：大考儀表板核心運算 -->
+    <!-- 大考儀表板核心運算 -->
     <ExamModeManager 
       v-if="isExamModeView && isIpBrownlisted" 
       :examData="examData" :nowTick="nowTick" :currentTime="currentTime" :isIpBrownlisted="isIpBrownlisted"
@@ -10,7 +10,7 @@
 
     <div v-if="!isExamModeView" class="normal-home-content">
       
-      <!-- 💡 抽離 2：頂部身分狀態列 -->
+      <!-- 頂部身分狀態列 -->
       <TopIdentityBanner 
         v-if="!isIpBrownlisted" 
         :currentIdentity="currentIdentity" 
@@ -18,10 +18,23 @@
       />
 
       <div v-if="isContentVisible">
-        <NoticeBoards :isIpBrownlisted="isIpBrownlisted" :isNoticeBoardVisibleOnIndex="isNoticeBoardVisibleOnIndex" :parentNotices="parentNotices" :isParentAnnouncementVisibleOnIndex="isParentAnnouncementVisibleOnIndex" :parentAnnouncements="parentAnnouncements" :isAnnouncementVisibleOnIndex="isAnnouncementVisibleOnIndex" :announcements="announcements" :privacyFilter="privacyFilter" :formatDateTime="formatDateTime" :formatNL="formatNL" />
+        <!-- 💡 班級公佈欄 (已恢復正常渲染) -->
+        <NoticeBoards 
+          :isIpBrownlisted="isIpBrownlisted" 
+          :isNoticeBoardVisibleOnIndex="isNoticeBoardVisibleOnIndex" 
+          :parentNotices="parentNotices" 
+          :isParentAnnouncementVisibleOnIndex="isParentAnnouncementVisibleOnIndex" 
+          :parentAnnouncements="parentAnnouncements" 
+          :isAnnouncementVisibleOnIndex="isAnnouncementVisibleOnIndex" 
+          :announcements="announcements" 
+          :privacyFilter="privacyFilter" 
+          :formatDateTime="formatDateTime" 
+          :formatNL="formatNL" 
+        />
 
         <div class="main-split">
           <div class="left-panel">
+            
             <ControlPanel 
               :clockConfig="clockConfig" 
               :currentTime="currentTime" 
@@ -44,7 +57,18 @@
               @update:showHygieneLocal="showHygieneLocal = $event" 
             />
             
-            <AttendanceGrid v-if="isIpBrownlisted" :allStudents="allStudents" :todayAttendances="todayAttendances" :expectedCount="expectedCount" :presentCount="presentCount" :leaveCount="leaveCount" :lateCount="lateCount" :absentCount="absentCount" :privacyFilter="privacyFilter" @toggle-attendance="toggleAttendance" />
+            <AttendanceGrid 
+              v-if="isIpBrownlisted" 
+              :allStudents="allStudents" 
+              :todayAttendances="todayAttendances" 
+              :expectedCount="expectedCount" 
+              :presentCount="presentCount" 
+              :leaveCount="leaveCount" 
+              :lateCount="lateCount" 
+              :absentCount="absentCount" 
+              :privacyFilter="privacyFilter" 
+              @toggle-attendance="toggleAttendance" 
+            />
             
             <div v-if="isIpBrownlisted && !isWeekday" class="weekend-prompt">
               🌴 今天是週末，點名版僅供查閱，點擊需輸入導師密碼解鎖。
@@ -60,7 +84,7 @@
         <SeatingAndHygiene :seatingChart="seatingChart" :showSeatingChartLocal="showSeatingChartLocal" :indexButtonSettings="indexButtonSettings" :hygieneData="hygieneData" :showHygieneLocal="showHygieneLocal" :privacyFilter="privacyFilter" :formatNL="formatNL" />
       </div>
       
-      <!-- 💡 抽離 3：未通過驗證的鎖定畫面 -->
+      <!-- 未通過驗證的鎖定畫面 -->
       <SystemLockedGuard v-else />
     </div> 
 
@@ -284,42 +308,65 @@ const toggleAttendance = async (student) => {
   } catch (err) {}
 }
 
+// 💡 修正：堅不可摧的資料加載器 (Switch + Safe Chaining)，拒絕任何 Null Error
 const fetchData = async () => {
   const { data: boardData } = await supabase.from('contact_books').select('contact_items').eq('record_date', todayISO).maybeSingle()
   contactBookItems.value = boardData?.contact_items || []
-  const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings', 'announcements_data', 'class_schedule_data', 'exam_schedule_data', 'parent_notices_data', 'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible', 'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings', 'index_clock_size', 'index_clock_config', 'index_auto_refresh_seconds', 'role_button_settings'])
+
+  const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', [
+    'board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings', 'announcements_data', 'class_schedule_data', 'exam_schedule_data', 'parent_notices_data', 'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible', 'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings', 'index_clock_size', 'index_clock_config', 'index_auto_refresh_seconds', 'role_button_settings'
+  ])
+  
   if (sysData) {
     sysData.forEach(s => {
       const v = s.setting_value
-      if (s.setting_key === 'board_officer_passwords') officerPasswords.value = { ...officerPasswords.value, ...v }
-      else if (s.setting_key === 'contact_history_visible') isHistoryVisibleOnIndex.value = v
-      else if (s.setting_key === 'index_button_settings') globalButtonSettings.value = v
-      else if (s.setting_key === 'role_button_settings') roleButtonSettings.value = { ...defaultRoleSettings, ...v }
-      else if (s.setting_key === 'index_clock_config') clockConfig.value = { ...clockConfig.value, ...v }
-      else if (s.setting_key === 'index_clock_size' && !sysData.find(x => x.setting_key === 'index_clock_config')) clockConfig.value.size = Number(v) || 35
-      else if (s.setting_key === 'announcements_data') announcements.value = (v || []).sort((a, b) => new Date(b.date) - new Date(a.date))
-      else if (s.setting_key === 'parent_announcements_data') parentAnnouncements.value = (v || []).sort((a, b) => new Date(b.date) - new Date(a.date))
-      else if (s.setting_key === 'announcement_board_visible') isAnnouncementVisibleOnIndex.value = v
-      else if (s.setting_key === 'parent_announcement_board_visible') isParentAnnouncementVisibleOnIndex.value = v
-      else if (s.setting_key === 'parent_notices_board_visible') isNoticeBoardVisibleOnIndex.value = v
-      else if (s.setting_key === 'class_schedule_data') scheduleData.value = v
-      else if (s.setting_key === 'schedule_button_settings') scheduleButtonConfig.value = { teacherOnlyInBrownlist: true, ...v }
-      else if (s.setting_key === 'index_auto_refresh_seconds') autoRefreshSeconds.value = Number(v) || 60
-      else if (s.setting_key === 'exam_schedule_data') examData.value = { ...examData.value, ...v }
-      else if (s.setting_key === 'parent_notices_data') parentNotices.value = (v || []).filter(n => (!n.startDate || n.startDate <= todayISO) && (!n.endDate || n.endDate >= todayISO)).map(n => n.content) 
-      else if (s.setting_key === 'class_notes_data') classNoteItems.value = v[todayISO] || []
-      else if (s.setting_key === 'seating_chart_data') seatingChart.value = { isVisible: v.isVisible || false, isRotated: v.isRotated || false, seats: (v.seats || []).map(seat => seat.content !== undefined ? { id: seat.id, isHidden: seat.isHidden, seatNum: String(seat.content).split('\n')[0] || '', name: String(seat.content).split('\n')[1] || '', other: String(seat.content).split('\n').slice(2).join(' ') || '' } : seat), settings: v.settings || {} }
-      else if (s.setting_key === 'hygiene_management_data') hygieneData.value = { ...hygieneData.value, ...v }
+      if (v === null || v === undefined) return // 絕對防禦機制，遇到空值立刻跳過
+
+      switch (s.setting_key) {
+        case 'board_officer_passwords': officerPasswords.value = { ...officerPasswords.value, ...v }; break;
+        case 'contact_history_visible': isHistoryVisibleOnIndex.value = v; break;
+        case 'index_button_settings': globalButtonSettings.value = v; break;
+        case 'role_button_settings': roleButtonSettings.value = { ...defaultRoleSettings, ...v }; break;
+        case 'index_clock_config': clockConfig.value = { ...clockConfig.value, ...v }; break;
+        case 'index_clock_size': 
+          if (!sysData.find(x => x.setting_key === 'index_clock_config')) clockConfig.value.size = Number(v) || 35; 
+          break;
+        case 'announcements_data': announcements.value = (v || []).sort((a, b) => new Date(b.date) - new Date(a.date)); break;
+        case 'parent_announcements_data': parentAnnouncements.value = (v || []).sort((a, b) => new Date(b.date) - new Date(a.date)); break;
+        case 'announcement_board_visible': isAnnouncementVisibleOnIndex.value = v; break;
+        case 'parent_announcement_board_visible': isParentAnnouncementVisibleOnIndex.value = v; break;
+        case 'parent_notices_board_visible': isNoticeBoardVisibleOnIndex.value = v; break;
+        case 'class_schedule_data': scheduleData.value = v; break;
+        case 'schedule_button_settings': scheduleButtonConfig.value = { teacherOnlyInBrownlist: true, ...v }; break;
+        case 'index_auto_refresh_seconds': autoRefreshSeconds.value = Number(v) || 60; break;
+        case 'exam_schedule_data': examData.value = { ...examData.value, ...v }; break;
+        case 'parent_notices_data': 
+          parentNotices.value = (v || []).filter(n => (!n.startDate || n.startDate <= todayISO) && (!n.endDate || n.endDate >= todayISO)).map(n => n.content); 
+          break;
+        case 'class_notes_data': classNoteItems.value = v[todayISO] || []; break;
+        case 'seating_chart_data': 
+          seatingChart.value = { 
+            isVisible: v.isVisible || false, isRotated: v.isRotated || false, 
+            seats: (v.seats || []).map(seat => seat.content !== undefined ? { id: seat.id, isHidden: seat.isHidden, seatNum: String(seat.content).split('\n')[0] || '', name: String(seat.content).split('\n')[1] || '', other: String(seat.content).split('\n').slice(2).join(' ') || '' } : seat), 
+            settings: v.settings || {} 
+          }; break;
+        case 'hygiene_management_data': hygieneData.value = { ...hygieneData.value, ...v }; break;
+      }
     })
+    
+    // 兼容舊版設定檔防護
     if (!sysData.find(s => s.setting_key === 'role_button_settings') && globalButtonSettings.value) {
       roleButtonSettings.value.anonymous = { ...roleButtonSettings.value.anonymous, ...globalButtonSettings.value }
     }
   }
 
+  // 以下代碼現在能 100% 被執行到，學生與點名資料不會再變成空白了
   const { data: sData } = await supabase.from('students').select('*').order('seat_number')
   if (sData) { allStudentsForLogin.value = sData; allStudents.value = sData.filter(s => !s.hide_attendance) }
+  
   const { data: attData } = await supabase.from('attendances').select('*').eq('record_date', todayISO)
   if (attData) todayAttendances.value = attData
+
   try {
     const { data: msgData } = await supabase.from('private_messages').select('*').neq('sender_role', '導師')
     if (msgData) {
