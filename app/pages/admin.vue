@@ -42,7 +42,7 @@
           <button @click="currentTab = 'roleSettings'" :class="{ active: currentTab === 'roleSettings' }">🎯 首頁按鈕權限設定</button>
 
   
-</button>
+
           <button @click="handleLogout" class="logout-btn">🚪 導師登出</button>
           <NuxtLink to="/" class="back-btn">⬅️ 返回前台</NuxtLink>
         </div>
