@@ -39,7 +39,7 @@
           <button @click="currentTab = 'identityTracking'">🕵️ （家長與）實名足跡追蹤</button>
           <button @click="currentTab = 'indexButtons'" :class="{ active: currentTab === 'indexButtons' }">🎛️ 首頁按鈕控制</button>
           <!-- 🎯 依身分按鈕權限設定 -->
-          <button @click="currentTab = 'roleSettings'" :class="{ active: currentTab === 'roleSettings' }>🎯 首頁按鈕權限設定</button>
+          <button @click="currentTab = 'roleSettings'" :class="{ active: currentTab === 'roleSettings' }">🎯 首頁按鈕權限設定</button>
 
   
 </button>
