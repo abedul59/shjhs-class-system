@@ -35,6 +35,7 @@
           <button @click="currentTab = 'indexButtons'" :class="{ active: currentTab === 'indexButtons' }">🎛️ 首頁按鈕控制</button>
           <button @click="currentTab = 'visitor'" :class="{ active: currentTab === 'visitor' }">📦 訪客足跡追蹤</button>
           <button @click="currentTab = 'classroomTracker'">🖥️ 教室電腦監視器</button>
+          <button @click="currentTab = 'identityTracking'">🕵️ 家長與實名足跡追蹤</button>
           <button @click="handleLogout" class="logout-btn">🚪 導師登出</button>
           <NuxtLink to="/" class="back-btn">⬅️ 返回前台</NuxtLink>
         </div>
@@ -58,6 +59,7 @@
         <AdminIndexButtons v-if="currentTab === 'indexButtons'" />
         <!-- 💡 直接把這行加進去，並在選單加一個新按鈕即可 -->
         <AdminClassroomTracker v-if="currentTab === 'classroomTracker'" />
+        <AdminIdentityTracking v-if="currentTab === 'identityTracking'" />
         <AdminVisitorTracking v-if="currentTab === 'visitor'" />
         <AdminSettings v-if="currentTab === 'settings'" />
         <AdminBackup v-if="currentTab === 'backup'" />
