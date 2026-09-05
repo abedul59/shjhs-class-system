@@ -205,7 +205,6 @@ let dataRefreshTimer = null
 const isExamModeView = ref(false)
 const examData = ref({ isExamModeEnabled: true, theme: 'midnight', title: '', periods: [] })
 
-// 💡 雙層按鈕引擎邏輯：全局設定 (總開關) + 身分設定 (條件開關)
 const globalButtonSettings = ref({})
 const defaultRoleSettings = {
   anonymous: { parentBind: true, parentMsg: true, studentMsg: true, schedule: true, assignments: true, discipline: true, hygiene: true, seats: true, manageSchedule: false, exams: false, emergency: true, admin: false, showSeats: false, showHygiene: false, contactHistory: false },
@@ -217,30 +216,24 @@ const defaultRoleSettings = {
 }
 const roleButtonSettings = ref(JSON.parse(JSON.stringify(defaultRoleSettings)))
 
-// 判斷當前使用者是哪種身分類別
 const activeRoleCategory = computed(() => {
   const id = currentIdentity.value;
   if (id.includes('導師')) return 'teacher';
   if (id.includes('任課老師')) return 'subject_teacher';
   if (id.includes('家長')) return 'parent';
   if (id.includes('學生')) return 'student';
-  
-  // 💡 若尚未登入，且 IP 在校內，則視為「教室電腦」
   if (isIpBrownlisted.value) return 'classroom';
-  
   return 'anonymous';
 })
 
-// 💡 最終渲染的按鈕 (AND 邏輯：必須總開關開著，且身分開關也開著)
 const indexButtonSettings = computed(() => {
   const roleSettings = roleButtonSettings.value[activeRoleCategory.value] || defaultRoleSettings.anonymous
   const effectiveSettings = {}
-  
   for (const key in roleSettings) {
     if (globalButtonSettings.value[key] === false) {
-      effectiveSettings[key] = false // 總開關關閉，強行隱藏
+      effectiveSettings[key] = false
     } else {
-      effectiveSettings[key] = roleSettings[key] // 總開關開啟或未設定，依照身分決定
+      effectiveSettings[key] = roleSettings[key] 
     }
   }
   return effectiveSettings
@@ -415,36 +408,63 @@ const updateTime = () => {
   currentTime.value = now.toLocaleTimeString('zh-TW', { hour12: false })
 }
 
+// 💡 修正：排課顯示邏輯 (週末防呆 + 老師姓名褐名單遮蔽原則)
 const scheduleDisplay = computed(() => {
   if (!scheduleData.value || !scheduleData.value.periods) return null
-  const currentDayIndex = new Date(nowTick.value).getDay() - 1 
-  if (currentDayIndex < 0 || currentDayIndex > 4) return null 
   
   const now = new Date(nowTick.value)
+  const currentDayIndex = now.getDay() - 1 
+  
+  // 1. 如果是週末，回傳休息狀態，防止整個區塊消失
+  if (currentDayIndex < 0 || currentDayIndex > 4) {
+    return {
+      current: { status: '放假中', label: '週末', subject: '週末休息', teacher: '' },
+      next: null
+    }
+  }
+  
   const nowMins = now.getHours() * 60 + now.getMinutes()
   let currentClass = { status: '下課中', label: '目前', subject: '休息時間', teacher: '' }
   let nextClass = null
+  
+  // 2. 老師姓名遮蔽函數 (如果不在褐名單，就把中間字改成Ｏ)
+  const maskTeacherName = (name) => {
+    if (!name) return ''
+    if (name.length >= 3) return name.charAt(0) + 'Ｏ' + name.charAt(name.length - 1)
+    if (name.length === 2) return name.charAt(0) + 'Ｏ'
+    return 'ＯＯＯ'
+  }
   
   for (let i = 0; i < scheduleData.value.periods.length; i++) {
     const p = scheduleData.value.periods[i]
     if (!p.startTime || !p.endTime) continue
     const [sh, sm] = p.startTime.split(':').map(Number)
     const [eh, em] = p.endTime.split(':').map(Number)
-    const startMins = sh * 60 + sm; const endMins = eh * 60 + em
+    const startMins = sh * 60 + sm
+    const endMins = eh * 60 + em
     
     const dayData = p.days[currentDayIndex]
     if (!dayData || !dayData.subject) continue
     
+    // 套用褐名單原則過濾老師姓名
+    const safeTeacher = isIpBrownlisted.value ? (dayData.teacher || '') : maskTeacherName(dayData.teacher)
+    
     if (nowMins >= startMins && nowMins <= endMins) {
-      currentClass = { status: '上課中', label: p.name, subject: dayData.subject, teacher: dayData.teacher }
+      currentClass = { status: '上課中', label: p.name, subject: dayData.subject, teacher: safeTeacher }
       for (let j = i + 1; j < scheduleData.value.periods.length; j++) {
         const nextP = scheduleData.value.periods[j]
         const nextDayData = nextP.days[currentDayIndex]
-        if (nextDayData && nextDayData.subject) { nextClass = { subject: nextDayData.subject }; break }
+        if (nextDayData && nextDayData.subject) { 
+          const safeNextTeacher = isIpBrownlisted.value ? (nextDayData.teacher || '') : maskTeacherName(nextDayData.teacher)
+          nextClass = { subject: nextDayData.subject, teacher: safeNextTeacher }; 
+          break 
+        }
       }
       break
     }
-    if (nowMins < startMins && !nextClass) { nextClass = { subject: dayData.subject } }
+    if (nowMins < startMins && !nextClass) { 
+      nextClass = { subject: dayData.subject, teacher: safeTeacher } 
+    }
   }
   return { current: currentClass, next: nextClass }
 })
@@ -609,18 +629,15 @@ const fetchData = async () => {
     const histSetting = sysData.find(s => s.setting_key === 'contact_history_visible')
     if (histSetting) isHistoryVisibleOnIndex.value = histSetting.setting_value
 
-    // 💡 提取全域總開關設定
     const btnSetting = sysData.find(s => s.setting_key === 'index_button_settings')
     if (btnSetting && btnSetting.setting_value) { 
       globalButtonSettings.value = btnSetting.setting_value 
     }
 
-    // 💡 提取各身分權限設定
     const roleBtnSetting = sysData.find(s => s.setting_key === 'role_button_settings')
     if (roleBtnSetting && roleBtnSetting.setting_value) {
       roleButtonSettings.value = { ...defaultRoleSettings, ...roleBtnSetting.setting_value }
     } else if (btnSetting && btnSetting.setting_value) {
-      // 確保兼容舊版設定
       roleButtonSettings.value.anonymous = { ...roleButtonSettings.value.anonymous, ...btnSetting.setting_value }
     }
 
