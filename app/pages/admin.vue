@@ -25,7 +25,7 @@
           <button @click="currentTab = 'homework'" :class="{ active: currentTab === 'homework' }">📚 作業繳交推播與科任密碼設定</button>
           <button @click="currentTab = 'students'" :class="{ active: currentTab === 'students' }">👩‍🎓 學生資料名單管理</button>
           <button @click="currentTab = 'security'" :class="{ active: currentTab === 'security' }">🛡️ 安全與 IP鎖定</button>
-          <button @click="currentTab = 'visitors'" :class="{ active: currentTab === 'visitors' }">👁️ 所有網站訪客紀錄</button>
+          
           <button @click="currentTab = 'audit'" :class="{ active: currentTab === 'audit' }">🕵️ 系統權限操作稽核</button>
           <button @click="currentTab = 'communication'" :class="{ active: currentTab === 'communication' }">📨 家長須知推播紀錄</button>
           <button @click="currentTab = 'officers'" :class="{ active: currentTab === 'officers' }">🔐 幹部職位密碼管理</button>
@@ -33,9 +33,10 @@
           <button @click="currentTab = 'settings'" :class="{ active: currentTab === 'settings' }">⚙️ 系統密碼設定</button>
           <button @click="currentTab = 'backup'" :class="{ active: currentTab === 'backup' }">📦 系統備份</button>
           <button @click="currentTab = 'indexButtons'" :class="{ active: currentTab === 'indexButtons' }">🎛️ 首頁按鈕控制</button>
-          <button @click="currentTab = 'visitor'" :class="{ active: currentTab === 'visitor' }">📦 訪客足跡追蹤</button>
+          <button @click="currentTab = 'visitors'" :class="{ active: currentTab === 'visitors' }">👁️ 全網站訪客紀錄</button>
+          <button @click="currentTab = 'visitor'" :class="{ active: currentTab === 'visitor' }">📦 訪客足跡進階追蹤</button>
           <button @click="currentTab = 'classroomTracker'">🖥️ 教室電腦監視器</button>
-          <button @click="currentTab = 'identityTracking'">🕵️ 家長與實名足跡追蹤</button>
+          <button @click="currentTab = 'identityTracking'">🕵️ （家長與）實名足跡追蹤</button>
           <button @click="handleLogout" class="logout-btn">🚪 導師登出</button>
           <NuxtLink to="/" class="back-btn">⬅️ 返回前台</NuxtLink>
         </div>
