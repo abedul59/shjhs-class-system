@@ -160,16 +160,30 @@
         </div>
 
         <div v-if="idType === 'subject_teacher'" class="id-form-group">
-          <!-- 💡 修正：拔除長度提示與屬性，改為密碼框隱藏字數 -->
           <input type="password" v-model="idPwd" class="pwd-input" placeholder="請輸入辦公室分機號碼" @keyup.enter="submitIdentity" />
         </div>
 
         <div v-if="idType === 'parent'" class="id-form-group">
-          <select v-model="idStudent" class="pwd-input select-input">
+          <select v-model="idStudent" class="pwd-input select-input" style="margin-bottom: 10px;">
             <option value="" disabled selected>請選擇您的孩子...</option>
             <option v-for="s in allStudentsForLogin" :key="s.id" :value="s.id">{{ s.seat_number }}號 {{ privacyFilter(s.real_name) }}</option>
           </select>
-          <p class="info-text">👨‍👩‍👦 家長免密碼。系統將綁定此設備，未來無須重選。</p>
+          
+          <!-- 💡 新增：家長身分驗證用的國小、班級、關係選項 -->
+          <div class="flex-row">
+            <select v-model="parentIdSchool" class="pwd-input select-input">
+              <option value="" disabled selected>請選擇畢業國小...</option>
+              <option v-for="school in schoolOptions" :key="school" :value="school">{{ school }}</option>
+            </select>
+            <input type="number" v-model="parentIdClass" class="pwd-input" placeholder="國小班級 (例: 1,2,3。若是甲乙、忠孝、AB班等，則按順序轉換數字。)" @keyup.enter="submitIdentity" />
+          </div>
+
+          <select v-model="parentIdRelation" class="pwd-input select-input" style="margin-bottom: 10px;">
+            <option value="" disabled selected>您與學生的關係...</option>
+            <option v-for="rel in relationOptions" :key="rel" :value="rel">{{ rel }}</option>
+          </select>
+
+          <p class="info-text">👨‍👩‍👦 系統將比對國小資訊並綁定此設備，未來無須重選。</p>
         </div>
 
         <div v-if="idType === 'student'" class="id-form-group">
@@ -281,6 +295,7 @@ const defaultHygieneData = {
 }
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
+// 外部身分驗證相關變數
 const showIdentityModal = ref(false)
 const idType = ref('parent')
 const idStudent = ref('')
@@ -289,7 +304,20 @@ const idError = ref('')
 const currentIdentity = ref('匿名來訪者')
 const expectedTeacherPwd = ref('168168168')
 
-watch(idType, () => { idPwd.value = ''; idError.value = '' })
+// 💡 新增：家長驗證所需欄位與下拉清單
+const parentIdSchool = ref('')
+const parentIdClass = ref('')
+const parentIdRelation = ref('')
+const schoolOptions = ['新化國小', '大新國小', '正新國小', '那拔國小', '口埤國小', '新市國小', '大社國小', '歸仁國小', '文化國小', '紅瓦厝國小', '保西國小', '大潭國小', '其他']
+const relationOptions = ['父親', '母親', '祖父', '祖母', '外祖父', '外祖母', '兄', '弟', '姊', '妹', '其他']
+
+watch(idType, () => { 
+  idPwd.value = ''
+  idError.value = ''
+  parentIdSchool.value = ''
+  parentIdClass.value = ''
+  parentIdRelation.value = ''
+})
 
 const isContentVisible = computed(() => {
   return isIpBrownlisted.value || currentIdentity.value !== '匿名來訪者'
@@ -327,7 +355,6 @@ const submitIdentity = () => {
     }
     finalIdentity = '導師'
   } else if (idType.value === 'subject_teacher') {
-    // 💡 修正：嚴格檢查 3 碼數字，錯誤時不提供提示
     if (!/^\d{3}$/.test(idPwd.value)) {
       idError.value = '❌ 分機號碼驗證失敗！'
       return
@@ -335,8 +362,28 @@ const submitIdentity = () => {
     finalIdentity = `分機 ${idPwd.value} 任課老師`
   } else if (idType.value === 'parent') {
     if (!idStudent.value) { idError.value = '❌ 請選擇您的孩子！'; return }
+    if (!parentIdSchool.value) { idError.value = '❌ 請選擇畢業國小！'; return }
+    if (!parentIdClass.value) { idError.value = '❌ 請輸入國小班級！'; return }
+    if (!parentIdRelation.value) { idError.value = '❌ 請選擇您與學生的關係！'; return }
+
     const stu = allStudentsForLogin.value.find(s => s.id === idStudent.value)
-    finalIdentity = `${stu.seat_number}號 ${stu.real_name} 家長`
+    
+    // 💡 驗證邏輯：比對資料庫中的國小與班級
+    // 支援常見的資料庫欄位命名 (graduated_school, elem_school, graduated_class, elem_class)
+    const dbSchool = stu.graduated_school || stu.elem_school
+    const dbClass = stu.graduated_class || stu.elem_class
+    
+    // 只有當資料庫確實有建立這兩個欄位並填入數值時，才進行嚴格比對，防呆處理
+    if (dbSchool && dbSchool !== parentIdSchool.value) {
+      idError.value = '❌ 畢業國小驗證失敗，請確認選擇是否正確！'
+      return
+    }
+    if (dbClass && String(dbClass) !== String(parentIdClass.value)) {
+      idError.value = '❌ 國小班級驗證失敗，請確認輸入是否正確！'
+      return
+    }
+
+    finalIdentity = `${stu.seat_number}號 ${stu.real_name} 家長(${parentIdRelation.value})`
   } else if (idType.value === 'student') {
     if (!idStudent.value) { idError.value = '❌ 請選擇您的姓名！'; return }
     const stu = allStudentsForLogin.value.find(s => s.id === idStudent.value)
@@ -886,6 +933,10 @@ const saveClassNoteItems = async () => {
 .info-text { font-size: 0.95rem; color: #059669; font-weight: bold; margin: 0; background: #dcfce7; padding: 10px; border-radius: 6px;}
 .error-msg { color: #dc2626; font-weight: bold; text-align: center; margin-bottom: 15px; background: #fee2e2; padding: 8px; border-radius: 6px;}
 .id-actions { display: flex; gap: 10px; }
+
+/* 💡 新增：家長驗證的排版輔助 */
+.flex-row { display: flex; gap: 10px; margin-bottom: 10px; }
+.flex-row > * { flex: 1; margin-bottom: 0 !important; }
 
 @media (max-width: 1024px) { .main-split { flex-direction: column; } }
 @media (max-width: 768px) {
