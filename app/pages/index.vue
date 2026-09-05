@@ -126,7 +126,6 @@
       </div>
     </div> 
 
-    <!-- 💡 替換為抽離出的元件 -->
     <PasswordModal 
       :show="showPwdModal" 
       :title="pwdModalTitle" 
@@ -205,8 +204,31 @@ let dataRefreshTimer = null
 
 const isExamModeView = ref(false)
 const examData = ref({ isExamModeEnabled: true, theme: 'midnight', title: '', periods: [] })
-const indexButtonSettings = ref({
-  parentBind: true, parentMsg: true, studentMsg: true, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: true, schedule: true, exams: true
+
+// 💡 動態按鈕引擎：根據載入的設定與目前身分類別即時運算顯示的按鈕
+const defaultRoleSettings = {
+  anonymous: { parentBind: true, parentMsg: true, studentMsg: true, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: true, schedule: true, exams: true },
+  parent: { parentBind: false, parentMsg: true, studentMsg: false, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: false, schedule: true, exams: true },
+  student: { parentBind: false, parentMsg: false, studentMsg: true, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: false, schedule: true, exams: true },
+  subject_teacher: { parentBind: false, parentMsg: false, studentMsg: false, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: false, schedule: true, exams: true },
+  teacher: { parentBind: true, parentMsg: true, studentMsg: true, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: true, schedule: true, exams: true }
+}
+
+const roleButtonSettings = ref(JSON.parse(JSON.stringify(defaultRoleSettings)))
+
+// 判斷當前是屬於哪一個群體
+const activeRoleCategory = computed(() => {
+  const id = currentIdentity.value;
+  if (id.includes('導師')) return 'teacher';
+  if (id.includes('任課老師')) return 'subject_teacher';
+  if (id.includes('家長')) return 'parent';
+  if (id.includes('學生')) return 'student';
+  return 'anonymous';
+})
+
+// 原本寫死的 ref 變成智慧型 computed
+const indexButtonSettings = computed(() => {
+  return roleButtonSettings.value[activeRoleCategory.value] || defaultRoleSettings.anonymous
 })
 
 const examThemes = {
@@ -272,7 +294,9 @@ const loadTeacherPwd = async () => {
 
 const checkIdentity = () => {
   currentIdentity.value = localStorage.getItem('visitor_known_identity') || '匿名來訪者'
-  if (!isIpBrownlisted.value && currentIdentity.value === '匿名來訪者') showIdentityModal.value = true
+  if (!isIpBrownlisted.value && currentIdentity.value === '匿名來訪者') {
+    showIdentityModal.value = true
+  }
 }
 
 const handleIdentityVerified = async (finalIdentity) => {
@@ -311,10 +335,14 @@ const logVisit = async () => {
     const ua = navigator.userAgent
     let role = localStorage.getItem('visitor_known_identity') || '匿名來訪者'
     if (sessionStorage.getItem('schedule_admin_logged_in') === 'true' || sessionStorage.getItem('exams_admin_logged_in') === 'true') role = '導師'
+    
     await supabase.from('visitor_logs').insert([{ 
       ip_address: currentIpStr.value || '未知IP', 
-      device_info: ua, role: role, action_details: '👁️ 瀏覽頁面：班級首頁' 
+      device_info: ua, 
+      role: role,
+      action_details: '👁️ 瀏覽頁面：班級首頁' 
     }])
+    
     sessionStorage.setItem('visit_logged', 'true')
   } catch (e) {}
 }
@@ -324,7 +352,8 @@ const logRoleVisit = async (roleName) => {
     await supabase.from('visitor_logs').insert([{ 
       ip_address: currentIpStr.value || '未知IP', 
       device_info: navigator.userAgent, 
-      role: roleName, action_details: `🔑 解鎖後台：${roleName}` 
+      role: roleName,
+      action_details: `🔑 解鎖後台：${roleName}` 
     }]) 
   } catch (e) { console.error(e) }
 }
@@ -555,7 +584,7 @@ const fetchData = async () => {
       'class_schedule_data', 'exam_schedule_data', 'parent_notices_data', 
       'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible',
       'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings',
-      'index_clock_size', 'index_auto_refresh_seconds'
+      'index_clock_size', 'index_auto_refresh_seconds', 'role_button_settings'
     ])
   
   if (sysData) {
@@ -565,8 +594,17 @@ const fetchData = async () => {
     const histSetting = sysData.find(s => s.setting_key === 'contact_history_visible')
     if (histSetting) isHistoryVisibleOnIndex.value = histSetting.setting_value
 
-    const btnSetting = sysData.find(s => s.setting_key === 'index_button_settings')
-    if (btnSetting && btnSetting.setting_value) { indexButtonSettings.value = { ...indexButtonSettings.value, ...btnSetting.setting_value } }
+    // 💡 讀取全新的身分按鈕設定
+    const roleBtnSetting = sysData.find(s => s.setting_key === 'role_button_settings')
+    if (roleBtnSetting && roleBtnSetting.setting_value) {
+      roleButtonSettings.value = { ...defaultRoleSettings, ...roleBtnSetting.setting_value }
+    } else {
+      // 確保向下兼容，如果沒存過新格式，就把舊版的設定檔給匿名者用
+      const oldBtnSetting = sysData.find(s => s.setting_key === 'index_button_settings')
+      if (oldBtnSetting && oldBtnSetting.setting_value) {
+        roleButtonSettings.value.anonymous = { ...roleButtonSettings.value.anonymous, ...oldBtnSetting.setting_value }
+      }
+    }
 
     const annSetting = sysData.find(s => s.setting_key === 'announcements_data')
     if (annSetting && annSetting.setting_value) { announcements.value = (annSetting.setting_value || []).sort((a, b) => new Date(b.date) - new Date(a.date)) }
