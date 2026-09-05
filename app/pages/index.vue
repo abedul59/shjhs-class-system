@@ -205,30 +205,45 @@ let dataRefreshTimer = null
 const isExamModeView = ref(false)
 const examData = ref({ isExamModeEnabled: true, theme: 'midnight', title: '', periods: [] })
 
-// 💡 動態按鈕引擎：根據載入的設定與目前身分類別即時運算顯示的按鈕
+// 💡 雙層按鈕引擎邏輯：全局設定 (總開關) + 身分設定 (條件開關)
+const globalButtonSettings = ref({})
 const defaultRoleSettings = {
-  anonymous: { parentBind: true, parentMsg: true, studentMsg: true, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: true, schedule: true, exams: true },
-  parent: { parentBind: false, parentMsg: true, studentMsg: false, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: false, schedule: true, exams: true },
-  student: { parentBind: false, parentMsg: false, studentMsg: true, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: false, schedule: true, exams: true },
-  subject_teacher: { parentBind: false, parentMsg: false, studentMsg: false, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: false, schedule: true, exams: true },
-  teacher: { parentBind: true, parentMsg: true, studentMsg: true, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: true, schedule: true, exams: true }
+  anonymous: { parentBind: true, parentMsg: true, studentMsg: true, schedule: true, assignments: true, discipline: true, hygiene: true, seats: true, manageSchedule: false, exams: false, emergency: true, admin: false, showSeats: false, showHygiene: false, contactHistory: false },
+  classroom: { parentBind: false, parentMsg: false, studentMsg: false, schedule: true, assignments: true, discipline: true, hygiene: true, seats: true, manageSchedule: false, exams: false, emergency: true, admin: false, showSeats: true, showHygiene: true, contactHistory: true },
+  parent: { parentBind: false, parentMsg: true, studentMsg: false, schedule: true, assignments: true, discipline: true, hygiene: true, seats: true, manageSchedule: false, exams: false, emergency: true, admin: false, showSeats: false, showHygiene: false, contactHistory: true },
+  student: { parentBind: false, parentMsg: false, studentMsg: true, schedule: true, assignments: true, discipline: true, hygiene: true, seats: true, manageSchedule: false, exams: false, emergency: true, admin: false, showSeats: false, showHygiene: false, contactHistory: true },
+  subject_teacher: { parentBind: false, parentMsg: false, studentMsg: false, schedule: true, assignments: true, discipline: true, hygiene: true, seats: true, manageSchedule: false, exams: false, emergency: true, admin: false, showSeats: true, showHygiene: true, contactHistory: true },
+  teacher: { parentBind: true, parentMsg: true, studentMsg: true, schedule: true, assignments: true, discipline: true, hygiene: true, seats: true, manageSchedule: true, exams: true, emergency: true, admin: true, showSeats: true, showHygiene: true, contactHistory: true }
 }
-
 const roleButtonSettings = ref(JSON.parse(JSON.stringify(defaultRoleSettings)))
 
-// 判斷當前是屬於哪一個群體
+// 判斷當前使用者是哪種身分類別
 const activeRoleCategory = computed(() => {
   const id = currentIdentity.value;
   if (id.includes('導師')) return 'teacher';
   if (id.includes('任課老師')) return 'subject_teacher';
   if (id.includes('家長')) return 'parent';
   if (id.includes('學生')) return 'student';
+  
+  // 💡 若尚未登入，且 IP 在校內，則視為「教室電腦」
+  if (isIpBrownlisted.value) return 'classroom';
+  
   return 'anonymous';
 })
 
-// 原本寫死的 ref 變成智慧型 computed
+// 💡 最終渲染的按鈕 (AND 邏輯：必須總開關開著，且身分開關也開著)
 const indexButtonSettings = computed(() => {
-  return roleButtonSettings.value[activeRoleCategory.value] || defaultRoleSettings.anonymous
+  const roleSettings = roleButtonSettings.value[activeRoleCategory.value] || defaultRoleSettings.anonymous
+  const effectiveSettings = {}
+  
+  for (const key in roleSettings) {
+    if (globalButtonSettings.value[key] === false) {
+      effectiveSettings[key] = false // 總開關關閉，強行隱藏
+    } else {
+      effectiveSettings[key] = roleSettings[key] // 總開關開啟或未設定，依照身分決定
+    }
+  }
+  return effectiveSettings
 })
 
 const examThemes = {
@@ -594,16 +609,19 @@ const fetchData = async () => {
     const histSetting = sysData.find(s => s.setting_key === 'contact_history_visible')
     if (histSetting) isHistoryVisibleOnIndex.value = histSetting.setting_value
 
-    // 💡 讀取全新的身分按鈕設定
+    // 💡 提取全域總開關設定
+    const btnSetting = sysData.find(s => s.setting_key === 'index_button_settings')
+    if (btnSetting && btnSetting.setting_value) { 
+      globalButtonSettings.value = btnSetting.setting_value 
+    }
+
+    // 💡 提取各身分權限設定
     const roleBtnSetting = sysData.find(s => s.setting_key === 'role_button_settings')
     if (roleBtnSetting && roleBtnSetting.setting_value) {
       roleButtonSettings.value = { ...defaultRoleSettings, ...roleBtnSetting.setting_value }
-    } else {
-      // 確保向下兼容，如果沒存過新格式，就把舊版的設定檔給匿名者用
-      const oldBtnSetting = sysData.find(s => s.setting_key === 'index_button_settings')
-      if (oldBtnSetting && oldBtnSetting.setting_value) {
-        roleButtonSettings.value.anonymous = { ...roleButtonSettings.value.anonymous, ...oldBtnSetting.setting_value }
-      }
+    } else if (btnSetting && btnSetting.setting_value) {
+      // 確保兼容舊版設定
+      roleButtonSettings.value.anonymous = { ...roleButtonSettings.value.anonymous, ...btnSetting.setting_value }
     }
 
     const annSetting = sysData.find(s => s.setting_key === 'announcements_data')
