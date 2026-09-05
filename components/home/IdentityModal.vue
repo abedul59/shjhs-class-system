@@ -2,7 +2,7 @@
   <div v-if="show" class="modal-overlay">
     <div class="pwd-modal-content identity-modal">
       <h3>🛡️ 資訊安全身分驗證</h3>
-      <p class="pwd-desc">為了增強資訊安全與紀錄足跡，請選擇您的身分登入系統：</p>
+      <p class="pwd-desc">為了增強校園資安管理，請選擇您的身分登入系統：</p>
       
       <div class="id-type-selector">
         <label><input type="radio" v-model="idType" value="teacher"> 導師</label>
