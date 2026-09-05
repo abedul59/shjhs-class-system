@@ -20,6 +20,7 @@
         <button @click="changeIdentity" class="change-id-btn">切換/綁定身分</button>
       </div>
 
+      <!-- 🛡️ 核心資安防護：實體隔離區塊 -->
       <div v-if="isContentVisible">
         <NoticeBoards 
           :isIpBrownlisted="isIpBrownlisted"
@@ -119,6 +120,7 @@
         />
       </div>
       
+      <!-- 🛡️ 未通過驗證的鎖定畫面 -->
       <div v-else class="unverified-placeholder">
         <div class="spinner-icon">🛡️</div>
         <h2>系統安全鎖定中</h2>
@@ -127,6 +129,7 @@
 
     </div> 
 
+    <!-- 密碼解鎖彈窗 -->
     <div v-if="showPwdModal" class="modal-overlay" @click.self="closePwdModal">
       <div class="pwd-modal-content">
         <h3>{{ pwdModalTitle }}</h3>
@@ -139,6 +142,7 @@
       </div>
     </div>
 
+    <!-- 外部 IP 強制身分驗證彈窗 -->
     <div v-if="showIdentityModal" class="modal-overlay">
       <div class="pwd-modal-content identity-modal">
         <h3>🛡️ 資訊安全身分驗證</h3>
@@ -156,7 +160,8 @@
         </div>
 
         <div v-if="idType === 'subject_teacher'" class="id-form-group">
-          <input type="text" v-model="idPwd" class="pwd-input" placeholder="請輸入辦公室分機號碼" @keyup.enter="submitIdentity" maxlength="3" />
+          <!-- 💡 修正：拔除長度提示與屬性，改為密碼框隱藏字數 -->
+          <input type="password" v-model="idPwd" class="pwd-input" placeholder="請輸入辦公室分機號碼" @keyup.enter="submitIdentity" />
         </div>
 
         <div v-if="idType === 'parent'" class="id-form-group">
@@ -164,12 +169,12 @@
             <option value="" disabled selected>請選擇您的孩子...</option>
             <option v-for="s in allStudentsForLogin" :key="s.id" :value="s.id">{{ s.seat_number }}號 {{ privacyFilter(s.real_name) }}</option>
           </select>
-          <p class="info-text">👨‍👩‍👦 家長們免密碼。系統將綁定此設備，未來無須重選。</p>
+          <p class="info-text">👨‍👩‍👦 家長免密碼。系統將綁定此設備，未來無須重選。</p>
         </div>
 
         <div v-if="idType === 'student'" class="id-form-group">
           <select v-model="idStudent" class="pwd-input select-input" style="margin-bottom: 10px;">
-            <option value="" disabled selected>請選擇您（學生本人）的姓名...</option>
+            <option value="" disabled selected>請選擇您的姓名...</option>
             <option v-for="s in allStudentsForLogin" :key="s.id" :value="s.id">{{ s.seat_number }}號 {{ privacyFilter(s.real_name) }}</option>
           </select>
           <input type="password" v-model="idPwd" class="pwd-input" placeholder="請輸入西元年出生8碼 (例: 20120508)" @keyup.enter="submitIdentity" />
@@ -286,7 +291,6 @@ const expectedTeacherPwd = ref('168168168')
 
 watch(idType, () => { idPwd.value = ''; idError.value = '' })
 
-// 🛡️ 實體隔離計算屬性：未達安全條件前，元件根本不會被掛載
 const isContentVisible = computed(() => {
   return isIpBrownlisted.value || currentIdentity.value !== '匿名來訪者'
 })
@@ -323,19 +327,18 @@ const submitIdentity = () => {
     }
     finalIdentity = '導師'
   } else if (idType.value === 'subject_teacher') {
+    // 💡 修正：嚴格檢查 3 碼數字，錯誤時不提供提示
     if (!/^\d{3}$/.test(idPwd.value)) {
-      idError.value = '❌ 請輸入 3 碼數字的分機號碼！'
+      idError.value = '❌ 分機號碼驗證失敗！'
       return
     }
     finalIdentity = `分機 ${idPwd.value} 任課老師`
   } else if (idType.value === 'parent') {
     if (!idStudent.value) { idError.value = '❌ 請選擇您的孩子！'; return }
-    // 💡 修正：改向 allStudentsForLogin 搜尋，確保假帳號也能登入
     const stu = allStudentsForLogin.value.find(s => s.id === idStudent.value)
     finalIdentity = `${stu.seat_number}號 ${stu.real_name} 家長`
   } else if (idType.value === 'student') {
     if (!idStudent.value) { idError.value = '❌ 請選擇您的姓名！'; return }
-    // 💡 修正：改向 allStudentsForLogin 搜尋
     const stu = allStudentsForLogin.value.find(s => s.id === idStudent.value)
     if (!stu.birthday) {
       idError.value = '❌ 系統尚無您的生日資料，請聯繫導師。'
@@ -596,7 +599,6 @@ const submitPwd = async () => {
 }
 
 const allStudents = ref([])
-// 💡 新增：登入選單專用名單 (保留包含隱藏點名屬性的帳號，如 27號)
 const allStudentsForLogin = ref([])
 const todayAttendances = ref([])
 
@@ -736,9 +738,7 @@ const fetchData = async () => {
   const { data: sData } = await supabase.from('students').select('*').order('seat_number')
   
   if (sData) {
-    // 💡 登入名單不隱藏假帳號
     allStudentsForLogin.value = sData
-    // 點名網格仍維持過濾隱藏學生
     allStudents.value = sData.filter(s => !s.hide_attendance)
   }
 
@@ -866,7 +866,6 @@ const saveClassNoteItems = async () => {
 .cancel-btn { background: #e2e8f0; color: #475569; transition: 0.2s;}
 .cancel-btn:hover { background: #cbd5e1; }
 
-/* 🛡️ 新增：實體隔離鎖定防護畫面 */
 .unverified-placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: white; padding: 80px 20px; border-radius: 12px; border: 1px dashed #cbd5e1; margin-top: 20px; }
 .spinner-icon { font-size: 4rem; animation: pulse 2s infinite; margin-bottom: 20px; }
 .unverified-placeholder h2 { color: #334155; margin-bottom: 10px; }
