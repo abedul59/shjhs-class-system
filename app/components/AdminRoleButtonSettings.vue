@@ -9,7 +9,7 @@
     
     <p class="help-text">
       您可以為不同的驗證身分，個別設定他們在班級首頁能看到哪些功能按鈕。<br>
-      💡 勾選代表「顯示」，取消勾選代表「隱藏」。為避免無法管理，<strong>導師預設擁有所有按鈕權限</strong>。
+      💡 此設定受限於「首頁功能按鈕顯示控制」的總開關。若總開關關閉，即使此處勾選，依然不會顯示。為避免無法管理，<strong>導師預設擁有所有按鈕權限</strong>。
     </p>
 
     <div class="table-wrapper">
@@ -18,6 +18,7 @@
           <tr>
             <th>功能按鈕</th>
             <th class="col-anonymous">👤 匿名訪客</th>
+            <th class="col-classroom">🖥️ 教室電腦<br><span class="col-sub">校內/未登入</span></th>
             <th class="col-student">🎒 學生</th>
             <th class="col-parent">👨‍👩‍👦 家長</th>
             <th class="col-teacher">👨‍🏫 任課老師</th>
@@ -28,6 +29,7 @@
           <tr v-for="btn in buttonList" :key="btn.key">
             <td class="btn-name">{{ btn.label }}</td>
             <td><input type="checkbox" v-model="settings.anonymous[btn.key]" class="role-cb"></td>
+            <td><input type="checkbox" v-model="settings.classroom[btn.key]" class="role-cb"></td>
             <td><input type="checkbox" v-model="settings.student[btn.key]" class="role-cb"></td>
             <td><input type="checkbox" v-model="settings.parent[btn.key]" class="role-cb"></td>
             <td><input type="checkbox" v-model="settings.subject_teacher[btn.key]" class="role-cb"></td>
@@ -46,27 +48,33 @@ const supabase = useSupabaseClient()
 
 const isSaving = ref(false)
 
+// 補齊首頁的 15 個按鈕
 const buttonList = [
-  { key: 'parentBind', label: '👨‍👩‍👦 家長綁定' },
+  { key: 'parentBind', label: '👨‍👩‍👦 綁定' },
   { key: 'parentMsg', label: '💬 家長私訊' },
   { key: 'studentMsg', label: '💬 學生私訊' },
-  { key: 'schedule', label: '📅 班級大課表' },
+  { key: 'schedule', label: '📅 顯示班級大課表' },
   { key: 'assignments', label: '📚 作業管理' },
   { key: 'discipline', label: '⚖️ 秩序管理' },
   { key: 'hygiene', label: '🧹 衛生管理' },
   { key: 'seats', label: '🪑 座位管理' },
-  { key: 'exams', label: '📝 考試模式' },
-  { key: 'emergency', label: '🚨 後台/聯絡簿/注意事項' },
-  { key: 'admin', label: '⚙️ 後台設定' }
+  { key: 'manageSchedule', label: '⚙️ 課表管理' },
+  { key: 'exams', label: '📝 大考管理' },
+  { key: 'emergency', label: '🚨 緊急通知' },
+  { key: 'admin', label: '⚙️ 後台' },
+  { key: 'showSeats', label: '👀 顯示教室座位表' },
+  { key: 'showHygiene', label: '🧹 顯示衛生工作' },
+  { key: 'contactHistory', label: '📅 查詢近期聯絡簿' }
 ]
 
-// 系統預設值（幫您把家長/學生的後台權限預設關閉，提升安全性）
+// 系統預設值 (加入教室電腦)
 const defaultSettings = {
-  anonymous: { parentBind: true, parentMsg: true, studentMsg: true, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: true, schedule: true, exams: true },
-  parent: { parentBind: false, parentMsg: true, studentMsg: false, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: false, schedule: true, exams: true },
-  student: { parentBind: false, parentMsg: false, studentMsg: true, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: false, schedule: true, exams: true },
-  subject_teacher: { parentBind: false, parentMsg: false, studentMsg: false, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: false, schedule: true, exams: true },
-  teacher: { parentBind: true, parentMsg: true, studentMsg: true, assignments: true, discipline: true, hygiene: true, seats: true, emergency: true, admin: true, schedule: true, exams: true }
+  anonymous: { parentBind: true, parentMsg: true, studentMsg: true, schedule: true, assignments: true, discipline: true, hygiene: true, seats: true, manageSchedule: false, exams: false, emergency: true, admin: false, showSeats: false, showHygiene: false, contactHistory: false },
+  classroom: { parentBind: false, parentMsg: false, studentMsg: false, schedule: true, assignments: true, discipline: true, hygiene: true, seats: true, manageSchedule: false, exams: false, emergency: true, admin: false, showSeats: true, showHygiene: true, contactHistory: true },
+  parent: { parentBind: false, parentMsg: true, studentMsg: false, schedule: true, assignments: true, discipline: true, hygiene: true, seats: true, manageSchedule: false, exams: false, emergency: true, admin: false, showSeats: false, showHygiene: false, contactHistory: true },
+  student: { parentBind: false, parentMsg: false, studentMsg: true, schedule: true, assignments: true, discipline: true, hygiene: true, seats: true, manageSchedule: false, exams: false, emergency: true, admin: false, showSeats: false, showHygiene: false, contactHistory: true },
+  subject_teacher: { parentBind: false, parentMsg: false, studentMsg: false, schedule: true, assignments: true, discipline: true, hygiene: true, seats: true, manageSchedule: false, exams: false, emergency: true, admin: false, showSeats: true, showHygiene: true, contactHistory: true },
+  teacher: { parentBind: true, parentMsg: true, studentMsg: true, schedule: true, assignments: true, discipline: true, hygiene: true, seats: true, manageSchedule: true, exams: true, emergency: true, admin: true, showSeats: true, showHygiene: true, contactHistory: true }
 }
 
 const settings = ref(JSON.parse(JSON.stringify(defaultSettings)))
@@ -74,13 +82,15 @@ const settings = ref(JSON.parse(JSON.stringify(defaultSettings)))
 const fetchSettings = async () => {
   const { data } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'role_button_settings').maybeSingle()
   if (data && data.setting_value) {
-    settings.value = { ...defaultSettings, ...data.setting_value }
-  } else {
-    // 第一次使用時，嘗試讀取原本舊的「全域按鈕設定」並套用在匿名者身上
-    const { data: oldData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'index_button_settings').maybeSingle()
-    if (oldData && oldData.setting_value) {
-      settings.value.anonymous = { ...settings.value.anonymous, ...oldData.setting_value }
+    // 確保新增的按鈕 key 不會 undefined
+    const loadedSettings = data.setting_value
+    for (const role in defaultSettings) {
+      if (!loadedSettings[role]) loadedSettings[role] = defaultSettings[role]
+      for (const key of buttonList.map(b => b.key)) {
+        if (loadedSettings[role][key] === undefined) loadedSettings[role][key] = defaultSettings[role][key]
+      }
     }
+    settings.value = loadedSettings
   }
 }
 
@@ -88,7 +98,7 @@ onMounted(() => fetchSettings())
 
 const saveSettings = async () => {
   isSaving.value = true
-  // 強制確保導師擁有全部權限，防止不小心把自己鎖在外面
+  // 強制確保導師擁有全部權限
   buttonList.forEach(b => settings.value.teacher[b.key] = true)
   
   const { error } = await supabase.from('system_settings').upsert({
@@ -117,9 +127,11 @@ const saveSettings = async () => {
 .role-table tbody tr:hover { background: #f1f5f9; }
 
 .btn-name { font-weight: bold; color: #0f172a; text-align: left; padding-left: 20px !important; }
+.col-sub { font-size: 0.8rem; font-weight: normal; color: #64748b; }
 .role-cb { transform: scale(1.4); cursor: pointer; accent-color: #10b981; }
 
 .col-anonymous { background: #f1f5f9 !important; }
+.col-classroom { background: #fef08a !important; color: #854d0e !important; }
 .col-student { background: #e0f2fe !important; }
 .col-parent { background: #dcfce7 !important; }
 .col-teacher { background: #fee2e2 !important; }
