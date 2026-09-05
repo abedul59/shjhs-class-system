@@ -34,11 +34,11 @@
 
         <div class="flex-row">
           <select v-model="parentIdMonth" class="pwd-input select-input">
-            <option value="" disabled selected>生日 (月份)...</option>
+            <option value="" disabled selected>學生生日月份...</option>
             <option v-for="m in monthOptions" :key="m" :value="m">{{ m }}月</option>
           </select>
           <select v-model="parentIdDay" class="pwd-input select-input">
-            <option value="" disabled selected>生日 (日期)...</option>
+            <option value="" disabled selected>學生生日日期...</option>
             <option v-for="d in dayOptions" :key="d" :value="d">{{ d }}日</option>
           </select>
         </div>
