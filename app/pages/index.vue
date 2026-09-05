@@ -22,7 +22,27 @@
 
         <div class="main-split">
           <div class="left-panel">
-            <ControlPanel :clockFontSize="clockFontSize" :currentTime="currentTime" :unreadMsgCount="unreadMsgCount" :scheduleDisplay="scheduleDisplay" :scheduleButtonConfig="scheduleButtonConfig" :isIpBrownlisted="isIpBrownlisted" :examData="examData" :indexButtonSettings="indexButtonSettings" :isScheduleButtonVisible="isScheduleButtonVisible" :seatingChart="seatingChart" :showSeatingChartLocal="showSeatingChartLocal" :hygieneData="hygieneData" :showHygieneLocal="showHygieneLocal" :isHistoryVisibleOnIndex="isHistoryVisibleOnIndex" @enterExam="isExamModeView = true" @openLargeSchedule="openLargeSchedule" @openPwd="openPwdModal" @update:showSeatingChartLocal="showSeatingChartLocal = $event" @update:showHygieneLocal="showHygieneLocal = $event" />
+            <ControlPanel 
+              :clockConfig="clockConfig" 
+              :currentTime="currentTime" 
+              :unreadMsgCount="unreadMsgCount" 
+              :scheduleDisplay="scheduleDisplay" 
+              :scheduleButtonConfig="scheduleButtonConfig" 
+              :isIpBrownlisted="isIpBrownlisted" 
+              :examData="examData" 
+              :indexButtonSettings="indexButtonSettings" 
+              :isScheduleButtonVisible="isScheduleButtonVisible" 
+              :seatingChart="seatingChart" 
+              :showSeatingChartLocal="showSeatingChartLocal" 
+              :hygieneData="hygieneData" 
+              :showHygieneLocal="showHygieneLocal" 
+              :isHistoryVisibleOnIndex="isHistoryVisibleOnIndex" 
+              @enterExam="isExamModeView = true" 
+              @openLargeSchedule="openLargeSchedule" 
+              @openPwd="openPwdModal" 
+              @update:showSeatingChartLocal="showSeatingChartLocal = $event" 
+              @update:showHygieneLocal="showHygieneLocal = $event" 
+            />
             
             <AttendanceGrid v-if="isIpBrownlisted" :allStudents="allStudents" :todayAttendances="todayAttendances" :expectedCount="expectedCount" :presentCount="presentCount" :leaveCount="leaveCount" :lateCount="lateCount" :absentCount="absentCount" :privacyFilter="privacyFilter" @toggle-attendance="toggleAttendance" />
             
@@ -86,7 +106,7 @@ const isIpWhitelisted = ref(false)
 const isIpBrownlisted = ref(false)
 const currentIpStr = ref('')
 const unreadMsgCount = ref(0)
-const clockFontSize = ref(35) 
+const clockConfig = ref({ theme: 'classic', color: '#1e293b', size: 35, showIcon: true })
 const autoRefreshSeconds = ref(60) 
 let dataRefreshTimer = null
 
@@ -267,7 +287,7 @@ const toggleAttendance = async (student) => {
 const fetchData = async () => {
   const { data: boardData } = await supabase.from('contact_books').select('contact_items').eq('record_date', todayISO).maybeSingle()
   contactBookItems.value = boardData?.contact_items || []
-  const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings', 'announcements_data', 'class_schedule_data', 'exam_schedule_data', 'parent_notices_data', 'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible', 'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings', 'index_clock_size', 'index_auto_refresh_seconds', 'role_button_settings'])
+  const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', ['board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings', 'announcements_data', 'class_schedule_data', 'exam_schedule_data', 'parent_notices_data', 'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible', 'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings', 'index_clock_size', 'index_clock_config', 'index_auto_refresh_seconds', 'role_button_settings'])
   if (sysData) {
     sysData.forEach(s => {
       const v = s.setting_value
@@ -275,6 +295,8 @@ const fetchData = async () => {
       else if (s.setting_key === 'contact_history_visible') isHistoryVisibleOnIndex.value = v
       else if (s.setting_key === 'index_button_settings') globalButtonSettings.value = v
       else if (s.setting_key === 'role_button_settings') roleButtonSettings.value = { ...defaultRoleSettings, ...v }
+      else if (s.setting_key === 'index_clock_config') clockConfig.value = { ...clockConfig.value, ...v }
+      else if (s.setting_key === 'index_clock_size' && !sysData.find(x => x.setting_key === 'index_clock_config')) clockConfig.value.size = Number(v) || 35
       else if (s.setting_key === 'announcements_data') announcements.value = (v || []).sort((a, b) => new Date(b.date) - new Date(a.date))
       else if (s.setting_key === 'parent_announcements_data') parentAnnouncements.value = (v || []).sort((a, b) => new Date(b.date) - new Date(a.date))
       else if (s.setting_key === 'announcement_board_visible') isAnnouncementVisibleOnIndex.value = v
@@ -282,7 +304,6 @@ const fetchData = async () => {
       else if (s.setting_key === 'parent_notices_board_visible') isNoticeBoardVisibleOnIndex.value = v
       else if (s.setting_key === 'class_schedule_data') scheduleData.value = v
       else if (s.setting_key === 'schedule_button_settings') scheduleButtonConfig.value = { teacherOnlyInBrownlist: true, ...v }
-      else if (s.setting_key === 'index_clock_size') clockFontSize.value = Number(v) || 35
       else if (s.setting_key === 'index_auto_refresh_seconds') autoRefreshSeconds.value = Number(v) || 60
       else if (s.setting_key === 'exam_schedule_data') examData.value = { ...examData.value, ...v }
       else if (s.setting_key === 'parent_notices_data') parentNotices.value = (v || []).filter(n => (!n.startDate || n.startDate <= todayISO) && (!n.endDate || n.endDate >= todayISO)).map(n => n.content) 
@@ -290,7 +311,6 @@ const fetchData = async () => {
       else if (s.setting_key === 'seating_chart_data') seatingChart.value = { isVisible: v.isVisible || false, isRotated: v.isRotated || false, seats: (v.seats || []).map(seat => seat.content !== undefined ? { id: seat.id, isHidden: seat.isHidden, seatNum: String(seat.content).split('\n')[0] || '', name: String(seat.content).split('\n')[1] || '', other: String(seat.content).split('\n').slice(2).join(' ') || '' } : seat), settings: v.settings || {} }
       else if (s.setting_key === 'hygiene_management_data') hygieneData.value = { ...hygieneData.value, ...v }
     })
-    // 確保兼容舊版設定
     if (!sysData.find(s => s.setting_key === 'role_button_settings') && globalButtonSettings.value) {
       roleButtonSettings.value.anonymous = { ...roleButtonSettings.value.anonymous, ...globalButtonSettings.value }
     }
