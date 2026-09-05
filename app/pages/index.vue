@@ -17,10 +17,9 @@
       <div v-if="!isIpBrownlisted" class="identity-banner">
         <span v-if="currentIdentity !== '匿名來訪者'">✅ 目前驗證身分：{{ currentIdentity }}</span>
         <span v-else>⚠️ 尚未驗證身分</span>
-        <button @click="changeIdentity" class="change-id-btn">切換/綁定身分</button>
+        <button @click="showIdentityModal = true" class="change-id-btn">切換/綁定身分</button>
       </div>
 
-      <!-- 🛡️ 核心資安防護：實體隔離區塊 -->
       <div v-if="isContentVisible">
         <NoticeBoards 
           :isIpBrownlisted="isIpBrownlisted"
@@ -120,97 +119,34 @@
         />
       </div>
       
-      <!-- 🛡️ 未通過驗證的鎖定畫面 -->
       <div v-else class="unverified-placeholder">
         <div class="spinner-icon">🛡️</div>
         <h2>系統安全鎖定中</h2>
         <p>為保護班級資訊，請於驗證畫面選擇身分後進入。</p>
       </div>
-
     </div> 
 
-    <!-- 密碼解鎖彈窗 -->
-    <div v-if="showPwdModal" class="modal-overlay" @click.self="closePwdModal">
-      <div class="pwd-modal-content">
-        <h3>{{ pwdModalTitle }}</h3>
-        <p class="pwd-desc">{{ pwdModalDesc }}</p>
-        <input type="password" v-model="pwdInput" @keyup.enter="submitPwd" class="pwd-input" placeholder="請輸入密碼..." autofocus />
-        <div class="pwd-actions">
-          <button @click="closePwdModal" class="cancel-btn">取消</button>
-          <button @click="submitPwd" class="confirm-btn">解鎖</button>
-        </div>
-      </div>
-    </div>
+    <!-- 💡 替換為抽離出的元件 -->
+    <PasswordModal 
+      :show="showPwdModal" 
+      :title="pwdModalTitle" 
+      :desc="pwdModalDesc" 
+      :target="pwdTarget"
+      :officerPasswords="officerPasswords"
+      @close="showPwdModal = false"
+      @success="handlePwdSuccess" 
+    />
 
-    <!-- 外部 IP 強制身分驗證彈窗 -->
-    <div v-if="showIdentityModal" class="modal-overlay">
-      <div class="pwd-modal-content identity-modal">
-        <h3>🛡️ 資訊安全身分驗證</h3>
-        <p class="pwd-desc">為了增強資訊安全與紀錄足跡，請選擇您的身分登入系統：</p>
-        
-        <div class="id-type-selector">
-          <label><input type="radio" v-model="idType" value="teacher"> 導師</label>
-          <label><input type="radio" v-model="idType" value="subject_teacher"> 任課老師</label>
-          <label><input type="radio" v-model="idType" value="parent"> 家長</label>
-          <label><input type="radio" v-model="idType" value="student"> 學生</label>
-        </div>
-
-        <div v-if="idType === 'teacher'" class="id-form-group">
-          <input type="password" v-model="idPwd" class="pwd-input" placeholder="請輸入導師密碼" @keyup.enter="submitIdentity" />
-        </div>
-
-        <div v-if="idType === 'subject_teacher'" class="id-form-group">
-          <input type="password" v-model="idPwd" class="pwd-input" placeholder="請輸入辦公室分機號碼" @keyup.enter="submitIdentity" />
-        </div>
-
-        <div v-if="idType === 'parent'" class="id-form-group">
-          <select v-model="idStudent" class="pwd-input select-input" style="margin-bottom: 10px;">
-            <option value="" disabled selected>請選擇您的孩子...</option>
-            <option v-for="s in allStudentsForLogin" :key="s.id" :value="s.id">{{ s.seat_number }}號 {{ privacyFilter(s.real_name) }}</option>
-          </select>
-          
-          <div class="flex-row">
-            <select v-model="parentIdSchool" class="pwd-input select-input">
-              <option value="" disabled selected>請選擇畢業國小...</option>
-              <option v-for="school in availableSchools" :key="school" :value="school">{{ school }}</option>
-            </select>
-          </div>
-
-          <div class="flex-row">
-            <select v-model="parentIdMonth" class="pwd-input select-input">
-              <option value="" disabled selected>生日 (月份)...</option>
-              <option v-for="m in monthOptions" :key="m" :value="m">{{ m }}月</option>
-            </select>
-            <select v-model="parentIdDay" class="pwd-input select-input">
-              <option value="" disabled selected>生日 (日期)...</option>
-              <option v-for="d in dayOptions" :key="d" :value="d">{{ d }}日</option>
-            </select>
-          </div>
-
-          <select v-model="parentIdRelation" class="pwd-input select-input" style="margin-bottom: 10px;">
-            <option value="" disabled selected>您與學生的關係...</option>
-            <option v-for="rel in relationOptions" :key="rel" :value="rel">{{ rel }}</option>
-          </select>
-
-          <p class="info-text">👨‍👩‍👦 系統將比對國小與生日資訊並綁定此設備，未來無須重選。</p>
-        </div>
-
-        <div v-if="idType === 'student'" class="id-form-group">
-          <select v-model="idStudent" class="pwd-input select-input" style="margin-bottom: 10px;">
-            <option value="" disabled selected>請選擇您的姓名...</option>
-            <option v-for="s in allStudentsForLogin" :key="s.id" :value="s.id">{{ s.seat_number }}號 {{ privacyFilter(s.real_name) }}</option>
-          </select>
-          <input type="password" v-model="idPwd" class="pwd-input" placeholder="請輸入西元年出生8碼 (例: 20120508)" @keyup.enter="submitIdentity" />
-        </div>
-
-        <p v-if="idError" class="error-msg">{{ idError }}</p>
-
-        <div class="pwd-actions id-actions">
-          <button v-if="currentIdentity !== '匿名來訪者'" @click="showIdentityModal = false" class="cancel-btn">取消</button>
-          <button @click="submitIdentity" class="confirm-btn" style="flex: 1;">驗證並登入</button>
-        </div>
-      </div>
-    </div>
+    <IdentityModal 
+      :show="showIdentityModal" 
+      :students="allStudentsForLogin"
+      :schools="availableSchools"
+      :expectedTeacherPwd="expectedTeacherPwd"
+      :hasCurrentIdentity="currentIdentity !== '匿名來訪者'"
+      :privacyFilter="privacyFilter"
+      @close="showIdentityModal = false"
+      @verified="handleIdentityVerified" 
+    />
 
     <LargeScheduleModal 
       v-if="showLargeSchedule"
@@ -236,6 +172,8 @@ import SeatingAndHygiene from '~~/components/home/SeatingAndHygiene.vue'
 import NoticeBoards from '~~/components/home/NoticeBoards.vue'
 import ControlPanel from '~~/components/home/ControlPanel.vue'
 import LargeScheduleModal from '~~/components/home/LargeScheduleModal.vue'
+import PasswordModal from '~~/components/home/PasswordModal.vue'
+import IdentityModal from '~~/components/home/IdentityModal.vue'
 
 const supabase = useSupabaseClient()
 
@@ -262,7 +200,6 @@ const scheduleButtonConfig = ref({ isVisible: false, visibility: 'both', teacher
 const showLargeSchedule = ref(false)
 
 const clockFontSize = ref(35) 
-
 const autoRefreshSeconds = ref(60) 
 let dataRefreshTimer = null
 
@@ -305,30 +242,8 @@ const defaultHygieneData = {
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
 const showIdentityModal = ref(false)
-const idType = ref('parent')
-const idStudent = ref('')
-const idPwd = ref('')
-const idError = ref('')
 const currentIdentity = ref('匿名來訪者')
 const expectedTeacherPwd = ref('168168168')
-
-const parentIdSchool = ref('')
-const parentIdMonth = ref('')
-const parentIdDay = ref('')
-const parentIdRelation = ref('')
-
-const relationOptions = ['父親', '母親', '祖父', '祖母', '外祖父', '外祖母', '兄', '弟', '姊', '妹', '其他']
-const monthOptions = ['01','02','03','04','05','06','07','08','09','10','11','12']
-const dayOptions = ['01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30','31']
-
-watch(idType, () => { 
-  idPwd.value = ''
-  idError.value = ''
-  parentIdSchool.value = ''
-  parentIdMonth.value = ''
-  parentIdDay.value = ''
-  parentIdRelation.value = ''
-})
 
 const isContentVisible = computed(() => {
   return isIpBrownlisted.value || currentIdentity.value !== '匿名來訪者'
@@ -339,14 +254,8 @@ const availableSchools = computed(() => {
   const schools = allStudentsForLogin.value
     .map(s => s.graduated_school || s.elementary_school || s.elem_school || s.school || s.school_name)
     .filter(Boolean)
-  
   const uniqueSchools = [...new Set(schools)].sort()
-  
-  if (uniqueSchools.length === 0) {
-    return ['【資料庫尚未建立國小資料】']
-  }
-  
-  return uniqueSchools
+  return uniqueSchools.length === 0 ? ['【資料庫尚未建立國小資料】'] : uniqueSchools
 })
 
 const loadTeacherPwd = async () => {
@@ -363,97 +272,19 @@ const loadTeacherPwd = async () => {
 
 const checkIdentity = () => {
   currentIdentity.value = localStorage.getItem('visitor_known_identity') || '匿名來訪者'
-  if (!isIpBrownlisted.value && currentIdentity.value === '匿名來訪者') {
-    showIdentityModal.value = true
-  }
+  if (!isIpBrownlisted.value && currentIdentity.value === '匿名來訪者') showIdentityModal.value = true
 }
 
-const changeIdentity = () => { showIdentityModal.value = true }
-
-const submitIdentity = () => {
-  idError.value = ''
-  let finalIdentity = ''
-
-  if (idType.value === 'teacher') {
-    if (idPwd.value !== expectedTeacherPwd.value && idPwd.value !== '168168168') {
-      idError.value = '❌ 導師密碼錯誤！'
-      return
-    }
-    finalIdentity = '導師'
-  } else if (idType.value === 'subject_teacher') {
-    if (!/^\d{3}$/.test(idPwd.value)) {
-      idError.value = '❌ 分機號碼驗證失敗！'
-      return
-    }
-    finalIdentity = `分機 ${idPwd.value} 任課老師`
-  } else if (idType.value === 'parent') {
-    if (!idStudent.value) { idError.value = '❌ 請選擇您的孩子！'; return }
-    if (!parentIdSchool.value) { idError.value = '❌ 請選擇畢業國小！'; return }
-    if (!parentIdMonth.value || !parentIdDay.value) { idError.value = '❌ 請選擇生日的月份與日期！'; return }
-    if (!parentIdRelation.value) { idError.value = '❌ 請選擇您與學生的關係！'; return }
-
-    const stu = allStudentsForLogin.value.find(s => s.id === idStudent.value)
-    
-    // 比對國小
-    const dbSchool = stu.graduated_school || stu.elementary_school || stu.elem_school || stu.school || stu.school_name
-    if (dbSchool && parentIdSchool.value !== '【資料庫尚未建立國小資料】' && dbSchool !== parentIdSchool.value) {
-      idError.value = '❌ 畢業國小驗證失敗，請確認選擇是否正確！'
-      return
-    }
-
-    if (!stu.birthday) {
-      idError.value = '❌ 系統尚無該學生的生日資料，無法驗證，請聯繫導師。'
-      return
-    }
-    const birthMatch = stu.birthday.match(/(\d{4})[-/]?(\d{1,2})[-/]?(\d{1,2})/)
-    if (!birthMatch) {
-      idError.value = '❌ 系統生日資料格式異常，無法驗證，請聯繫導師。'
-      return
-    }
-    const mm = birthMatch[2].padStart(2, '0')
-    const dd = birthMatch[3].padStart(2, '0')
-
-    if (mm !== parentIdMonth.value || dd !== parentIdDay.value) {
-      idError.value = '❌ 生日月份或日期驗證失敗！'
-      return
-    }
-
-    finalIdentity = `${stu.seat_number}號 ${stu.real_name} 家長(${parentIdRelation.value})`
-  } else if (idType.value === 'student') {
-    if (!idStudent.value) { idError.value = '❌ 請選擇您的姓名！'; return }
-    const stu = allStudentsForLogin.value.find(s => s.id === idStudent.value)
-    
-    if (!stu.birthday) {
-      idError.value = '❌ 系統尚無您的生日資料，請聯繫導師。'
-      return
-    }
-    const birthMatch = stu.birthday.match(/(\d{4})[-/]?(\d{1,2})[-/]?(\d{1,2})/)
-    if (!birthMatch) {
-      idError.value = '❌ 系統生日資料格式異常，無法驗證，請聯繫導師。'
-      return
-    }
-    const yyyy = birthMatch[1]
-    const mm = birthMatch[2].padStart(2, '0')
-    const dd = birthMatch[3].padStart(2, '0')
-    const bdayStr = `${yyyy}${mm}${dd}`
-
-    if (idPwd.value !== bdayStr) {
-      idError.value = '❌ 生日密碼錯誤！請輸入西元年出生 8 碼 (例如 20120508)'
-      return
-    }
-    finalIdentity = `${stu.seat_number}號 ${stu.real_name} 學生`
-  }
-
+const handleIdentityVerified = async (finalIdentity) => {
   localStorage.setItem('visitor_known_identity', finalIdentity)
   currentIdentity.value = finalIdentity
   showIdentityModal.value = false
-  
-  supabase.from('visitor_logs').insert([{ 
+  await supabase.from('visitor_logs').insert([{ 
     ip_address: currentIpStr.value || '未知IP', 
     device_info: navigator.userAgent, 
     role: finalIdentity,
     action_details: `🔑 綁定設備身分：${finalIdentity}` 
-  }]).then(() => {})
+  }])
 }
 
 const currentThemeStyles = computed(() => {
@@ -480,14 +311,10 @@ const logVisit = async () => {
     const ua = navigator.userAgent
     let role = localStorage.getItem('visitor_known_identity') || '匿名來訪者'
     if (sessionStorage.getItem('schedule_admin_logged_in') === 'true' || sessionStorage.getItem('exams_admin_logged_in') === 'true') role = '導師'
-    
     await supabase.from('visitor_logs').insert([{ 
       ip_address: currentIpStr.value || '未知IP', 
-      device_info: ua, 
-      role: role,
-      action_details: '👁️ 瀏覽頁面：班級首頁' 
+      device_info: ua, role: role, action_details: '👁️ 瀏覽頁面：班級首頁' 
     }])
-    
     sessionStorage.setItem('visit_logged', 'true')
   } catch (e) {}
 }
@@ -497,8 +324,7 @@ const logRoleVisit = async (roleName) => {
     await supabase.from('visitor_logs').insert([{ 
       ip_address: currentIpStr.value || '未知IP', 
       device_info: navigator.userAgent, 
-      role: roleName,
-      action_details: `🔑 解鎖後台：${roleName}` 
+      role: roleName, action_details: `🔑 解鎖後台：${roleName}` 
     }]) 
   } catch (e) { console.error(e) }
 }
@@ -513,7 +339,6 @@ const logAudit = async (actionType, details) => {
 
 const privacyFilter = (txt) => {
   let result = String(txt || '')
-  // 💡 修正：依賴 allStudentsForLogin，確保被隱藏點名的學生也能被覆蓋姓名
   if (!isIpWhitelisted.value && allStudentsForLogin.value && allStudentsForLogin.value.length > 0) {
     const sortedStudents = [...allStudentsForLogin.value].sort((a, b) => (b.real_name || '').length - (a.real_name || '').length)
     sortedStudents.forEach(stu => {
@@ -619,7 +444,7 @@ const countdownMinutes = computed(() => {
   if (examStatus.value.state !== 'TESTING' || !examStatus.value.current) return 999;
   const currentTick = nowTick.value; const now = new Date(currentTick);
   const [eh, em] = examStatus.value.current.endTime.split(':').map(Number);
-  const end = new Date(now.getFullYear(), now.getMonth(),getDate(), eh, em, 0);
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em, 0);
   return Math.floor((end.getTime() - currentTick) / 60000);
 })
 
@@ -653,11 +478,9 @@ const showPwdModal = ref(false)
 const pwdTarget = ref('')
 const pwdModalTitle = ref('')
 const pwdModalDesc = ref('')
-const pwdInput = ref('')
 
 const openPwdModal = (target) => {
   pwdTarget.value = target
-  pwdInput.value = ''
   if (target === 'emergency') { 
     pwdModalTitle.value = '🚨 緊急通知系統解鎖'; pwdModalDesc.value = '請輸入「導師」密碼：' 
   } else if (target === 'contact') { 
@@ -668,27 +491,20 @@ const openPwdModal = (target) => {
   showPwdModal.value = true
 }
 
-const closePwdModal = () => { showPwdModal.value = false }
-
-const submitPwd = async () => {
-  const pwd = pwdInput.value
-  const teacherPwd = officerPasswords.value.teacher || '168168168'
-
-  if (pwdTarget.value === 'emergency') {
-    if (pwd === teacherPwd) { showPwdModal.value = false; showEmergencyModal.value = true; await logRoleVisit('導師') } else { alert("❌ 密碼錯誤！") }
-  } 
-  else if (pwdTarget.value === 'contact') {
-    if (officerPasswords.value.academic && pwd === officerPasswords.value.academic) { currentEditorRole.value = '學藝股長'; isEditingContact.value = true; editingContactItems.value = [...contactBookItems.value]; showPwdModal.value = false; await logRoleVisit('學藝股長') } 
-    else if (officerPasswords.value.counseling && pwd === officerPasswords.value.counseling) { currentEditorRole.value = '輔導股長'; isEditingContact.value = true; editingContactItems.value = [...contactBookItems.value]; showPwdModal.value = false; await logRoleVisit('輔導股長') } 
-    else if (pwd === teacherPwd) { currentEditorRole.value = '導師'; isEditingContact.value = true; editingContactItems.value = [...contactBookItems.value]; showPwdModal.value = false; await logRoleVisit('導師') } 
-    else { alert("❌ 密碼錯誤！請確認密碼是否正確。") }
+const handlePwdSuccess = async ({ target, role }) => {
+  showPwdModal.value = false
+  currentEditorRole.value = role
+  
+  if (target === 'emergency') {
+    showEmergencyModal.value = true
+  } else if (target === 'contact') {
+    isEditingContact.value = true
+    editingContactItems.value = [...contactBookItems.value]
+  } else if (target === 'classNotes') {
+    isEditingClassNotes.value = true
+    editingClassNoteItems.value = [...classNoteItems.value]
   }
-  else if (pwdTarget.value === 'classNotes') {
-    if (officerPasswords.value.academic && pwd === officerPasswords.value.academic) { currentEditorRole.value = '學藝股長'; isEditingClassNotes.value = true; editingClassNoteItems.value = [...classNoteItems.value]; showPwdModal.value = false; await logRoleVisit('學藝股長') } 
-    else if (officerPasswords.value.counseling && pwd === officerPasswords.value.counseling) { currentEditorRole.value = '輔導股長'; isEditingClassNotes.value = true; editingClassNoteItems.value = [...classNoteItems.value]; showPwdModal.value = false; await logRoleVisit('輔導股長') } 
-    else if (pwd === teacherPwd) { currentEditorRole.value = '導師'; isEditingClassNotes.value = true; editingClassNoteItems.value = [...classNoteItems.value]; showPwdModal.value = false; await logRoleVisit('導師') } 
-    else { alert("❌ 密碼錯誤！請確認密碼是否正確。") }
-  }
+  await logRoleVisit(role)
 }
 
 const allStudents = ref([])
@@ -946,19 +762,6 @@ const saveClassNoteItems = async () => {
 .left-panel { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .right-panel { flex: 1; min-width: 0; }
 
-.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 9999; padding: 20px; box-sizing: border-box; }
-.pwd-modal-content { background: white; padding: 25px 30px; border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); text-align: center;}
-.pwd-modal-content h3 { margin: 0 0 15px 0; color: #1e293b; font-size: 1.4rem; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; }
-.pwd-desc { color: #64748b; font-size: 1.05rem; margin-bottom: 20px; }
-.pwd-input { width: 100%; padding: 12px 15px; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 25px; font-size: 1.2rem; text-align: center; box-sizing: border-box;}
-.pwd-input:focus { border-color: #3b82f6; outline: none; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
-.pwd-actions { display: flex; justify-content: center; gap: 15px; }
-.pwd-actions button { padding: 10px 25px; border-radius: 8px; font-weight: bold; font-size: 1.05rem; cursor: pointer; border: none;}
-.confirm-btn { background: #3b82f6; color: white; transition: 0.2s;}
-.confirm-btn:hover { background: #2563eb; }
-.cancel-btn { background: #e2e8f0; color: #475569; transition: 0.2s;}
-.cancel-btn:hover { background: #cbd5e1; }
-
 .unverified-placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: white; padding: 80px 20px; border-radius: 12px; border: 1px dashed #cbd5e1; margin-top: 20px; }
 .spinner-icon { font-size: 4rem; animation: pulse 2s infinite; margin-bottom: 20px; }
 .unverified-placeholder h2 { color: #334155; margin-bottom: 10px; }
@@ -971,24 +774,9 @@ const saveClassNoteItems = async () => {
 .change-id-btn { background: #0ea5e9; color: white; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.95rem; font-weight: bold; transition: 0.2s; }
 .change-id-btn:hover { background: #0284c7; }
 
-.identity-modal { max-width: 480px; text-align: left; }
-.id-type-selector { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px dashed #cbd5e1; }
-.id-type-selector label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: bold; color: #334155; font-size: 1.05rem; padding: 5px;}
-.id-form-group { margin-bottom: 20px; min-height: 50px;}
-.select-input { text-align: left; }
-.info-text { font-size: 0.95rem; color: #059669; font-weight: bold; margin: 0; background: #dcfce7; padding: 10px; border-radius: 6px;}
-.error-msg { color: #dc2626; font-weight: bold; text-align: center; margin-bottom: 15px; background: #fee2e2; padding: 8px; border-radius: 6px;}
-.id-actions { display: flex; gap: 10px; }
-
-.identity-modal .pwd-input { font-size: 0.95rem; padding: 10px; margin-bottom: 15px; }
-.identity-modal .pwd-input::placeholder { font-size: 0.9rem; color: #94a3b8; }
-.flex-row { display: flex; gap: 10px; margin-bottom: 15px; }
-.flex-row > * { flex: 1; margin-bottom: 0 !important; }
-
 @media (max-width: 1024px) { .main-split { flex-direction: column; } }
 @media (max-width: 768px) {
   .page-container { padding: 10px; }
-  .id-type-selector { flex-direction: column; gap: 12px; }
 }
 
 :deep(.text-sm) { font-size: 0.9rem !important; line-height: 1.5; }
