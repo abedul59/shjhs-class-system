@@ -1,24 +1,30 @@
 <template>
   <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
     
-    <!-- 大考儀表板核心運算 -->
-    <ExamModeManager 
+    <!-- 🎯 大考模式儀表板 (已恢復寫在內層) -->
+    <ExamDashboard 
       v-if="isExamModeView && isIpBrownlisted" 
-      :examData="examData" :nowTick="nowTick" :currentTime="currentTime" :isIpBrownlisted="isIpBrownlisted"
-      @exit="isExamModeView = false" 
+      :examData="examData" 
+      :examStatus="examStatus"
+      :currentTime="currentTime"
+      :countdownMinutes="countdownMinutes"
+      :countdownText="countdownText"
+      :currentThemeStyles="currentThemeStyles"
+      @exit="isExamModeView = false"
     />
 
     <div v-if="!isExamModeView" class="normal-home-content">
       
-      <!-- 頂部身分狀態列 -->
-      <TopIdentityBanner 
-        v-if="!isIpBrownlisted" 
-        :currentIdentity="currentIdentity" 
-        @change-identity="showIdentityModal = true" 
-      />
+      <!-- 🎯 頂部身分狀態列 (已恢復寫在內層) -->
+      <div v-if="!isIpBrownlisted" class="identity-banner">
+        <span v-if="currentIdentity !== '匿名來訪者'">✅ 目前驗證身分：{{ currentIdentity }}</span>
+        <span v-else>⚠️ 尚未驗證身分</span>
+        <button @click="showIdentityModal = true" class="change-id-btn">切換/綁定身分</button>
+      </div>
 
       <div v-if="isContentVisible">
-        <!-- 💡 班級公佈欄 (已恢復正常渲染) -->
+        
+        <!-- 💡 班級公佈欄區塊 -->
         <NoticeBoards 
           :isIpBrownlisted="isIpBrownlisted" 
           :isNoticeBoardVisibleOnIndex="isNoticeBoardVisibleOnIndex" 
@@ -35,6 +41,7 @@
         <div class="main-split">
           <div class="left-panel">
             
+            <!-- 💡 總控制面板 -->
             <ControlPanel 
               :clockConfig="clockConfig" 
               :currentTime="currentTime" 
@@ -51,12 +58,13 @@
               :showHygieneLocal="showHygieneLocal" 
               :isHistoryVisibleOnIndex="isHistoryVisibleOnIndex" 
               @enterExam="isExamModeView = true" 
-              @openLargeSchedule="openLargeSchedule" 
+              @openLargeSchedule="showLargeSchedule = true" 
               @openPwd="openPwdModal" 
               @update:showSeatingChartLocal="showSeatingChartLocal = $event" 
               @update:showHygieneLocal="showHygieneLocal = $event" 
             />
             
+            <!-- 💡 點名表 -->
             <AttendanceGrid 
               v-if="isIpBrownlisted" 
               :allStudents="allStudents" 
@@ -76,22 +84,85 @@
           </div>
 
           <div class="right-panel">
-            <ClassNotes :classNoteItems="classNoteItems" :editingClassNoteItems="editingClassNoteItems" :isEditingClassNotes="isEditingClassNotes" :todayDisplay="todayDisplay" :privacyFilter="privacyFilter" @open-pwd="openPwdModal('classNotes')" @cancel-edit="isEditingClassNotes = false" @save-items="saveClassNoteItems" @add-item="addClassNoteItem" @remove-item="removeClassNoteItem" @update-item="updateEditingClassNoteItem" />
-            <ContactBook :contactBookItems="contactBookItems" :editingContactItems="editingContactItems" :isEditingContact="isEditingContact" :todayDisplay="todayDisplay" :privacyFilter="privacyFilter" @open-pwd="openPwdModal('contact')" @cancel-edit="isEditingContact = false" @save-items="saveContactItems" @add-item="addContactItem" @remove-item="removeContactItem" @update-item="updateEditingContactItem" />
+            <ClassNotes 
+              :classNoteItems="classNoteItems" 
+              :editingClassNoteItems="editingClassNoteItems" 
+              :isEditingClassNotes="isEditingClassNotes" 
+              :todayDisplay="todayDisplay" 
+              :privacyFilter="privacyFilter" 
+              @open-pwd="openPwdModal('classNotes')" 
+              @cancel-edit="isEditingClassNotes = false" 
+              @save-items="saveClassNoteItems" 
+              @add-item="addClassNoteItem" 
+              @remove-item="removeClassNoteItem" 
+              @update-item="updateEditingClassNoteItem" 
+            />
+            <ContactBook 
+              :contactBookItems="contactBookItems" 
+              :editingContactItems="editingContactItems" 
+              :isEditingContact="isEditingContact" 
+              :todayDisplay="todayDisplay" 
+              :privacyFilter="privacyFilter" 
+              @open-pwd="openPwdModal('contact')" 
+              @cancel-edit="isEditingContact = false" 
+              @save-items="saveContactItems" 
+              @add-item="addContactItem" 
+              @remove-item="removeContactItem" 
+              @update-item="updateEditingContactItem" 
+            />
           </div>
         </div>
         
-        <SeatingAndHygiene :seatingChart="seatingChart" :showSeatingChartLocal="showSeatingChartLocal" :indexButtonSettings="indexButtonSettings" :hygieneData="hygieneData" :showHygieneLocal="showHygieneLocal" :privacyFilter="privacyFilter" :formatNL="formatNL" />
+        <SeatingAndHygiene 
+          :seatingChart="seatingChart" 
+          :showSeatingChartLocal="showSeatingChartLocal" 
+          :indexButtonSettings="indexButtonSettings" 
+          :hygieneData="hygieneData" 
+          :showHygieneLocal="showHygieneLocal" 
+          :privacyFilter="privacyFilter" 
+          :formatNL="formatNL" 
+        />
       </div>
       
-      <!-- 未通過驗證的鎖定畫面 -->
-      <SystemLockedGuard v-else />
+      <!-- 🎯 系統安全鎖定畫面 (已恢復寫在內層) -->
+      <div v-else class="unverified-placeholder">
+        <div class="spinner-icon">🛡️</div>
+        <h2>系統安全鎖定中</h2>
+        <p>為保護班級資訊，請於驗證畫面選擇身分後進入。</p>
+      </div>
     </div> 
 
-    <!-- 模態彈窗區 -->
-    <PasswordModal :show="showPwdModal" :title="pwdModalTitle" :desc="pwdModalDesc" :target="pwdTarget" :officerPasswords="officerPasswords" @close="showPwdModal = false" @success="handlePwdSuccess" />
-    <IdentityModal :show="showIdentityModal" :students="allStudentsForLogin" :schools="availableSchools" :expectedTeacherPwd="expectedTeacherPwd" :hasCurrentIdentity="currentIdentity !== '匿名來訪者'" :privacyFilter="privacyFilter" @close="showIdentityModal = false" @verified="handleIdentityVerified" />
-    <LargeScheduleModal v-if="showLargeSchedule" :scheduleData="scheduleData" :scheduleButtonConfig="scheduleButtonConfig" :isIpBrownlisted="isIpBrownlisted" :privacyFilter="privacyFilter" @close="showLargeSchedule = false" />
+    <!-- 模態彈窗區 (保留先前的身分認證與密碼彈窗) -->
+    <PasswordModal 
+      :show="showPwdModal" 
+      :title="pwdModalTitle" 
+      :desc="pwdModalDesc" 
+      :target="pwdTarget" 
+      :officerPasswords="officerPasswords" 
+      @close="showPwdModal = false" 
+      @success="handlePwdSuccess" 
+    />
+    
+    <IdentityModal 
+      :show="showIdentityModal" 
+      :students="allStudentsForLogin" 
+      :schools="availableSchools" 
+      :expectedTeacherPwd="expectedTeacherPwd" 
+      :hasCurrentIdentity="currentIdentity !== '匿名來訪者'" 
+      :privacyFilter="privacyFilter" 
+      @close="showIdentityModal = false" 
+      @verified="handleIdentityVerified" 
+    />
+    
+    <LargeScheduleModal 
+      v-if="showLargeSchedule" 
+      :scheduleData="scheduleData" 
+      :scheduleButtonConfig="scheduleButtonConfig" 
+      :isIpBrownlisted="isIpBrownlisted" 
+      :privacyFilter="privacyFilter" 
+      @close="showLargeSchedule = false" 
+    />
+    
     <EmergencyModal v-if="showEmergencyModal" @close="showEmergencyModal = false" />
   </div>
 </template>
@@ -99,10 +170,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 
-// 引用的所有元件
-import ExamModeManager from '~~/components/home/ExamModeManager.vue'
-import TopIdentityBanner from '~~/components/home/TopIdentityBanner.vue'
-import SystemLockedGuard from '~~/components/home/SystemLockedGuard.vue'
+import ExamDashboard from '~~/components/home/ExamDashboard.vue'
 import AttendanceGrid from '~~/components/home/AttendanceGrid.vue'
 import ContactBook from '~~/components/home/ContactBook.vue'
 import ClassNotes from '~~/components/home/ClassNotes.vue'
@@ -115,7 +183,7 @@ import IdentityModal from '~~/components/home/IdentityModal.vue'
 
 const supabase = useSupabaseClient()
 
-// UI 顯示控制狀態
+// ===== UI 控制狀態 =====
 const showEmergencyModal = ref(false)
 const showSeatingChartLocal = ref(false)
 const showHygieneLocal = ref(false)
@@ -134,17 +202,33 @@ const clockConfig = ref({ theme: 'classic', color: '#1e293b', size: 35, showIcon
 const autoRefreshSeconds = ref(60) 
 let dataRefreshTimer = null
 
-// 核心資料狀態
+// ===== 核心資料狀態 =====
 const announcements = ref([])
 const parentAnnouncements = ref([])
+const parentNotices = ref([])
 const scheduleData = ref(null)
 const examData = ref({ isExamModeEnabled: true, theme: 'midnight', title: '', periods: [] })
 const scheduleButtonConfig = ref({ isVisible: false, visibility: 'both', teacherOnlyInBrownlist: true })
 
-// 權限與身分狀態
+const contactBookItems = ref([])
+const isEditingContact = ref(false)
+const editingContactItems = ref([])
+
+const classNoteItems = ref([])
+const isEditingClassNotes = ref(false)
+const editingClassNoteItems = ref([])
+
+const seatingChart = ref({ isVisible: false, isRotated: false, seats: [], settings: {} })
+const defaultHygieneData = { isVisibleOnIndex: false, morning: {}, lunch: {}, squad: {} }
+const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
+
+// ===== 權限與身分狀態 =====
 const showIdentityModal = ref(false)
 const currentIdentity = ref('匿名來訪者')
 const expectedTeacherPwd = ref('168168168')
+const officerPasswords = ref({ academic: '', counseling: '', discipline: '', teacher: '168168168' })
+const currentEditorRole = ref('') 
+
 const globalButtonSettings = ref({})
 const defaultRoleSettings = {
   anonymous: { parentBind: true, parentMsg: true, studentMsg: true, schedule: true, assignments: true, discipline: true, hygiene: true, seats: true, manageSchedule: false, exams: false, emergency: true, admin: false, showSeats: false, showHygiene: false, contactHistory: false },
@@ -156,17 +240,28 @@ const defaultRoleSettings = {
 }
 const roleButtonSettings = ref(JSON.parse(JSON.stringify(defaultRoleSettings)))
 
+// 計算當前身分群組 (加入教室電腦判斷)
 const activeRoleCategory = computed(() => {
   const id = currentIdentity.value;
-  if (id.includes('導師')) return 'teacher'; if (id.includes('任課老師')) return 'subject_teacher';
-  if (id.includes('家長')) return 'parent'; if (id.includes('學生')) return 'student';
+  if (!id) return 'anonymous';
+  if (id.includes('導師')) return 'teacher'; 
+  if (id.includes('任課老師')) return 'subject_teacher';
+  if (id.includes('家長')) return 'parent'; 
+  if (id.includes('學生')) return 'student';
   return isIpBrownlisted.value ? 'classroom' : 'anonymous';
 })
 
+// 計算最終顯示按鈕 (雙層權限引擎：總開關 AND 身分開關)
 const indexButtonSettings = computed(() => {
   const roleSettings = roleButtonSettings.value[activeRoleCategory.value] || defaultRoleSettings.anonymous
   const effectiveSettings = {}
-  for (const key in roleSettings) { effectiveSettings[key] = globalButtonSettings.value[key] === false ? false : roleSettings[key] }
+  for (const key in roleSettings) { 
+    if (globalButtonSettings.value && globalButtonSettings.value[key] === false) {
+      effectiveSettings[key] = false
+    } else {
+      effectiveSettings[key] = roleSettings[key] 
+    }
+  }
   return effectiveSettings
 })
 
@@ -178,25 +273,58 @@ const availableSchools = computed(() => {
   return uniqueSchools.length === 0 ? ['【資料庫尚未建立國小資料】'] : uniqueSchools
 })
 
+// ===== 密碼彈窗邏輯 =====
+const showPwdModal = ref(false)
+const pwdTarget = ref('')
+const pwdModalTitle = ref('')
+const pwdModalDesc = ref('')
+
+const openPwdModal = (target) => {
+  pwdTarget.value = target
+  if (target === 'emergency') { pwdModalTitle.value = '🚨 緊急通知系統解鎖'; pwdModalDesc.value = '請輸入「導師」密碼：' } 
+  else if (target === 'contact') { pwdModalTitle.value = '✏️ 編輯聯絡簿解鎖'; pwdModalDesc.value = '請輸入「學藝股長」、「輔導股長」或「導師」密碼：' } 
+  else if (target === 'classNotes') { pwdModalTitle.value = '⚡ 編輯注意事項解鎖'; pwdModalDesc.value = '請輸入「學藝股長」、「輔導股長」或「導師」密碼：' }
+  showPwdModal.value = true
+}
+
+const handlePwdSuccess = async ({ target, role }) => {
+  showPwdModal.value = false
+  currentEditorRole.value = role
+  if (target === 'emergency') {
+    showEmergencyModal.value = true
+  } else if (target === 'contact') { 
+    isEditingContact.value = true
+    editingContactItems.value = [...contactBookItems.value] 
+  } else if (target === 'classNotes') { 
+    isEditingClassNotes.value = true
+    editingClassNoteItems.value = [...classNoteItems.value] 
+  }
+  await logRoleVisit(role)
+}
+
 const checkIdentity = () => {
   currentIdentity.value = localStorage.getItem('visitor_known_identity') || '匿名來訪者'
   if (!isIpBrownlisted.value && currentIdentity.value === '匿名來訪者') showIdentityModal.value = true
 }
 
 const handleIdentityVerified = async (finalIdentity) => {
-  localStorage.setItem('visitor_known_identity', finalIdentity); currentIdentity.value = finalIdentity; showIdentityModal.value = false
+  localStorage.setItem('visitor_known_identity', finalIdentity)
+  currentIdentity.value = finalIdentity
+  showIdentityModal.value = false
   await supabase.from('visitor_logs').insert([{ ip_address: currentIpStr.value || '未知IP', device_info: navigator.userAgent, role: finalIdentity, action_details: `🔑 綁定設備身分：${finalIdentity}` }])
 }
 
 const checkIpRules = async () => {
   try {
-    const ipRes = await fetch('https://api.ipify.org?format=json'); const { ip } = await ipRes.json(); currentIpStr.value = ip 
+    const ipRes = await fetch('https://api.ipify.org?format=json')
+    const { ip } = await ipRes.json()
+    currentIpStr.value = ip 
     const { data: rules } = await supabase.from('ip_rules').select('ip_range, rule_type')
     if (rules && rules.length > 0) {
       isIpWhitelisted.value = rules.filter(r => r.rule_type === '白名單').some(r => ip.startsWith(r.ip_range))
       isIpBrownlisted.value = rules.filter(r => r.rule_type === '褐名單').some(r => ip.startsWith(r.ip_range))
     }
-  } catch (e) {}
+  } catch (e) { console.error('IP check failed', e) }
 }
 
 const logVisit = async () => {
@@ -209,13 +337,19 @@ const logVisit = async () => {
   } catch (e) {}
 }
 
-const logRoleVisit = async (roleName) => await supabase.from('visitor_logs').insert([{ ip_address: currentIpStr.value || '未知IP', device_info: navigator.userAgent, role: roleName, action_details: `🔑 解鎖後台：${roleName}` }]).catch(e => {})
-const logAudit = async (actionType, details) => await supabase.from('assignment_audit_logs').insert({ subject_name: '首頁黑板', action_type: actionType, operator_role: currentEditorRole.value || '導師', details: details }).catch(e => {})
+const logRoleVisit = async (roleName) => {
+  try { await supabase.from('visitor_logs').insert([{ ip_address: currentIpStr.value || '未知IP', device_info: navigator.userAgent, role: roleName, action_details: `🔑 解鎖後台：${roleName}` }]) } catch (e) {}
+}
+
+const logAudit = async (actionType, details) => {
+  try { await supabase.from('assignment_audit_logs').insert({ subject_name: '首頁黑板', action_type: actionType, operator_role: currentEditorRole.value || '導師', details: details }) } catch (e) {}
+}
 
 const privacyFilter = (txt) => {
   let result = String(txt || '')
   if (!isIpWhitelisted.value && allStudentsForLogin.value && allStudentsForLogin.value.length > 0) {
-    [...allStudentsForLogin.value].sort((a, b) => (b.real_name || '').length - (a.real_name || '').length).forEach(stu => {
+    const sortedStudents = [...allStudentsForLogin.value].sort((a, b) => (b.real_name || '').length - (a.real_name || '').length)
+    sortedStudents.forEach(stu => {
       if (stu.real_name && stu.hidden_name && stu.real_name.trim() !== '') result = result.split(stu.real_name).join(stu.hidden_name)
     })
   }
@@ -225,7 +359,8 @@ const privacyFilter = (txt) => {
 const formatNL = (txt) => privacyFilter(txt).replace(/\n/g, '<br>')
 const formatDateTime = (dtStr) => dtStr ? new Date(dtStr).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : ''
 
-const dDate = new Date(); const todayISO = `${dDate.getFullYear()}-${String(dDate.getMonth()+1).padStart(2,'0')}-${String(dDate.getDate()).padStart(2,'0')}`
+const dDate = new Date()
+const todayISO = `${dDate.getFullYear()}-${String(dDate.getMonth()+1).padStart(2,'0')}-${String(dDate.getDate()).padStart(2,'0')}`
 const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
 const todayDisplay = `${dDate.getFullYear()}年${dDate.getMonth()+1}月${dDate.getDate()}日${days[dDate.getDay()]}`
 const isWeekday = dDate.getDay() !== 0 && dDate.getDay() !== 6
@@ -233,6 +368,7 @@ const isWeekday = dDate.getDay() !== 0 && dDate.getDay() !== 6
 const currentTime = ref(''); const nowTick = ref(Date.now()); let timer = null
 const updateTime = () => { nowTick.value = Date.now(); currentTime.value = new Date().toLocaleTimeString('zh-TW', { hour12: false }) }
 
+// ===== 課表與大考狀態引擎 =====
 const scheduleDisplay = computed(() => {
   if (!scheduleData.value || !scheduleData.value.periods) return null
   const now = new Date(nowTick.value); const currentDayIndex = now.getDay() - 1 
@@ -263,28 +399,54 @@ const scheduleDisplay = computed(() => {
   return { current: currentClass, next: nextClass }
 })
 
-const parentNotices = ref([]); const officerPasswords = ref({ academic: '', counseling: '', discipline: '', teacher: '168168168' })
-const seatingChart = ref({ isVisible: false, isRotated: false, seats: [], settings: {} })
-const hygieneData = ref({ isVisibleOnIndex: false, morning: { title: '', sweep_names: '', mop_names: '' }, lunch: { title: '' }, squad: { title: '' } })
-const contactBookItems = ref([]); const isEditingContact = ref(false); const editingContactItems = ref([])
-const classNoteItems = ref([]); const isEditingClassNotes = ref(false); const editingClassNoteItems = ref([])
-const currentEditorRole = ref(''); const showPwdModal = ref(false); const pwdTarget = ref(''); const pwdModalTitle = ref(''); const pwdModalDesc = ref('')
-
-const openPwdModal = (target) => {
-  pwdTarget.value = target
-  if (target === 'emergency') { pwdModalTitle.value = '🚨 緊急通知系統解鎖'; pwdModalDesc.value = '請輸入「導師」密碼：' } 
-  else if (target === 'contact') { pwdModalTitle.value = '✏️ 編輯聯絡簿解鎖'; pwdModalDesc.value = '請輸入「學藝股長」、「輔導股長」或「導師」密碼：' } 
-  else if (target === 'classNotes') { pwdModalTitle.value = '⚡ 編輯注意事項解鎖'; pwdModalDesc.value = '請輸入「學藝股長」、「輔導股長」或「導師」密碼：' }
-  showPwdModal.value = true
+const examThemes = {
+  midnight: { name: '午夜藍 (Midnight)', bg: '#0f172a', border: '#334155', title: '#f8fafc', clock: '#fbbf24', text: '#cbd5e1', accent: '#3b82f6', success: '#10b981', danger: '#ef4444', panelBg: '#1e293b' },
+  blackboard: { name: '經典黑板 (Blackboard)', bg: '#1a3627', border: '#5b3a1a', title: '#ffffff', clock: '#fbbf24', text: '#e2e8f0', accent: '#fca5a5', success: '#a7f3d0', danger: '#f87171', panelBg: '#234a36' },
+  slate: { name: '沉穩灰 (Slate)', bg: '#334155', border: '#64748b', title: '#f8fafc', clock: '#38bdf8', text: '#f1f5f9', accent: '#818cf8', success: '#34d399', danger: '#f87171', panelBg: '#475569' },
+  matcha: { name: '抹茶綠 (Matcha)', bg: '#2f3e36', border: '#5b6a5a', title: '#ecfdf5', clock: '#a7f3d0', text: '#d1fae5', accent: '#6ee7b7', success: '#10b981', danger: '#fca5a5', panelBg: '#3b4d45' },
+  burgundy: { name: '勃根地紅 (Burgundy)', bg: '#450a0a', border: '#7f1d1d', title: '#fee2e2', clock: '#fca5a5', text: '#fecaca', accent: '#f87171', success: '#a7f3d0', danger: '#fbbf24', panelBg: '#591111' },
 }
 
-const handlePwdSuccess = async ({ target, role }) => {
-  showPwdModal.value = false; currentEditorRole.value = role
-  if (target === 'emergency') showEmergencyModal.value = true
-  else if (target === 'contact') { isEditingContact.value = true; editingContactItems.value = [...contactBookItems.value] } 
-  else if (target === 'classNotes') { isEditingClassNotes.value = true; editingClassNoteItems.value = [...classNoteItems.value] }
-  await logRoleVisit(role)
-}
+const currentThemeStyles = computed(() => {
+  const t = examThemes[examData.value.theme] || examThemes.midnight
+  return { '--ex-bg': t.bg, '--ex-border': t.border, '--ex-title': t.title, '--ex-clock': t.clock, '--ex-text': t.text, '--ex-accent': t.accent, '--ex-success': t.success, '--ex-danger': t.danger, '--ex-panel-bg': t.panelBg }
+})
+
+const examStatus = computed(() => {
+  if (!examData.value || !examData.value.periods || examData.value.periods.length === 0) return { state: 'WAITING', periods: [] }
+  const now = new Date(nowTick.value); const nowMins = now.getHours() * 60 + now.getMinutes()
+  let current = null; let next = null; let state = 'WAITING'; const periods = JSON.parse(JSON.stringify(examData.value.periods))
+  for (let i = 0; i < periods.length; i++) {
+    const p = periods[i]; if (!p.startTime || !p.endTime) continue
+    const startMins = p.startTime.split(':')[0] * 60 + Number(p.startTime.split(':')[1])
+    const endMins = p.endTime.split(':')[0] * 60 + Number(p.endTime.split(':')[1])
+    p.isActive = false
+    if (nowMins >= startMins && nowMins <= endMins) { state = 'TESTING'; current = p; p.isActive = true; if (i + 1 < periods.length) next = periods[i + 1]; break }
+    if (nowMins < startMins) { if (state !== 'TESTING') { state = i === 0 ? 'WAITING' : 'BREAK'; next = p }; break }
+  }
+  const lastP = periods[periods.length - 1]
+  if (lastP && lastP.endTime) {
+    const lsm = lastP.endTime.split(':')[0] * 60 + Number(lastP.endTime.split(':')[1])
+    if (!current && !next && nowMins >= lsm) state = 'FINISHED'
+  }
+  return { state, current, next, periods }
+})
+
+const countdownMinutes = computed(() => {
+  if (examStatus.value.state !== 'TESTING' || !examStatus.value.current) return 999;
+  const now = new Date(nowTick.value); const [eh, em] = examStatus.value.current.endTime.split(':').map(Number)
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em, 0)
+  return Math.floor((end.getTime() - nowTick.value) / 60000)
+})
+
+const countdownText = computed(() => {
+  if (examStatus.value.state !== 'TESTING' || !examStatus.value.current) return '';
+  const now = new Date(nowTick.value); const [eh, em] = examStatus.value.current.endTime.split(':').map(Number)
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em, 0)
+  const diffMs = end.getTime() - nowTick.value; if (diffMs <= 0) return '00:00'
+  const diffMins = Math.floor(diffMs / 60000); const diffSecs = Math.floor((diffMs % 60000) / 1000)
+  return `${String(diffMins).padStart(2, '0')}:${String(diffSecs).padStart(2, '0')}`
+})
 
 const allStudents = ref([]); const allStudentsForLogin = ref([]); const todayAttendances = ref([])
 const expectedCount = computed(() => allStudents.value.length)
@@ -308,59 +470,79 @@ const toggleAttendance = async (student) => {
   } catch (err) {}
 }
 
-// 💡 修正：堅不可摧的資料加載器 (Switch + Safe Chaining)，拒絕任何 Null Error
+// 💡 防呆與解構完全強化版的 fetchData (拒絕 Null 錯誤)
 const fetchData = async () => {
   const { data: boardData } = await supabase.from('contact_books').select('contact_items').eq('record_date', todayISO).maybeSingle()
   contactBookItems.value = boardData?.contact_items || []
 
-  const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', [
-    'board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 'contact_history_visible', 'index_button_settings', 'announcements_data', 'class_schedule_data', 'exam_schedule_data', 'parent_notices_data', 'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible', 'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings', 'index_clock_size', 'index_clock_config', 'index_auto_refresh_seconds', 'role_button_settings'
-  ])
-  
-  if (sysData) {
-    sysData.forEach(s => {
-      const v = s.setting_value
-      if (v === null || v === undefined) return // 絕對防禦機制，遇到空值立刻跳過
+  const keysToFetch = [
+    'board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 
+    'contact_history_visible', 'index_button_settings', 'announcements_data', 
+    'class_schedule_data', 'exam_schedule_data', 'parent_notices_data', 
+    'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible',
+    'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings',
+    'index_clock_size', 'index_clock_config', 'index_auto_refresh_seconds', 'role_button_settings'
+  ]
 
-      switch (s.setting_key) {
-        case 'board_officer_passwords': officerPasswords.value = { ...officerPasswords.value, ...v }; break;
-        case 'contact_history_visible': isHistoryVisibleOnIndex.value = v; break;
-        case 'index_button_settings': globalButtonSettings.value = v; break;
-        case 'role_button_settings': roleButtonSettings.value = { ...defaultRoleSettings, ...v }; break;
-        case 'index_clock_config': clockConfig.value = { ...clockConfig.value, ...v }; break;
-        case 'index_clock_size': 
-          if (!sysData.find(x => x.setting_key === 'index_clock_config')) clockConfig.value.size = Number(v) || 35; 
-          break;
-        case 'announcements_data': announcements.value = (v || []).sort((a, b) => new Date(b.date) - new Date(a.date)); break;
-        case 'parent_announcements_data': parentAnnouncements.value = (v || []).sort((a, b) => new Date(b.date) - new Date(a.date)); break;
-        case 'announcement_board_visible': isAnnouncementVisibleOnIndex.value = v; break;
-        case 'parent_announcement_board_visible': isParentAnnouncementVisibleOnIndex.value = v; break;
-        case 'parent_notices_board_visible': isNoticeBoardVisibleOnIndex.value = v; break;
-        case 'class_schedule_data': scheduleData.value = v; break;
-        case 'schedule_button_settings': scheduleButtonConfig.value = { teacherOnlyInBrownlist: true, ...v }; break;
-        case 'index_auto_refresh_seconds': autoRefreshSeconds.value = Number(v) || 60; break;
-        case 'exam_schedule_data': examData.value = { ...examData.value, ...v }; break;
-        case 'parent_notices_data': 
-          parentNotices.value = (v || []).filter(n => (!n.startDate || n.startDate <= todayISO) && (!n.endDate || n.endDate >= todayISO)).map(n => n.content); 
-          break;
-        case 'class_notes_data': classNoteItems.value = v[todayISO] || []; break;
-        case 'seating_chart_data': 
-          seatingChart.value = { 
-            isVisible: v.isVisible || false, isRotated: v.isRotated || false, 
-            seats: (v.seats || []).map(seat => seat.content !== undefined ? { id: seat.id, isHidden: seat.isHidden, seatNum: String(seat.content).split('\n')[0] || '', name: String(seat.content).split('\n')[1] || '', other: String(seat.content).split('\n').slice(2).join(' ') || '' } : seat), 
-            settings: v.settings || {} 
-          }; break;
-        case 'hygiene_management_data': hygieneData.value = { ...hygieneData.value, ...v }; break;
-      }
-    })
-    
-    // 兼容舊版設定檔防護
-    if (!sysData.find(s => s.setting_key === 'role_button_settings') && globalButtonSettings.value) {
-      roleButtonSettings.value.anonymous = { ...roleButtonSettings.value.anonymous, ...globalButtonSettings.value }
+  const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', keysToFetch)
+  
+  if (sysData && sysData.length > 0) {
+    const getSetting = (key) => {
+      const item = sysData.find(s => s.setting_key === key)
+      return item ? item.setting_value : undefined
     }
+
+    const pwdVal = getSetting('board_officer_passwords'); if (pwdVal) officerPasswords.value = { ...officerPasswords.value, ...pwdVal }
+    const histVal = getSetting('contact_history_visible'); if (histVal !== undefined) isHistoryVisibleOnIndex.value = histVal
+    const globalBtnVal = getSetting('index_button_settings'); if (globalBtnVal) globalButtonSettings.value = globalBtnVal
+    
+    const roleBtnVal = getSetting('role_button_settings')
+    if (roleBtnVal) {
+      roleButtonSettings.value = { ...defaultRoleSettings, ...roleBtnVal }
+    } else if (globalBtnVal) {
+      roleButtonSettings.value.anonymous = { ...roleButtonSettings.value.anonymous, ...globalBtnVal }
+    }
+
+    const clockConfVal = getSetting('index_clock_config')
+    if (clockConfVal) clockConfig.value = { ...clockConfig.value, ...clockConfVal }
+    else {
+      const clockSizeVal = getSetting('index_clock_size')
+      if (clockSizeVal) clockConfig.value.size = Number(clockSizeVal) || 35
+    }
+
+    const refreshVal = getSetting('index_auto_refresh_seconds'); if (refreshVal !== undefined) autoRefreshSeconds.value = Number(refreshVal) || 60
+    
+    const annVal = getSetting('announcements_data'); if (annVal) announcements.value = annVal.sort((a, b) => new Date(b.date) - new Date(a.date))
+    const pAnnVal = getSetting('parent_announcements_data'); if (pAnnVal) parentAnnouncements.value = pAnnVal.sort((a, b) => new Date(b.date) - new Date(a.date))
+    
+    const annVisVal = getSetting('announcement_board_visible'); if (annVisVal !== undefined) isAnnouncementVisibleOnIndex.value = annVisVal
+    const pAnnVisVal = getSetting('parent_announcement_board_visible'); if (pAnnVisVal !== undefined) isParentAnnouncementVisibleOnIndex.value = pAnnVisVal
+    const noticeVisVal = getSetting('parent_notices_board_visible'); if (noticeVisVal !== undefined) isNoticeBoardVisibleOnIndex.value = noticeVisVal
+    
+    const pNoticesVal = getSetting('parent_notices_data')
+    if (pNoticesVal) {
+      parentNotices.value = pNoticesVal.filter(n => (!n.startDate || n.startDate <= todayISO) && (!n.endDate || n.endDate >= todayISO)).map(n => n.content) 
+    }
+
+    const schVal = getSetting('class_schedule_data'); if (schVal) scheduleData.value = schVal
+    const schBtnVal = getSetting('schedule_button_settings'); if (schBtnVal) scheduleButtonConfig.value = { teacherOnlyInBrownlist: true, ...schBtnVal }
+    
+    const examVal = getSetting('exam_schedule_data'); if (examVal) examData.value = { ...examData.value, ...examVal }
+    const classNoteVal = getSetting('class_notes_data'); if (classNoteVal && classNoteVal[todayISO]) classNoteItems.value = classNoteVal[todayISO]
+    
+    const seatVal = getSetting('seating_chart_data')
+    if (seatVal) {
+      seatingChart.value = { 
+        isVisible: seatVal.isVisible || false, 
+        isRotated: seatVal.isRotated || false, 
+        seats: (seatVal.seats || []).map(seat => seat.content !== undefined ? { id: seat.id, isHidden: seat.isHidden, seatNum: String(seat.content).split('\n')[0] || '', name: String(seat.content).split('\n')[1] || '', other: String(seat.content).split('\n').slice(2).join(' ') || '' } : seat), 
+        settings: seatVal.settings || {} 
+      }
+    }
+    
+    const hygVal = getSetting('hygiene_management_data'); if (hygVal) hygieneData.value = { ...hygieneData.value, ...hygVal }
   }
 
-  // 以下代碼現在能 100% 被執行到，學生與點名資料不會再變成空白了
   const { data: sData } = await supabase.from('students').select('*').order('seat_number')
   if (sData) { allStudentsForLogin.value = sData; allStudents.value = sData.filter(s => !s.hide_attendance) }
   
@@ -374,7 +556,7 @@ const fetchData = async () => {
       const uStudents = msgData.filter(m => m.chat_type === '學生' && (!m.is_read_by_teacher || !m.is_read_by_admin)).length
       unreadMsgCount.value = isIpBrownlisted.value ? (uParents + uStudents) : uParents
     }
-  } catch (e) {}
+  } catch (e) { console.error('無法取得私訊', e) }
 }
 
 const startAutoRefresh = () => {
@@ -390,7 +572,6 @@ const isScheduleButtonVisible = computed(() => {
   if (scheduleButtonConfig.value.visibility === 'outside' && !isIpBrownlisted.value) return true
   return false
 })
-const openLargeSchedule = () => showLargeSchedule.value = true
 
 onMounted(() => { 
   updateTime(); timer = setInterval(updateTime, 1000)
@@ -404,8 +585,8 @@ const updateEditingContactItem = (index, value) => editingContactItems.value[ind
 const saveContactItems = async () => {
   try {
     await supabase.from('contact_books').upsert({ record_date: todayISO, contact_items: editingContactItems.value }, { onConflict: 'record_date' })
-    await logAudit('修改聯絡簿', `將今日聯絡簿更新為：${editingContactItems.value.length > 0 ? editingContactItems.value.join('、') : '清空'}`)
-    alert("✅ 聯絡簿已成功更新發布！"); contactBookItems.value = [...editingContactItems.value]; isEditingContact.value = false
+    await logAudit('修改聯絡簿', `更新為：${editingContactItems.value.length > 0 ? editingContactItems.value.join('、') : '清空'}`)
+    alert("✅ 聯絡簿已成功更新！"); contactBookItems.value = [...editingContactItems.value]; isEditingContact.value = false
   } catch (error) { alert("❌ 儲存失敗") }
 }
 
@@ -418,8 +599,8 @@ const saveClassNoteItems = async () => {
     let updatedData = currentSettings?.setting_value || {}
     updatedData[todayISO] = editingClassNoteItems.value
     await supabase.from('system_settings').upsert({ setting_key: 'class_notes_data', setting_value: updatedData }, { onConflict: 'setting_key' })
-    await logAudit('修改注意事項', `將今日班級注意事項更新為：${editingClassNoteItems.value.length > 0 ? editingClassNoteItems.value.join('、') : '清空'}`)
-    alert("✅ 注意事項已成功更新發布！"); classNoteItems.value = [...editingClassNoteItems.value]; isEditingClassNotes.value = false
+    await logAudit('修改注意事項', `更新為：${editingClassNoteItems.value.length > 0 ? editingClassNoteItems.value.join('、') : '清空'}`)
+    alert("✅ 注意事項已成功更新！"); classNoteItems.value = [...editingClassNoteItems.value]; isEditingClassNotes.value = false
   } catch (error) { alert("❌ 儲存失敗") }
 }
 </script>
@@ -432,7 +613,17 @@ const saveClassNoteItems = async () => {
 .left-panel { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .right-panel { flex: 1; min-width: 0; }
 
+.unverified-placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: white; padding: 80px 20px; border-radius: 12px; border: 1px dashed #cbd5e1; margin-top: 20px; }
+.spinner-icon { font-size: 4rem; animation: pulse 2s infinite; margin-bottom: 20px; }
+.unverified-placeholder h2 { color: #334155; margin-bottom: 10px; }
+.unverified-placeholder p { color: #64748b; font-size: 1.1rem; }
+@keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
+
 .weekend-prompt { text-align: center; padding: 15px; background: #fef3c7; border: 2px dashed #fde68a; border-radius: 8px; color: #d97706; font-size: 1rem; font-weight: bold; margin-top: 10px;}
+
+.identity-banner { background: #e0f2fe; color: #0369a1; padding: 12px 20px; text-align: center; font-weight: bold; border-radius: 8px; display: flex; justify-content: center; align-items: center; gap: 15px; border: 1px solid #bae6fd; margin-bottom: -5px;}
+.change-id-btn { background: #0ea5e9; color: white; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.95rem; font-weight: bold; transition: 0.2s; }
+.change-id-btn:hover { background: #0284c7; }
 
 @media (max-width: 1024px) { .main-split { flex-direction: column; } }
 @media (max-width: 768px) { .page-container { padding: 10px; } }
