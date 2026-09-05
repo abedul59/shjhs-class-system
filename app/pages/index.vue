@@ -401,7 +401,6 @@ const submitIdentity = () => {
       return
     }
 
-    // 💡 修正：嚴謹的生日驗證提取法 (無視格式干擾)
     if (!stu.birthday) {
       idError.value = '❌ 系統尚無該學生的生日資料，無法驗證，請聯繫導師。'
       return
@@ -424,7 +423,6 @@ const submitIdentity = () => {
     if (!idStudent.value) { idError.value = '❌ 請選擇您的姓名！'; return }
     const stu = allStudentsForLogin.value.find(s => s.id === idStudent.value)
     
-    // 💡 修正：學生的嚴謹生日提取
     if (!stu.birthday) {
       idError.value = '❌ 系統尚無您的生日資料，請聯繫導師。'
       return
@@ -515,8 +513,9 @@ const logAudit = async (actionType, details) => {
 
 const privacyFilter = (txt) => {
   let result = String(txt || '')
-  if (!isIpWhitelisted.value && allStudents.value && allStudents.value.length > 0) {
-    const sortedStudents = [...allStudents.value].sort((a, b) => (b.real_name || '').length - (a.real_name || '').length)
+  // 💡 修正：依賴 allStudentsForLogin，確保被隱藏點名的學生也能被覆蓋姓名
+  if (!isIpWhitelisted.value && allStudentsForLogin.value && allStudentsForLogin.value.length > 0) {
+    const sortedStudents = [...allStudentsForLogin.value].sort((a, b) => (b.real_name || '').length - (a.real_name || '').length)
     sortedStudents.forEach(stu => {
       if (stu.real_name && stu.hidden_name && stu.real_name.trim() !== '') { result = result.split(stu.real_name).join(stu.hidden_name) }
     })
@@ -620,7 +619,7 @@ const countdownMinutes = computed(() => {
   if (examStatus.value.state !== 'TESTING' || !examStatus.value.current) return 999;
   const currentTick = nowTick.value; const now = new Date(currentTick);
   const [eh, em] = examStatus.value.current.endTime.split(':').map(Number);
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em, 0);
+  const end = new Date(now.getFullYear(), now.getMonth(),getDate(), eh, em, 0);
   return Math.floor((end.getTime() - currentTick) / 60000);
 })
 
