@@ -334,7 +334,6 @@ const isContentVisible = computed(() => {
   return isIpBrownlisted.value || currentIdentity.value !== '匿名來訪者'
 })
 
-// 💡 修正：擴增過濾資料庫常見的國小欄位名稱
 const availableSchools = computed(() => {
   if (!allStudentsForLogin.value || allStudentsForLogin.value.length === 0) return []
   const schools = allStudentsForLogin.value
@@ -343,7 +342,6 @@ const availableSchools = computed(() => {
   
   const uniqueSchools = [...new Set(schools)].sort()
   
-  // 若資料庫內完全沒有任一學生的國小資料，給予防呆提示並允許放行
   if (uniqueSchools.length === 0) {
     return ['【資料庫尚未建立國小資料】']
   }
@@ -396,19 +394,26 @@ const submitIdentity = () => {
 
     const stu = allStudentsForLogin.value.find(s => s.id === idStudent.value)
     
-    // 💡 修正：擴增核對欄位的範圍
+    // 比對國小
     const dbSchool = stu.graduated_school || stu.elementary_school || stu.elem_school || stu.school || stu.school_name
-    
     if (dbSchool && parentIdSchool.value !== '【資料庫尚未建立國小資料】' && dbSchool !== parentIdSchool.value) {
       idError.value = '❌ 畢業國小驗證失敗，請確認選擇是否正確！'
       return
     }
 
+    // 💡 修正：嚴謹的生日驗證提取法 (無視格式干擾)
     if (!stu.birthday) {
       idError.value = '❌ 系統尚無該學生的生日資料，無法驗證，請聯繫導師。'
       return
     }
-    const [yy, mm, dd] = stu.birthday.split('-')
+    const birthMatch = stu.birthday.match(/(\d{4})[-/]?(\d{1,2})[-/]?(\d{1,2})/)
+    if (!birthMatch) {
+      idError.value = '❌ 系統生日資料格式異常，無法驗證，請聯繫導師。'
+      return
+    }
+    const mm = birthMatch[2].padStart(2, '0')
+    const dd = birthMatch[3].padStart(2, '0')
+
     if (mm !== parentIdMonth.value || dd !== parentIdDay.value) {
       idError.value = '❌ 生日月份或日期驗證失敗！'
       return
@@ -418,11 +423,22 @@ const submitIdentity = () => {
   } else if (idType.value === 'student') {
     if (!idStudent.value) { idError.value = '❌ 請選擇您的姓名！'; return }
     const stu = allStudentsForLogin.value.find(s => s.id === idStudent.value)
+    
+    // 💡 修正：學生的嚴謹生日提取
     if (!stu.birthday) {
       idError.value = '❌ 系統尚無您的生日資料，請聯繫導師。'
       return
     }
-    const bdayStr = stu.birthday.replace(/-/g, '')
+    const birthMatch = stu.birthday.match(/(\d{4})[-/]?(\d{1,2})[-/]?(\d{1,2})/)
+    if (!birthMatch) {
+      idError.value = '❌ 系統生日資料格式異常，無法驗證，請聯繫導師。'
+      return
+    }
+    const yyyy = birthMatch[1]
+    const mm = birthMatch[2].padStart(2, '0')
+    const dd = birthMatch[3].padStart(2, '0')
+    const bdayStr = `${yyyy}${mm}${dd}`
+
     if (idPwd.value !== bdayStr) {
       idError.value = '❌ 生日密碼錯誤！請輸入西元年出生 8 碼 (例如 20120508)'
       return
