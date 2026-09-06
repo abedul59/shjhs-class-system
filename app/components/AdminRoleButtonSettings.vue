@@ -64,7 +64,7 @@ const buttonList = [
   { key: 'admin', label: '⚙️ 後台' },
   { key: 'showSeats', label: '👀 顯示教室座位表' },
   { key: 'showHygiene', label: '🧹 顯示衛生工作' },
-  { key: 'contactHistory', label: '📅 查詢近期聯絡簿' }
+  { key: 'contactHistory', label: '📅 查詢近期聯絡簿' },
   { key: 'parentLeave', label: '📝 家長代學生請假' }, // 💡 新增這行
 ]
 
