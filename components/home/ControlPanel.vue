@@ -1,26 +1,24 @@
 <template>
   <div class="control-card">
     
-    <!-- 🕒 升級版動態時鐘顯示區塊 (支援 10 種樣式) -->
+    <!-- 🕒 升級版動態時鐘顯示區塊 (支援 10 種樣式，相容舊版) -->
     <div class="clock-top-bar">
       <div class="clock-wrapper" :class="`theme-${actualClockConfig.theme}`" :style="{ '--clk-color': actualClockConfig.color, '--clk-size': actualClockConfig.size + 'px' }">
         <div v-if="actualClockConfig.showIcon" class="clock-icon">🕒</div>
         <div class="clock-display-core">
-          <!-- 針對復古翻頁時鐘的特殊切割渲染 -->
           <template v-if="actualClockConfig.theme === 'flip'">
             <span v-for="(char, i) in currentTime.split('')" :key="i" :class="char === ':' ? 'flip-colon' : 'flip-digit'">{{ char }}</span>
           </template>
-          <!-- 其他 9 種樣式的標準渲染 -->
           <template v-else>{{ currentTime }}</template>
         </div>
       </div>
-      <!-- 保留原本的未讀私訊警報鈴鐺 -->
+      
+      <!-- 🚨 警報鈴鐺完美保留 -->
       <NuxtLink v-if="unreadMsgCount > 0" to="/admin" class="icon-alert-bell" title="您有未讀私訊，點擊前往後台！">
         🚨
       </NuxtLink>
     </div>
     
-    <!-- 📅 狀態列 -->
     <div v-if="scheduleDisplay" class="schedule-ticker">
       <div class="current-class">
         <span class="pulse-dot" v-if="scheduleDisplay.current.status === '上課中'"></span>
@@ -36,27 +34,26 @@
       </div>
     </div>
 
-    <!-- 📝 考試模式按鈕 -->
     <button v-if="isIpBrownlisted && examData.isExamModeEnabled && examData.periods && examData.periods.length > 0" 
             @click="emit('enterExam')" class="btn-enter-exam">
       🎓 切換至大考看板模式
     </button>
 
-    <!-- 🎯 權限控制按鈕區 -->
     <div class="button-group">
+      <!-- 💡 完全保留您的正確路由 -->
       <NuxtLink v-if="indexButtonSettings.parentBind" to="/parent-bind" class="btn btn-orange">👨‍👩‍👧 綁定</NuxtLink>
       <NuxtLink v-if="indexButtonSettings.parentMsg" to="/parent-message" class="btn btn-green">💬 家長私訊</NuxtLink>
       <NuxtLink v-if="indexButtonSettings.studentMsg" to="/student-message" class="btn btn-blue">💬 學生私訊</NuxtLink>
       
-      <!-- 💡 確保加入的：家長代學生請假 -->
-      <NuxtLink v-if="indexButtonSettings.parentLeave" to="/leave-application" class="btn btn-teal-light">📝 家長代學生請假</NuxtLink>
+      <!-- 💡 插入的請假按鈕 -->
+      <NuxtLink v-if="indexButtonSettings.parentLeave" to="/leave-application" class="btn btn-teal">📝 家長代學生請假</NuxtLink>
       
       <button v-if="isScheduleButtonVisible" @click="emit('openLargeSchedule')" class="btn btn-lime">🗓️ 顯示班級大課表</button>
 
       <NuxtLink v-if="indexButtonSettings.assignments" to="/assignments" class="btn btn-purple">📚 作業管理</NuxtLink>
       <NuxtLink v-if="indexButtonSettings.discipline" to="/discipline" class="btn btn-dark-blue">⚖️ 秩序管理</NuxtLink>
       <NuxtLink v-if="indexButtonSettings.hygiene" to="/hygiene" class="btn btn-cyan">🧹 衛生管理</NuxtLink>            
-      <NuxtLink v-if="indexButtonSettings.seats" to="/seats" class="btn btn-teal">🪑 座位管理</NuxtLink>
+      <NuxtLink v-if="indexButtonSettings.seats" to="/seats" class="btn btn-seat">🪑 座位管理</NuxtLink>
       <NuxtLink v-if="indexButtonSettings.schedule" to="/schedule" class="btn btn-amber">⚙️ 課表管理</NuxtLink>
       <NuxtLink v-if="indexButtonSettings.exams" to="/exams" class="btn btn-rose">📝 大考管理</NuxtLink>
       <button v-if="indexButtonSettings.emergency" @click="emit('openPwd', 'emergency')" class="btn btn-red">🚨 緊急通知</button>
@@ -82,7 +79,7 @@ import { computed } from 'vue'
 
 const props = defineProps({
   clockConfig: { type: Object, default: () => ({ theme: 'classic', color: '#1e293b', size: 35, showIcon: true }) },
-  clockFontSize: Number, // 為了向下兼容保留
+  clockFontSize: Number, // 為了向下相容保留
   currentTime: String,
   unreadMsgCount: Number,
   scheduleDisplay: Object,
@@ -100,7 +97,6 @@ const props = defineProps({
 
 const emit = defineEmits(['enterExam', 'openLargeSchedule', 'openPwd', 'update:showSeatingChartLocal', 'update:showHygieneLocal'])
 
-// 智慧防呆：如果上層傳了新的 clockConfig 就用，否則自動拼裝舊版的 clockFontSize
 const actualClockConfig = computed(() => {
   if (props.clockConfig && Object.keys(props.clockConfig).length > 0) return props.clockConfig
   return { theme: 'classic', color: '#1e293b', size: props.clockFontSize || 35, showIcon: true }
@@ -111,7 +107,7 @@ const actualClockConfig = computed(() => {
 .control-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; text-align: center; }
 
 /* --- 升級版時鐘區塊樣式 --- */
-.clock-top-bar { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px; }
+.clock-top-bar { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px; font-weight: bold; }
 .clock-wrapper { display: inline-flex; justify-content: center; align-items: center; gap: 15px; font-size: var(--clk-size); color: var(--clk-color); font-variant-numeric: tabular-nums; transition: all 0.3s ease; }
 .clock-icon { font-size: calc(var(--clk-size) * 1.1); display: flex; align-items: center; line-height: 1; }
 .theme-classic .clock-display-core { font-weight: 900; }
@@ -133,37 +129,36 @@ const actualClockConfig = computed(() => {
 .theme-chalk { background: #1f4d36; padding: 15px 40px; border: 6px solid var(--clk-color); border-radius: 8px; box-shadow: inset 0 0 20px rgba(0,0,0,0.6), 0 5px 15px rgba(0,0,0,0.3); color: #f8fafc !important; }
 .theme-chalk .clock-display-core { font-family: 'Comic Sans MS', 'Chalkboard SE', cursive; font-style: italic; letter-spacing: 2px; text-shadow: 1px 1px 2px rgba(255,255,255,0.4); }
 
-/* --- 鈴鐺與狀態列保留 --- */
-.icon-alert-bell { font-size: 2.2rem; text-decoration: none; animation: shake 1.5s infinite; filter: drop-shadow(0 2px 4px rgba(239,68,68,0.5)); cursor: pointer; display: flex; align-items: center;}
+.icon-alert-bell { font-size: 2.2rem; text-decoration: none; animation: shake 1.5s infinite; filter: drop-shadow(0 2px 4px rgba(239,68,68,0.5)); cursor: pointer; }
 @keyframes shake { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-15deg); } 75% { transform: rotate(15deg); } }
 
 .schedule-ticker { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 10px 15px; margin-bottom: 20px; display: flex; justify-content: center; gap: 20px; align-items: center; flex-wrap: wrap; }
 .subject-text { font-weight: bold; color: #047857;}
 .teacher-text { font-size: 0.95rem; color: #475569; }
 .next-class { color: #64748b; font-size: 1rem; border-left: 2px solid #cbd5e1; padding-left: 20px; }
-.pulse-dot { width: 10px; height: 10px; background: #3b82f6; border-radius: 50%; display: inline-block; animation: pulse 1.5s infinite; margin-right: 6px; }
+.pulse-dot { width: 10px; height: 10px; background: #3b82f6; border-radius: 50%; display: inline-block; animation: pulse 1.5s infinite; margin-right: 5px;}
 @keyframes pulse { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } }
 
-/* --- 按鈕群組 --- */
 .button-group { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
-.btn { padding: 8px 12px; border-radius: 6px; font-size: 0.95rem; font-weight: bold; color: white; border: none; cursor: pointer; display: inline-block; text-decoration: none; transition: filter 0.2s;}
+.btn { padding: 8px 12px; border-radius: 6px; font-size: 0.95rem; font-weight: bold; color: white; border: none; cursor: pointer; display: inline-block; text-decoration: none; transition: 0.2s;}
 .btn:hover { filter: brightness(0.9); }
 .btn-orange { background: #f59e0b; }
 .btn-green { background: #10b981; }
 .btn-blue { background: #3b82f6; }
-.btn-teal-light { background: #14b8a6; } /* 💡 請假專用顏色 */
+.btn-teal { background: #14b8a6; } /* 💡 請假按鈕 */
 .btn-lime { background: #84cc16; color: #14532d; border: 1px solid #65a30d;}
 .btn-dark { background: #64748b; }
 .btn-purple { background: #8b5cf6; }
 .btn-red { background: #ef4444; }
 .btn-dark-blue { background: #1e3a8a; } 
-.btn-teal { background: #0f766e; } 
+.btn-seat { background: #0f766e; } 
 .btn-cyan { background: #06b6d4; }
 .btn-indigo { background: #6366f1; } 
 .btn-sky { background: #0ea5e9; }
 .btn-pink { background: #ec4899; } 
 .btn-amber { background: #d97706; }
 .btn-rose { background: #be123c; }
+.badge { background: #ef4444; color: white; font-size: 0.75rem; padding: 2px 6px; border-radius: 10px; margin-left: 5px; box-shadow: 0 0 5px rgba(0,0,0,0.2); }
 
 .btn-enter-exam { width: 100%; padding: 12px; background: #991b1b; color: white; border: none; border-radius: 6px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(153, 27, 27, 0.3); animation: subtle-pulse 2s infinite;}
 
