@@ -32,6 +32,8 @@
       <NuxtLink v-if="indexButtonSettings.parentBind" to="/parent-bind" class="btn btn-orange">👨‍👩‍👧 綁定</NuxtLink>
       <NuxtLink v-if="indexButtonSettings.parentMsg" to="/parent-message" class="btn btn-green">💬 家長私訊</NuxtLink>
       <NuxtLink v-if="indexButtonSettings.studentMsg" to="/student-message" class="btn btn-blue">💬 學生私訊</NuxtLink>
+      <!-- 💡 新增的請假按鈕 -->
+      <NuxtLink v-if="indexButtonSettings.parentLeave" to="/leave-application" class="nav-btn btn-teal"> 📝 家長代為請假</NuxtLink>
       
       <button v-if="isScheduleButtonVisible" @click="emit('openLargeSchedule')" class="btn btn-lime">🗓️ 顯示班級大課表</button>
 
@@ -109,6 +111,7 @@ const emit = defineEmits(['enterExam', 'openLargeSchedule', 'openPwd', 'update:s
 .btn-pink { background: #ec4899; } 
 .btn-amber { background: #d97706; }
 .btn-rose { background: #be123c; }
+.btn-teal { background-color: #14b8a6; } /* 加入這行給請假按鈕專用顏色 */
 
 .btn-enter-exam { width: 100%; padding: 12px; background: #991b1b; color: white; border: none; border-radius: 6px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(153, 27, 27, 0.3); animation: subtle-pulse 2s infinite;}
 
