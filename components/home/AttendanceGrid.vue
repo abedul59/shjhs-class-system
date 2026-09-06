@@ -1,127 +1,126 @@
 <template>
-  <div class="attendance-section">
-    <!-- 頂部統計列 -->
+  <div class="attendance-wrapper">
+    
+    <!-- 📊 頂部統計數據列 (擴充為 7 格) -->
     <div class="stats-row">
-      <div class="stat-box default">應到: <strong>{{ expectedCount }}</strong></div>
-      <div class="stat-box success">已到: <strong>{{ presentCount }}</strong></div>
-      <div class="stat-box warning">請假: <strong>{{ leaveCount }}</strong></div>
-      <div class="stat-box late">遲到: <strong>{{ lateCount }}</strong></div>
-      <div class="stat-box danger">未到: <strong>{{ absentCount }}</strong></div>
-    </div>
-
-    <!-- 學生點名網格 -->
-    <div class="attendance-grid">
-      <div v-for="student in allStudents" :key="student.id"
-           class="student-card"
-           :class="getCardClass(student)"
-           @click="$emit('toggle-attendance', student)">
-        <span class="seat-num">{{ student.seat_number }}</span>
-        <span class="stu-name">{{ privacyFilter(student.real_name) }}</span>
-        <span class="stu-status">{{ getStudentStatus(student) }}</span>
+      <div class="stat-box stat-expected">
+        應到: <strong>{{ expectedCount }}</strong>
+      </div>
+      <div class="stat-box stat-present">
+        已到: <strong>{{ presentCount }}</strong>
+      </div>
+      <div class="stat-box stat-leave">
+        全天請假: <strong>{{ leaveCount }}</strong>
+      </div>
+      <div class="stat-box stat-late-leave">
+        晚到請假: <strong>{{ lateLeaveCount }}</strong>
+      </div>
+      <div class="stat-box stat-early-leave">
+        早退請假: <strong>{{ earlyLeaveCount }}</strong>
+      </div>
+      <div class="stat-box stat-late">
+        遲到: <strong>{{ lateCount }}</strong>
+      </div>
+      <div class="stat-box stat-absent">
+        未到: <strong>{{ absentCount }}</strong>
       </div>
     </div>
+
+    <!-- 👨‍🎓 學生卡片網格 -->
+    <div class="grid-container">
+      <button 
+        v-for="student in allStudents" 
+        :key="student.id"
+        class="student-card"
+        :class="getStatusClass(student.id)"
+        @click="$emit('toggle-attendance', student)"
+      >
+        <div class="st-num">{{ student.seat_number }}</div>
+        <div class="st-name">{{ privacyFilter(student.real_name || student.hidden_name) }}</div>
+        <!-- 狀態會顯示包含時間的字串，例如 晚到請假(10:00) -->
+        <div class="st-status">{{ getStatusText(student.id) }}</div>
+      </button>
+    </div>
+
   </div>
 </template>
 
 <script setup>
 const props = defineProps({
-  allStudents: Array,
-  todayAttendances: Array,
-  expectedCount: Number,
-  presentCount: Number,
-  leaveCount: Number,
-  lateCount: Number,
-  absentCount: Number,
-  privacyFilter: Function
+  allStudents: { type: Array, default: () => [] },
+  todayAttendances: { type: Array, default: () => [] },
+  expectedCount: { type: Number, default: 0 },
+  presentCount: { type: Number, default: 0 },
+  leaveCount: { type: Number, default: 0 },
+  lateLeaveCount: { type: Number, default: 0 }, // 新增晚到
+  earlyLeaveCount: { type: Number, default: 0 }, // 新增早退
+  lateCount: { type: Number, default: 0 },
+  absentCount: { type: Number, default: 0 },
+  privacyFilter: { type: Function, default: (val) => val }
 })
 
 defineEmits(['toggle-attendance'])
 
-// 取得該學生的出缺席文字
-const getStudentStatus = (student) => {
-  const record = props.todayAttendances.find(a => a.student_id === student.id)
-  return record ? record.status : '未到'
+const getStatusText = (studentId) => {
+  const record = props.todayAttendances.find(a => a.student_id === studentId)
+  return record?.status || '未到'
 }
 
-// 💡 修正：依據狀態文字決定卡片顏色，改用 startsWith 支援包含時間的遲到字串
-const getCardClass = (student) => {
-  const status = getStudentStatus(student)
-  if (status === '已到') return 'status-present'
-  if (status === '請假') return 'status-leave'
-  if (status && status.startsWith('遲到')) return 'status-late' // 修正這裡！
-  return 'status-absent' // 預設(未到)
+// 根據不同狀態套用專屬的顏色 Class
+const getStatusClass = (studentId) => {
+  const status = getStatusText(studentId)
+  if (status === '已到') return 'is-present'
+  if (status === '全天請假' || status === '請假') return 'is-leave'
+  if (status.startsWith('晚到請假')) return 'is-late-leave'
+  if (status.startsWith('早退請假')) return 'is-early-leave'
+  if (status.startsWith('遲到')) return 'is-late'
+  return 'is-absent' // 預設未到 (紅色)
 }
 </script>
 
 <style scoped>
-.attendance-section {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
+.attendance-wrapper { background: transparent; width: 100%; }
 
-/* 統計列樣式 */
-.stats-row { 
-  display: flex; 
-  gap: 10px; 
-  flex-wrap: wrap;
-}
-.stat-box { 
-  flex: 1; 
-  padding: 12px 15px; 
-  border-radius: 8px; 
-  text-align: center; 
-  font-size: 1.1rem; 
-  border: 1px solid transparent; 
-  min-width: 100px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-}
-.stat-box strong { 
-  font-size: 1.3rem; 
-  margin-left: 5px; 
-}
+/* --- 📊 統計列樣式 --- */
+.stats-row { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
+.stat-box { flex: 1; text-align: center; padding: 10px; border-radius: 8px; font-size: 1rem; border: 1px solid transparent; min-width: 90px; }
+.stat-box strong { font-size: 1.15rem; margin-left: 2px; }
 
-/* 網格與卡片樣式 */
-.attendance-grid { 
-  display: grid; 
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); 
-  gap: 12px; 
-}
-.student-card { 
-  display: flex; 
-  flex-direction: column; 
-  align-items: center; 
-  justify-content: center; 
-  padding: 15px 10px; 
-  border-radius: 8px; 
-  cursor: pointer; 
-  transition: transform 0.1s ease, box-shadow 0.2s ease; 
-  border: 1px solid transparent; 
-  user-select: none; 
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-}
-.student-card:active { 
-  transform: scale(0.95); 
-}
-.student-card:hover {
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-}
+/* 統計列色彩對應 */
+.stat-expected { background-color: #f8fafc; border-color: #e2e8f0; color: #334155; }
+.stat-present { background-color: #dcfce7; border-color: #bbf7d0; color: #166534; }
+.stat-leave { background-color: #fef9c3; border-color: #fde047; color: #a16207; }
+.stat-late-leave { background-color: #ffedd5; border-color: #fdba74; color: #c2410c; } /* 晚到請假(橘) */
+.stat-early-leave { background-color: #f3e8ff; border-color: #d8b4fe; color: #6b21a8; } /* 早退請假(紫) */
+.stat-late { background-color: #dbeafe; border-color: #bfdbfe; color: #1d4ed8; }
+.stat-absent { background-color: #fee2e2; border-color: #fca5a5; color: #991b1b; }
 
-.seat-num { font-size: 1.4rem; font-weight: bold; margin-bottom: 5px; }
-.stu-name { font-size: 1.05rem; font-weight: bold; margin-bottom: 8px; }
-.stu-status { font-size: 0.95rem; }
+/* --- 👨‍🎓 學生網格樣式 --- */
+.grid-container { display: grid; grid-template-columns: repeat(6, 1fr); gap: 15px; }
 
-/* 💡 對應的顏色定義 */
-.stat-box.default { background: #f8fafc; border-color: #e2e8f0; color: #475569; }
+.student-card { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px 5px; border-radius: 10px; cursor: pointer; border: 1px solid transparent; transition: all 0.2s ease; font-family: inherit; }
+.student-card:hover { filter: brightness(0.95); transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
 
-.stat-box.success, .status-present { background: #dcfce7; border-color: #bbf7d0; color: #166534; }
-.stat-box.warning, .status-leave { background: #fef3c7; border-color: #fde68a; color: #92400e; }
-.stat-box.late, .status-late { background: #e0e7ff; border-color: #c7d2fe; color: #3730a3; }
-.stat-box.danger, .status-absent { background: #fee2e2; border-color: #fecaca; color: #991b1b; }
+.st-num { font-size: 1.1rem; font-weight: bold; margin-bottom: 5px; }
+.st-name { font-size: 1.2rem; font-weight: 900; margin-bottom: 8px; letter-spacing: 1px; }
+.st-status { font-size: 0.9rem; font-weight: bold; white-space: pre-wrap; line-height: 1.3;}
 
+/* 學生卡片狀態色彩對應 */
+.is-absent { background-color: #fee2e2; border-color: #fca5a5; color: #991b1b; } 
+.is-present { background-color: #dcfce7; border-color: #86efac; color: #14532d; } 
+.is-leave { background-color: #fef9c3; border-color: #fde047; color: #713f12; }  
+.is-late-leave { background-color: #ffedd5; border-color: #fdba74; color: #c2410c; } 
+.is-early-leave { background-color: #f3e8ff; border-color: #d8b4fe; color: #6b21a8; } 
+.is-late { background-color: #dbeafe; border-color: #93c5fd; color: #1e3a8a; }    
+
+/* --- RWD --- */
+@media (max-width: 1024px) { .grid-container { grid-template-columns: repeat(5, 1fr); } }
 @media (max-width: 768px) {
-  .attendance-grid {
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  }
+  .grid-container { grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .stats-row { gap: 8px; }
+}
+@media (max-width: 480px) {
+  .grid-container { grid-template-columns: repeat(3, 1fr); }
+  .st-name { font-size: 1.1rem; }
 }
 </style>
