@@ -14,7 +14,7 @@
         <select v-model="selectedStudentId" class="custom-input" :disabled="isLoading">
           <option value="" disabled selected>請選擇座號與姓名...</option>
           <option v-for="s in students" :key="s.id" :value="s.id">
-            {{ s.seat_number }}號 {{ s.hidden_name || s.real_name }}
+            {{ s.seat_number }}號 {{ getMaskedName(s) }}
           </option>
         </select>
       </div>
@@ -153,7 +153,7 @@ const selectedStudentId = ref('')
 const authMethod = ref('id') 
 const authError = ref('')
 
-// ===== 綁定的變數 (與 parent-message 完全一致) =====
+// ===== 綁定的變數 =====
 const studentBirthday = ref('')
 const studentIdLast4 = ref('')
 const emailPrefix = ref('')
@@ -187,7 +187,7 @@ onMounted(async () => {
   leaveDate.value = todayDate.value
   
   // 抓取學生資料 (保留 hidden_name 用於下拉選單隱私)
-  const { data: sData } = await supabase.from('students').select('id, seat_number, hidden_name, real_name, birthday, id_number, id_last_5').order('seat_number')
+  const { data: sData } = await supabase.from('students').select('id, seat_number, hidden_name, real_name, birthday, id_number, id_last_5, parent_email').order('seat_number')
   if (sData) students.value = sData
 
   // 抓取系統設定 (包含密碼、公告、導師信箱)
@@ -209,6 +209,13 @@ onMounted(async () => {
   editingNotice.value = systemNotice.value.replace(/<br>/g, '\n').replace(/<\/?strong>/g, '').replace(/⚠️ /g, '')
 })
 
+const getMaskedName = (stu) => {
+  if (stu.hidden_name) return stu.hidden_name
+  const name = stu.real_name || ''
+  if (name.length > 2) return name[0] + 'Ｏ' + name[name.length - 1]
+  return name[0] + 'Ｏ'
+}
+
 const formatTime = (iso) => new Date(iso).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
 
 // ===== 導師管理功能 =====
@@ -229,13 +236,14 @@ const saveNotice = async () => {
   alert('✅ 介面公告已成功更新！')
 }
 
-// ===== 💡 100% 移植自 parent-message.vue 的驗證邏輯 =====
+// ===== 💡 從 parent-message 移植過來的 Email 字母萃取工具 =====
 const extractAlphanumericPrefix = (email) => {
   if (!email || typeof email !== 'string') return ''
   const beforeAt = email.split('@')[0]
   return beforeAt.replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toLowerCase()
 }
 
+// ===== 💡 雙重認證核心邏輯 (與 parent-message.vue 100% 同步) =====
 const verifyAuth = async () => {
   if (!selectedStudentId.value) {
     authError.value = '❌ 請先選擇學生！'
@@ -260,22 +268,43 @@ const verifyAuth = async () => {
     // 方式 A：生日 + 身分證後四碼
     if (authMethod.value === 'id') {
       const idStr = (stData.id_number || stData.id_last_5 || '').slice(-4)
-      if (stData.birthday === studentBirthday.value && idStr === studentIdLast4.value) {
+      
+      // 自動轉換資料庫可能的日期格式為純 8 碼數字
+      const bMatch = String(stData.birthday || '').match(/(\d{4})[-/]?(\d{1,2})[-/]?(\d{1,2})/)
+      const dbBday = bMatch ? `${bMatch[1]}${bMatch[2].padStart(2, '0')}${bMatch[3].padStart(2, '0')}` : ''
+      
+      if (dbBday === studentBirthday.value && idStr === studentIdLast4.value) {
         isValid = true
       }
     } 
     // 方式 B：Email 前五碼 (嚴格查詢 parents 與 parent_bindings 資料表)
     else if (authMethod.value === 'email') {
-      const userInputPrefix = extractAlphanumericPrefix(emailPrefix.value)
+      // 過濾家長輸入的字串
+      const userInputPrefix = emailPrefix.value.replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toLowerCase()
       let emailsToCheck = []
 
+      // 1. 學生資料表本身的 parent_email (雙重保險)
+      if (stData.parent_email) {
+        emailsToCheck.push(stData.parent_email)
+      }
+
+      // 2. parents 資料表
       const { data: parentsData } = await supabase.from('parents').select('email').eq('student_id', selectedStudentId.value)
       if (parentsData) emailsToCheck.push(...parentsData.map(p => p.email).filter(Boolean))
 
+      // 3. parent_bindings 資料表
       const { data: bindings } = await supabase.from('parent_bindings').select('email').eq('student_id', selectedStudentId.value)
       if (bindings) emailsToCheck.push(...bindings.map(b => b.email).filter(Boolean))
 
-      isValid = emailsToCheck.some(email => extractAlphanumericPrefix(email) === userInputPrefix)
+      if (emailsToCheck.length === 0) {
+        authError.value = '❌ 系統尚未綁定該名學生的家長 Email，請聯繫導師。'
+        isLoading.value = false
+        return
+      }
+
+      isValid = emailsToCheck.some(email => {
+        return extractAlphanumericPrefix(email) === userInputPrefix
+      })
     }
 
     if (!isValid) {
