@@ -30,57 +30,57 @@
       </button>
     </div>
 
-    <!-- 🕒 首頁時鐘樣式總管區塊 -->
+    <!-- 🕒 首頁時鐘樣式總管區塊 (30種) -->
     <div class="settings-section" style="margin-top: 25px;">
       <h4>🕒 首頁時鐘樣式總管</h4>
-      <p class="help-text">💡 自由搭配 10 種專屬風格、顏色與大小，打造獨一無二的班級看板！</p>
+      <p class="help-text">💡 自由搭配 30 種專屬風格、顏色與大小，打造獨一無二的班級看板！</p>
 
-<!-- 請在您的 AdminSettings.vue 或對應的後台檔案中替換這塊下拉選單 -->
-<div class="form-group">
-  <label>🎨 時鐘風格：</label>
-  <select v-model="clockConfig.theme" class="edit-input select-theme">
-    <optgroup label="經典與現代">
-      <option value="classic">1. 經典預設 (Classic)</option>
-      <option value="lcd">2. 液晶電子 (Digital LCD)</option>
-      <option value="flip">3. 復古翻頁 (Retro Flip)</option>
-      <option value="neon">4. 科技發光 (Neon Glow)</option>
-      <option value="minimal">5. 極簡文青 (Minimalist)</option>
-      <option value="glass">9. 質感毛玻璃 (Glassmorphism)</option>
-      <option value="eink">12. 電子紙 (E-Ink)</option>
-    </optgroup>
-    <optgroup label="立體與材質">
-      <option value="gradient">6. 漸層流光 (Gradient)</option>
-      <option value="emboss">7. 3D 立體 (3D Emboss)</option>
-      <option value="chalk">10. 黑板手寫 (Chalkboard)</option>
-      <option value="gold">11. 黃金奢華 (Luxury Gold)</option>
-      <option value="metal">16. 金屬雕刻 (Metal Carved)</option>
-      <option value="wood">20. 森林木紋 (Wood Craft)</option>
-      <option value="jelly">21. 水滴果凍 (Liquid Jelly)</option>
-      <option value="ice">28. 冰雪結晶 (Frosted Ice)</option>
-    </optgroup>
-    <optgroup label="科技與科幻">
-      <option value="cyber">8. 賽博龐克 (Cyberpunk)</option>
-      <option value="scifi">17. 未來科技 (Sci-Fi HUD)</option>
-      <option value="alert">19. 血紅警告 (Red Alert)</option>
-      <option value="matrix">27. 黑客指令 (Matrix Terminal)</option>
-      <option value="glitch">30. 故障藝術 (Glitch Art)</option>
-    </optgroup>
-    <optgroup label="復古與懷舊">
-      <option value="pixel">13. 像素藝術 (Pixel Art)</option>
-      <option value="dotmatrix">14. 點陣看板 (Dot Matrix)</option>
-      <option value="typewriter">18. 復古打字機 (Typewriter)</option>
-      <option value="arcade">22. 復古街機 (Arcade)</option>
-      <option value="news">24. 報紙油墨 (Newspaper)</option>
-      <option value="blueprint">25. 藍圖設計 (Blueprint)</option>
-      <option value="steampunk">29. 蒸汽龐克 (Steampunk)</option>
-    </optgroup>
-    <optgroup label="色彩與動態">
-      <option value="pastel">15. 粉彩夢幻 (Pastel Dream)</option>
-      <option value="aurora">23. 極光漸層 (Aurora)</option>
-      <option value="lava">26. 熔岩燈 (Lava Lamp)</option>
-    </optgroup>
-  </select>
-</div>
+      <div class="clock-settings-grid">
+        <div class="form-group">
+          <label>🎨 時鐘風格：</label>
+          <select v-model="clockConfig.theme" class="edit-input select-theme">
+            <optgroup label="經典與現代">
+              <option value="classic">1. 經典預設 (Classic)</option>
+              <option value="lcd">2. 液晶電子 (Digital LCD)</option>
+              <option value="flip">3. 復古翻頁 (Retro Flip)</option>
+              <option value="neon">4. 科技發光 (Neon Glow)</option>
+              <option value="minimal">5. 極簡文青 (Minimalist)</option>
+              <option value="glass">9. 質感毛玻璃 (Glassmorphism)</option>
+              <option value="eink">12. 電子紙 (E-Ink)</option>
+            </optgroup>
+            <optgroup label="立體與材質">
+              <option value="gradient">6. 漸層流光 (Gradient)</option>
+              <option value="emboss">7. 3D 立體 (3D Emboss)</option>
+              <option value="chalk">10. 黑板手寫 (Chalkboard)</option>
+              <option value="gold">11. 黃金奢華 (Luxury Gold)</option>
+              <option value="metal">16. 金屬雕刻 (Metal Carved)</option>
+              <option value="wood">20. 森林木紋 (Wood Craft)</option>
+              <option value="jelly">21. 水滴果凍 (Liquid Jelly)</option>
+              <option value="ice">28. 冰雪結晶 (Frosted Ice)</option>
+            </optgroup>
+            <optgroup label="科技與科幻">
+              <option value="cyber">8. 賽博龐克 (Cyberpunk)</option>
+              <option value="scifi">17. 未來科技 (Sci-Fi HUD)</option>
+              <option value="alert">19. 血紅警告 (Red Alert)</option>
+              <option value="matrix">27. 黑客指令 (Matrix Terminal)</option>
+              <option value="glitch">30. 故障藝術 (Glitch Art)</option>
+            </optgroup>
+            <optgroup label="復古與懷舊">
+              <option value="pixel">13. 像素藝術 (Pixel Art)</option>
+              <option value="dotmatrix">14. 點陣看板 (Dot Matrix)</option>
+              <option value="typewriter">18. 復古打字機 (Typewriter)</option>
+              <option value="arcade">22. 復古街機 (Arcade)</option>
+              <option value="news">24. 報紙油墨 (Newspaper)</option>
+              <option value="blueprint">25. 藍圖設計 (Blueprint)</option>
+              <option value="steampunk">29. 蒸汽龐克 (Steampunk)</option>
+            </optgroup>
+            <optgroup label="色彩與動態">
+              <option value="pastel">15. 粉彩夢幻 (Pastel Dream)</option>
+              <option value="aurora">23. 極光漸層 (Aurora)</option>
+              <option value="lava">26. 熔岩燈 (Lava Lamp)</option>
+            </optgroup>
+          </select>
+        </div>
 
         <div class="form-group">
           <label>📏 字體大小 (px)：</label>
@@ -161,7 +161,7 @@ const fetchConfig = async () => {
   if (clkData && clkData.setting_value) {
     clockConfig.value = { ...clockConfig.value, ...clkData.setting_value }
   } else {
-    // 向下兼容
+    // 向下兼容舊版單純字體大小的設定
     const { data: oldSize } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'index_clock_size').maybeSingle()
     if (oldSize) clockConfig.value.size = Number(oldSize.setting_value) || 35
   }
@@ -234,7 +234,7 @@ const saveRefreshSettings = async () => {
 .form-group label { font-weight: bold; color: #475569; }
 .edit-input { padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 1rem; outline: none; transition: border-color 0.2s;}
 .edit-input:focus { border-color: #10b981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2); }
-.select-theme { width: 220px; }
+.select-theme { width: 250px; }
 .size-input { width: 120px; }
 
 .color-picker-box { display: flex; align-items: center; gap: 10px; background: white; border: 1px solid #cbd5e1; border-radius: 6px; padding: 5px 12px; }
@@ -257,4 +257,8 @@ const saveRefreshSettings = async () => {
 
 .refresh-box { margin-left: 0; border-left-color: #8b5cf6; margin-bottom: 20px;}
 .refresh-btn { margin-top: 0; padding: 8px 16px; font-size: 1rem; background-color: #8b5cf6; }
+
+/* 為 optgroup 增加閱讀性 */
+optgroup { font-weight: bold; color: #1e3a8a; background: #f1f5f9; }
+option { font-weight: normal; color: #1e293b; background: white; }
 </style>
