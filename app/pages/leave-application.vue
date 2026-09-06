@@ -12,7 +12,6 @@
         <label>👩‍🎓 選擇學生</label>
         <select v-model="selectedStudentId" class="custom-input">
           <option value="" disabled selected>請選擇座號與姓名...</option>
-          <!-- 💡 修正：嚴格實施隱藏姓名策略 -->
           <option v-for="s in students" :key="s.id" :value="s.id">
             {{ s.seat_number }}號 {{ getMaskedName(s) }}
           </option>
@@ -33,7 +32,7 @@
         </div>
         <div class="form-group">
           <label>🪪 學生身分證末 4 碼</label>
-          <input type="password" v-model="inputIdLast4" class="custom-input" placeholder="例: 1234" maxlength="4" />
+          <input type="password" v-model="inputIdLast4" class="custom-input" placeholder="例: 1234 (若無資料可免填)" maxlength="4" />
         </div>
       </div>
 
@@ -45,7 +44,7 @@
         </div>
       </div>
 
-      <!-- 認證 C：導師隱藏登入 -->
+      <!-- 認證 C：導師登入 -->
       <div v-if="authMethod === 'teacher'" class="auth-fields">
         <div class="form-group">
           <label>🔑 系統授權密碼</label>
@@ -66,7 +65,6 @@
     <!-- ============================================== -->
     <div class="leave-form-container teacher-dashboard" v-else-if="isTeacherLogged">
       <h2>👨‍🏫 請假系統管理後台</h2>
-      
       <div class="form-group">
         <label>⚙️ 修改家長端介面「請假注意事項」：</label>
         <textarea v-model="editingNotice" class="custom-input" rows="4"></textarea>
@@ -85,18 +83,14 @@
         </div>
       </div>
 
-      <div class="back-link">
-        <button @click="isTeacherLogged = false" class="text-btn">登出</button> | <NuxtLink to="/">回首頁</NuxtLink>
-      </div>
+      <div class="back-link"><button @click="isTeacherLogged = false" class="text-btn">登出</button> | <NuxtLink to="/">回首頁</NuxtLink></div>
     </div>
 
     <!-- ============================================== -->
-    <!-- 請假填寫表單區塊 (家長認證成功後顯示) -->
+    <!-- 家長請假填寫表單區塊 -->
     <!-- ============================================== -->
     <div class="leave-form-container" v-else>
-      <!-- 💡 驗證成功後，顯示學生真實姓名 -->
       <h2>填寫請假單：{{ currentStudent?.real_name }}</h2>
-      
       <div class="important-notice" v-html="systemNoticeNL"></div>
 
       <div class="form-grid">
@@ -138,10 +132,7 @@
         {{ isSubmitting ? '送出中...' : '📤 確認送出請假通知' }}
       </button>
 
-      <div class="back-link">
-        <button @click="isAuthenticated = false" class="text-btn">返回重新認證</button> | 
-        <NuxtLink to="/">回首頁</NuxtLink>
-      </div>
+      <div class="back-link"><button @click="isAuthenticated = false" class="text-btn">返回重新認證</button> | <NuxtLink to="/">回首頁</NuxtLink></div>
     </div>
   </div>
 </template>
@@ -150,7 +141,6 @@
 import { ref, onMounted, computed } from 'vue'
 const supabase = useSupabaseClient()
 
-// 認證相關變數
 const isAuthenticated = ref(false)
 const isTeacherLogged = ref(false)
 const students = ref([])
@@ -163,7 +153,6 @@ const teacherPwdInput = ref('')
 const expectedTeacherPwd = ref('168168168')
 const authError = ref('')
 
-// 請假表單變數
 const leaveDate = ref('')
 const selectedPeriods = ref([])
 const leaveType = ref('病假')
@@ -171,7 +160,6 @@ const leaveReason = ref('')
 const isSubmitting = ref(false)
 const periodList = ['早修', '第1節', '第2節', '第3節', '第4節', '午休', '第5節', '第6節', '第7節', '第8節']
 
-// 導師管理變數
 const defaultNotice = `⚠️ <strong>重要提醒：</strong><br>本系統之線上請假僅為「事前通知導師」，方便班級點名與安全掌握。<br>學生返校後，<strong>仍必須依學校規定完成「書面請假手續」</strong>（請假本位於新生訓練手冊中，或可至合作社購買單本），以避免學務處記曠課。`
 const systemNotice = ref(defaultNotice)
 const editingNotice = ref('')
@@ -190,7 +178,6 @@ onMounted(async () => {
   const { data: sData } = await supabase.from('students').select('*').order('seat_number')
   if (sData) students.value = sData
 
-  // 抓取密碼與公告設定
   const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', ['admin_password', 'leave_application_notice'])
   if (sysData) {
     sysData.forEach(s => {
@@ -202,15 +189,12 @@ onMounted(async () => {
           expectedTeacherPwd.value = s.setting_value.custom_pwd || '168168168'
         }
       }
-      if (s.setting_key === 'leave_application_notice' && s.setting_value) {
-        systemNotice.value = s.setting_value
-      }
+      if (s.setting_key === 'leave_application_notice' && s.setting_value) systemNotice.value = s.setting_value
     })
   }
   editingNotice.value = systemNotice.value.replace(/<br>/g, '\n').replace(/<\/?strong>/g, '').replace(/⚠️ /g, '')
 })
 
-// 💡 確保下拉選單能隱藏姓名
 const getMaskedName = (stu) => {
   if (stu.hidden_name) return stu.hidden_name
   const name = stu.real_name || ''
@@ -220,11 +204,9 @@ const getMaskedName = (stu) => {
 
 const formatTime = (iso) => new Date(iso).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
 
-// 導師登入
 const loginTeacher = async () => {
   if (teacherPwdInput.value === expectedTeacherPwd.value || teacherPwdInput.value === '168168168') {
     isTeacherLogged.value = true; authError.value = ''
-    // 抓取請假紀錄
     const { data } = await supabase.from('private_messages')
       .select('*').eq('chat_type', '家長').ilike('content', '%線上請假通知%').order('created_at', { ascending: false })
     if (data) leaveRecords.value = data
@@ -233,14 +215,13 @@ const loginTeacher = async () => {
   }
 }
 
-// 導師儲存公告
 const saveNotice = async () => {
   await supabase.from('system_settings').upsert({ setting_key: 'leave_application_notice', setting_value: editingNotice.value }, { onConflict: 'setting_key' })
   systemNotice.value = editingNotice.value
   alert('✅ 介面公告已成功更新！')
 }
 
-// 💡 強化防呆的家長雙重驗證
+// 💡 終極寬容模式：自動修復與略過缺失欄位
 const verifyAuth = () => {
   authError.value = ''
   if (!selectedStudentId.value) return authError.value = '請先選擇學生！'
@@ -248,20 +229,29 @@ const verifyAuth = () => {
   const stu = currentStudent.value
   
   if (authMethod.value === 'id') {
-    if (!inputBirthday.value || !inputIdLast4.value) return authError.value = '請完整輸入生日與身分證末4碼。'
+    if (!inputBirthday.value) return authError.value = '請完整輸入生日！'
+    if (!stu.birthday) return authError.value = '❌ 資料庫中缺少該名學生的生日紀錄，無法驗證。'
     
-    // 嚴格擷取身分證 (相容 null 或欄位命名問題)
-    const dbIdStr = String(stu.id_number || stu.personal_id || stu.national_id || '')
-    if (dbIdStr.length < 4) return authError.value = '系統資料庫中缺少此學生的身分證紀錄，無法驗證，請聯繫導師。'
-    const dbId4 = dbIdStr.slice(-4)
+    // 將家長輸入的值拔除所有非數字字元 (例如 2013-05-14 會變成 20130514)
+    const cleanInputBday = inputBirthday.value.replace(/\D/g, '')
 
-    // 嚴格擷取生日並自動轉換為 8 碼 (無視 DB 裡面的橫線或斜線)
-    const bMatch = String(stu.birthday || '').match(/(\d{4})[-/]?(\d{1,2})[-/]?(\d{1,2})/)
-    if (!bMatch) return authError.value = '系統資料庫中缺少此學生的生日紀錄或格式異常，無法驗證。'
+    // 從資料庫解析真實生日
+    const bMatch = String(stu.birthday).match(/(\d{4})[-/]?(\d{1,2})[-/]?(\d{1,2})/)
+    if (!bMatch) return authError.value = '❌ 資料庫中的生日格式異常。'
     const dbBday = `${bMatch[1]}${bMatch[2].padStart(2, '0')}${bMatch[3].padStart(2, '0')}`
 
-    if (inputBirthday.value !== dbBday || inputIdLast4.value !== dbId4) {
-      return authError.value = '❌ 驗證失敗：生日或身分證末碼錯誤！'
+    if (cleanInputBday !== dbBday) {
+      return authError.value = '❌ 驗證失敗：生日輸入錯誤！'
+    }
+
+    // 身分證寬容檢查：如果資料庫完全沒有身分證相關欄位，系統自動「豁免」此檢查
+    const dbIdStr = String(stu.id_number || stu.personal_id || stu.national_id || stu.id_code || '')
+    if (dbIdStr && dbIdStr.trim().length >= 4) {
+       // 如果資料庫有身分證，就必須檢查末四碼
+       const dbId4 = dbIdStr.slice(-4)
+       if (inputIdLast4.value !== dbId4) {
+         return authError.value = '❌ 驗證失敗：身分證末 4 碼錯誤！'
+       }
     }
   } else {
     if (!inputEmailPrefix.value) return authError.value = '請輸入 Email 前 5 碼。'
@@ -272,6 +262,7 @@ const verifyAuth = () => {
       return authError.value = '❌ 驗證失敗：Email 前五碼不吻合！'
     }
   }
+  
   isAuthenticated.value = true
 }
 
@@ -292,17 +283,11 @@ const submitLeave = async () => {
       chat_type: '家長', student_id: currentStudent.value.id, sender_role: `家長(${currentStudent.value.real_name})`, content: msgContent, is_read_by_teacher: false
     })
 
-    try {
-      await $fetch('/api/send-email', { method: 'POST', body: { subject: `[線上請假通知] ${currentStudent.value.seat_number}號 ${currentStudent.value.real_name}`, text: msgContent } })
-    } catch (e) {}
+    try { await $fetch('/api/send-email', { method: 'POST', body: { subject: `[線上請假通知] ${currentStudent.value.seat_number}號 ${currentStudent.value.real_name}`, text: msgContent } }) } catch (e) {}
 
     alert('✅ 請假通知已成功送出！導師將會收到系統訊息。\n\n提醒您：學生返校後仍需補妥書面請假卡手續。')
     selectedPeriods.value = []; leaveReason.value = ''; leaveDate.value = todayDate.value; isAuthenticated.value = false
-  } catch (err) {
-    alert('❌ 送出失敗，請稍後再試。')
-  } finally {
-    isSubmitting.value = false
-  }
+  } catch (err) { alert('❌ 送出失敗，請稍後再試。') } finally { isSubmitting.value = false }
 }
 </script>
 
