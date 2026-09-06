@@ -38,7 +38,7 @@
           <div class="left-panel">
             
             <ControlPanel 
-              :clockFontSize="clockFontSize"
+              :clockConfig="clockConfig"
               :currentTime="currentTime"
               :unreadMsgCount="unreadMsgCount"
               :scheduleDisplay="scheduleDisplay"
@@ -193,12 +193,13 @@ const unreadMsgCount = ref(0)
 
 const announcements = ref([])
 const parentAnnouncements = ref([])
+const parentNotices = ref([])
 const scheduleData = ref(null)
 
 const scheduleButtonConfig = ref({ isVisible: false, visibility: 'both', teacherOnlyInBrownlist: true })
 const showLargeSchedule = ref(false)
 
-const clockFontSize = ref(35) 
+const clockConfig = ref({ theme: 'classic', color: '#1e293b', size: 35, showIcon: true })
 const autoRefreshSeconds = ref(60) 
 let dataRefreshTimer = null
 
@@ -206,7 +207,8 @@ const isExamModeView = ref(false)
 const examData = ref({ isExamModeEnabled: true, theme: 'midnight', title: '', periods: [] })
 
 const globalButtonSettings = ref({})
-// 在 app/pages/index.vue 的 <script setup> 中更新：
+
+// 💡 權限矩陣：已將 parentLeave (家長請假) 加入
 const defaultRoleSettings = {
   anonymous: { parentBind: true, parentMsg: true, studentMsg: true, parentLeave: true, schedule: true, assignments: true, discipline: true, hygiene: true, seats: true, manageSchedule: false, exams: false, emergency: true, admin: false, showSeats: false, showHygiene: false, contactHistory: false },
   classroom: { parentBind: false, parentMsg: false, studentMsg: false, parentLeave: false, schedule: true, assignments: true, discipline: true, hygiene: true, seats: true, manageSchedule: false, exams: false, emergency: true, admin: false, showSeats: true, showHygiene: true, contactHistory: true },
@@ -219,6 +221,7 @@ const roleButtonSettings = ref(JSON.parse(JSON.stringify(defaultRoleSettings)))
 
 const activeRoleCategory = computed(() => {
   const id = currentIdentity.value;
+  if (!id) return 'anonymous';
   if (id.includes('導師')) return 'teacher';
   if (id.includes('任課老師')) return 'subject_teacher';
   if (id.includes('家長')) return 'parent';
@@ -231,7 +234,7 @@ const indexButtonSettings = computed(() => {
   const roleSettings = roleButtonSettings.value[activeRoleCategory.value] || defaultRoleSettings.anonymous
   const effectiveSettings = {}
   for (const key in roleSettings) {
-    if (globalButtonSettings.value[key] === false) {
+    if (globalButtonSettings.value && globalButtonSettings.value[key] === false) {
       effectiveSettings[key] = false
     } else {
       effectiveSettings[key] = roleSettings[key] 
@@ -275,6 +278,7 @@ const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 const showIdentityModal = ref(false)
 const currentIdentity = ref('匿名來訪者')
 const expectedTeacherPwd = ref('168168168')
+const officerPasswords = ref({ academic: '', counseling: '', discipline: '', teacher: '168168168' })
 
 const isContentVisible = computed(() => {
   return isIpBrownlisted.value || currentIdentity.value !== '匿名來訪者'
@@ -409,26 +413,20 @@ const updateTime = () => {
   currentTime.value = now.toLocaleTimeString('zh-TW', { hour12: false })
 }
 
-// 💡 修正：排課顯示邏輯 (週末防呆 + 老師姓名褐名單遮蔽原則)
 const scheduleDisplay = computed(() => {
   if (!scheduleData.value || !scheduleData.value.periods) return null
   
   const now = new Date(nowTick.value)
   const currentDayIndex = now.getDay() - 1 
   
-  // 1. 如果是週末，回傳休息狀態，防止整個區塊消失
   if (currentDayIndex < 0 || currentDayIndex > 4) {
-    return {
-      current: { status: '放假中', label: '週末', subject: '週末休息', teacher: '' },
-      next: null
-    }
+    return { current: { status: '放假中', label: '週末', subject: '週末休息', teacher: '' }, next: null }
   }
   
   const nowMins = now.getHours() * 60 + now.getMinutes()
   let currentClass = { status: '下課中', label: '目前', subject: '休息時間', teacher: '' }
   let nextClass = null
   
-  // 2. 老師姓名遮蔽函數 (如果不在褐名單，就把中間字改成Ｏ)
   const maskTeacherName = (name) => {
     if (!name) return ''
     if (name.length >= 3) return name.charAt(0) + 'Ｏ' + name.charAt(name.length - 1)
@@ -447,7 +445,6 @@ const scheduleDisplay = computed(() => {
     const dayData = p.days[currentDayIndex]
     if (!dayData || !dayData.subject) continue
     
-    // 套用褐名單原則過濾老師姓名
     const safeTeacher = isIpBrownlisted.value ? (dayData.teacher || '') : maskTeacherName(dayData.teacher)
     
     if (nowMins >= startMins && nowMins <= endMins) {
@@ -525,18 +522,13 @@ const countdownText = computed(() => {
   return `${String(diffMins).padStart(2, '0')}:${String(diffSecs).padStart(2, '0')}`;
 })
 
-const parentNotices = ref([])
-const officerPasswords = ref({ academic: '', counseling: '', discipline: '', teacher: '168168168' })
 const seatingChart = ref({ isVisible: false, isRotated: false, seats: [], settings: {} })
-
 const contactBookItems = ref([])
 const isEditingContact = ref(false)
 const editingContactItems = ref([])
-
 const classNoteItems = ref([])
 const isEditingClassNotes = ref(false)
 const editingClassNoteItems = ref([])
-
 const currentEditorRole = ref('') 
 
 const showPwdModal = ref(false)
@@ -609,138 +601,79 @@ const toggleAttendance = async (student) => {
   } catch (err) { console.error(err) }
 }
 
+// 💡 防呆終極版的 fetchData
 const fetchData = async () => {
   const { data: boardData } = await supabase.from('contact_books').select('contact_items').eq('record_date', todayISO).maybeSingle()
   contactBookItems.value = boardData?.contact_items || []
 
-  const { data: sysData } = await supabase.from('system_settings').select('*')
-    .in('setting_key', [
-      'board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 
-      'contact_history_visible', 'index_button_settings', 'announcements_data', 
-      'class_schedule_data', 'exam_schedule_data', 'parent_notices_data', 
-      'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible',
-      'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings',
-      'index_clock_size', 'index_auto_refresh_seconds', 'role_button_settings'
-    ])
+  const keysToFetch = [
+    'board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 
+    'contact_history_visible', 'index_button_settings', 'announcements_data', 
+    'class_schedule_data', 'exam_schedule_data', 'parent_notices_data', 
+    'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible',
+    'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings',
+    'index_clock_size', 'index_clock_config', 'index_auto_refresh_seconds', 'role_button_settings'
+  ]
+
+  const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', keysToFetch)
   
-  if (sysData) {
-    const pwdSetting = sysData.find(s => s.setting_key === 'board_officer_passwords')
-    if (pwdSetting) officerPasswords.value = { ...officerPasswords.value, ...pwdSetting.setting_value }
+  if (sysData && sysData.length > 0) {
+    sysData.forEach(s => {
+      const v = s.setting_value
+      if (v === null || v === undefined) return // 安全防護網
+
+      switch (s.setting_key) {
+        case 'board_officer_passwords': officerPasswords.value = { ...officerPasswords.value, ...v }; break;
+        case 'contact_history_visible': isHistoryVisibleOnIndex.value = v; break;
+        case 'index_button_settings': globalButtonSettings.value = v; break;
+        case 'role_button_settings': roleButtonSettings.value = { ...defaultRoleSettings, ...v }; break;
+        case 'index_clock_config': clockConfig.value = { ...clockConfig.value, ...v }; break;
+        case 'index_clock_size': 
+          if (!sysData.find(x => x.setting_key === 'index_clock_config')) clockConfig.value.size = Number(v) || 35; 
+          break;
+        case 'announcements_data': announcements.value = (v || []).sort((a, b) => new Date(b.date) - new Date(a.date)); break;
+        case 'parent_announcements_data': parentAnnouncements.value = (v || []).sort((a, b) => new Date(b.date) - new Date(a.date)); break;
+        case 'announcement_board_visible': isAnnouncementVisibleOnIndex.value = v; break;
+        case 'parent_announcement_board_visible': isParentAnnouncementVisibleOnIndex.value = v; break;
+        case 'parent_notices_board_visible': isNoticeBoardVisibleOnIndex.value = v; break;
+        case 'class_schedule_data': scheduleData.value = v; break;
+        case 'schedule_button_settings': scheduleButtonConfig.value = { teacherOnlyInBrownlist: true, ...v }; break;
+        case 'index_auto_refresh_seconds': autoRefreshSeconds.value = Number(v) || 60; break;
+        case 'exam_schedule_data': examData.value = { ...examData.value, ...v }; break;
+        case 'parent_notices_data': 
+          parentNotices.value = (v || []).filter(n => (!n.startDate || n.startDate <= todayISO) && (!n.endDate || n.endDate >= todayISO)).map(n => n.content); 
+          break;
+        case 'class_notes_data': classNoteItems.value = v[todayISO] || []; break;
+        case 'seating_chart_data': 
+          seatingChart.value = { 
+            isVisible: v.isVisible || false, 
+            isRotated: v.isRotated || false, 
+            seats: (v.seats || []).map(seat => seat.content !== undefined ? { id: seat.id, isHidden: seat.isHidden, seatNum: String(seat.content).split('\n')[0] || '', name: String(seat.content).split('\n')[1] || '', other: String(seat.content).split('\n').slice(2).join(' ') || '' } : seat), 
+            settings: v.settings || {} 
+          }; break;
+        case 'hygiene_management_data': hygieneData.value = { ...hygieneData.value, ...v }; break;
+      }
+    })
     
-    const histSetting = sysData.find(s => s.setting_key === 'contact_history_visible')
-    if (histSetting) isHistoryVisibleOnIndex.value = histSetting.setting_value
-
-    const btnSetting = sysData.find(s => s.setting_key === 'index_button_settings')
-    if (btnSetting && btnSetting.setting_value) { 
-      globalButtonSettings.value = btnSetting.setting_value 
+    if (!sysData.find(s => s.setting_key === 'role_button_settings') && globalButtonSettings.value) {
+      roleButtonSettings.value.anonymous = { ...roleButtonSettings.value.anonymous, ...globalButtonSettings.value }
     }
-
-    const roleBtnSetting = sysData.find(s => s.setting_key === 'role_button_settings')
-    if (roleBtnSetting && roleBtnSetting.setting_value) {
-      roleButtonSettings.value = { ...defaultRoleSettings, ...roleBtnSetting.setting_value }
-    } else if (btnSetting && btnSetting.setting_value) {
-      roleButtonSettings.value.anonymous = { ...roleButtonSettings.value.anonymous, ...btnSetting.setting_value }
-    }
-
-    const annSetting = sysData.find(s => s.setting_key === 'announcements_data')
-    if (annSetting && annSetting.setting_value) { announcements.value = (annSetting.setting_value || []).sort((a, b) => new Date(b.date) - new Date(a.date)) }
-
-    const pAnnSetting = sysData.find(s => s.setting_key === 'parent_announcements_data')
-    if (pAnnSetting && pAnnSetting.setting_value) { parentAnnouncements.value = (pAnnSetting.setting_value || []).sort((a, b) => new Date(b.date) - new Date(a.date)) }
-
-    const annVisSetting = sysData.find(s => s.setting_key === 'announcement_board_visible')
-    if (annVisSetting !== undefined && annVisSetting.setting_value !== null) {
-      isAnnouncementVisibleOnIndex.value = annVisSetting.setting_value
-    }
-
-    const pAnnVisSetting = sysData.find(s => s.setting_key === 'parent_announcement_board_visible')
-    if (pAnnVisSetting !== undefined && pAnnVisSetting.setting_value !== null) {
-      isParentAnnouncementVisibleOnIndex.value = pAnnVisSetting.setting_value
-    }
-
-    const noticeVisSetting = sysData.find(s => s.setting_key === 'parent_notices_board_visible')
-    if (noticeVisSetting !== undefined && noticeVisSetting.setting_value !== null) {
-      isNoticeBoardVisibleOnIndex.value = noticeVisSetting.setting_value
-    }
-
-    const schSetting = sysData.find(s => s.setting_key === 'class_schedule_data')
-    if (schSetting && schSetting.setting_value) { scheduleData.value = schSetting.setting_value }
-    
-    const schBtnSetting = sysData.find(s => s.setting_key === 'schedule_button_settings')
-    if (schBtnSetting && schBtnSetting.setting_value) {
-      scheduleButtonConfig.value = { teacherOnlyInBrownlist: true, ...schBtnSetting.setting_value }
-    }
-
-    const clockSetting = sysData.find(s => s.setting_key === 'index_clock_size')
-    if (clockSetting && clockSetting.setting_value) {
-      clockFontSize.value = Number(clockSetting.setting_value) || 35
-    }
-    
-    const refreshSetting = sysData.find(s => s.setting_key === 'index_auto_refresh_seconds')
-    if (refreshSetting && refreshSetting.setting_value !== undefined) {
-      autoRefreshSeconds.value = Number(refreshSetting.setting_value) || 60
-    }
-
-    const exSetting = sysData.find(s => s.setting_key === 'exam_schedule_data')
-    if (exSetting && exSetting.setting_value) { examData.value = { ...examData.value, ...exSetting.setting_value } }
-
-    const noticesSetting = sysData.find(s => s.setting_key === 'parent_notices_data')
-    if (noticesSetting && noticesSetting.setting_value) {
-      const allNotices = (noticesSetting.setting_value || []).sort((a, b) => Number(a.id) - Number(b.id))
-      parentNotices.value = allNotices.filter(n => {
-        const startOk = !n.startDate || n.startDate <= todayISO
-        const endOk = !n.endDate || n.endDate >= todayISO
-        return startOk && endOk
-      }).map(n => n.content) 
-    } else { parentNotices.value = [] }
-
-    const classNotesSetting = sysData.find(s => s.setting_key === 'class_notes_data')
-    if (classNotesSetting && classNotesSetting.setting_value) {
-      classNoteItems.value = classNotesSetting.setting_value[todayISO] || []
-    } else {
-      classNoteItems.value = []
-    }
-
-    const seatSetting = sysData.find(s => s.setting_key === 'seating_chart_data')
-    if (seatSetting) {
-      const rawValue = seatSetting.setting_value || {}
-      const normalizedSeats = (rawValue.seats || []).map(seat => {
-        if (seat.content !== undefined) {
-          const lines = String(seat.content || '').split('\n')
-          return { id: seat.id, isHidden: seat.isHidden, seatNum: lines[0] || '', name: lines[1] || '', other: lines.slice(2).join(' ') || '' }
-        }
-        return seat
-      })
-      seatingChart.value = { isVisible: rawValue.isVisible || false, isRotated: rawValue.isRotated || false, seats: normalizedSeats, settings: rawValue.settings || {} }
-    }
-    
-    const hygieneSetting = sysData.find(s => s.setting_key === 'hygiene_management_data')
-    if (hygieneSetting && hygieneSetting.setting_value) { hygieneData.value = { ...JSON.parse(JSON.stringify(defaultHygieneData)), ...hygieneSetting.setting_value } }
   }
 
   const { data: sData } = await supabase.from('students').select('*').order('seat_number')
+  if (sData) { allStudentsForLogin.value = sData; allStudents.value = sData.filter(s => !s.hide_attendance) }
   
-  if (sData) {
-    allStudentsForLogin.value = sData
-    allStudents.value = sData.filter(s => !s.hide_attendance)
-  }
-
   const { data: attData } = await supabase.from('attendances').select('*').eq('record_date', todayISO)
   if (attData) todayAttendances.value = attData
 
   try {
-    const { data: msgData } = await supabase.from('private_messages')
-      .select('*')
-      .neq('sender_role', '導師')
-
+    const { data: msgData } = await supabase.from('private_messages').select('*').neq('sender_role', '導師')
     if (msgData) {
-      const unreadParents = msgData.filter(m => m.chat_type === '家長' && (m.is_read_by_teacher === false || m.is_read_by_admin === false)).length
-      const unreadStudents = msgData.filter(m => m.chat_type === '學生' && (m.is_read_by_teacher === false || m.is_read_by_admin === false)).length
-      unreadMsgCount.value = isIpBrownlisted.value ? (unreadParents + unreadStudents) : unreadParents
+      const uParents = msgData.filter(m => m.chat_type === '家長' && (!m.is_read_by_teacher || !m.is_read_by_admin)).length
+      const uStudents = msgData.filter(m => m.chat_type === '學生' && (!m.is_read_by_teacher || !m.is_read_by_admin)).length
+      unreadMsgCount.value = isIpBrownlisted.value ? (uParents + uStudents) : uParents
     }
-  } catch (e) {
-    console.error('無法取得未讀私訊數量', e)
-  }
+  } catch (e) {}
 }
 
 const startAutoRefresh = () => {
