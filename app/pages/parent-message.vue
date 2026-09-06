@@ -3,7 +3,7 @@
     <div class="message-card">
       <div v-if="!isVerified" class="verify-section">
         <div class="card-header">
-          <h2>💬 班級私訊聊天室</h2>
+          <h2>💬 家長私訊導師</h2>
           <div class="security-notice">
             🔒 提醒家長：為維護資安與嚴格保護學生個資，請擇一方式進行身分驗證，完成後即可檢視與導師的對話紀錄。<br>
             （學生的身份證後4碼和生日已經建構完成，可用來認證登入。也可先用email綁定功能，或提供email給導師為您綁定，再用email前五碼即可進入和導師私訊或請假。）
