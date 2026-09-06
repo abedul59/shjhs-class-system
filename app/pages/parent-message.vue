@@ -1,6 +1,8 @@
 <template>
   <div class="leave-page">
+    <!-- ============================================== -->
     <!-- 認證與登入區塊 -->
+    <!-- ============================================== -->
     <div class="auth-container" v-if="!isAuthenticated && !isTeacherLogged">
       <h2>📝 家長代為請假系統</h2>
       
@@ -68,21 +70,63 @@
     <!-- ============================================== -->
     <div class="leave-form-container teacher-dashboard" v-else-if="isTeacherLogged">
       <h2>👨‍🏫 請假系統管理後台</h2>
-      <div class="form-group">
-        <label>⚙️ 修改家長端介面「請假注意事項」：</label>
-        <textarea v-model="editingNotice" class="custom-input" rows="4"></textarea>
-        <button class="quick-btn" style="margin-top: 10px;" @click="saveNotice">💾 儲存修改</button>
+      
+      <!-- 區塊 1：介面公告設定 -->
+      <div class="admin-section">
+        <h3>📢 介面公告設定</h3>
+        <div class="form-group">
+          <label>修改家長端介面「請假注意事項」：</label>
+          <textarea v-model="editingNotice" class="custom-input" rows="3"></textarea>
+          <button class="quick-btn" style="margin-top: 10px;" @click="saveNotice">💾 儲存公告</button>
+        </div>
       </div>
 
-      <h3 class="record-title">📋 近期家長線上請假紀錄</h3>
-      <div class="record-list">
-        <div v-if="leaveRecords.length === 0" class="empty-msg">目前沒有請假紀錄。</div>
-        <div v-for="rec in leaveRecords" :key="rec.id" class="record-card">
-          <div class="rec-header">
-            <strong>{{ rec.sender_role }}</strong> 
-            <span class="rec-time">{{ formatTime(rec.created_at) }}</span>
+      <!-- 區塊 2：Email 通知設定 -->
+      <div class="admin-section">
+        <h3>📧 Email 通知推播設定</h3>
+        
+        <div class="form-group">
+          <label>導師接收通知之 Email 信箱：</label>
+          <input type="email" v-model="teacherEmail" class="custom-input" placeholder="例如: teacher@school.edu.tw" />
+        </div>
+
+        <div class="form-group">
+          <label>信件主旨範本：</label>
+          <input type="text" v-model="emailSubjectTpl" class="custom-input" />
+        </div>
+
+        <div class="form-group">
+          <label>信件內容範本：</label>
+          <div class="var-tips">
+            💡 <strong>可用變數：</strong> <code>{student_name}</code> (學生姓名), <code>{leave_date}</code> (請假日期), <code>{leave_periods}</code> (請假節數), <code>{leave_reason}</code> (事由)
           </div>
-          <div class="rec-body">{{ rec.content }}</div>
+          <textarea v-model="emailBodyTpl" class="custom-input" rows="6"></textarea>
+        </div>
+
+        <!-- 即時預覽區塊 -->
+        <div class="preview-box">
+          <h4>👁️ 信件預覽 (範例)</h4>
+          <div class="preview-subject"><strong>主旨：</strong> {{ previewSubject }}</div>
+          <div class="preview-body" v-html="previewBodyNL"></div>
+        </div>
+
+        <button class="quick-btn admin-btn" style="margin-top: 15px; width: 100%;" @click="saveEmailSettings">
+          💾 儲存 Email 推播設定
+        </button>
+      </div>
+
+      <!-- 區塊 3：請假紀錄 -->
+      <div class="admin-section" style="margin-bottom: 0;">
+        <h3 class="record-title">📋 近期家長線上請假紀錄</h3>
+        <div class="record-list">
+          <div v-if="leaveRecords.length === 0" class="empty-msg">目前沒有請假紀錄。</div>
+          <div v-for="rec in leaveRecords" :key="rec.id" class="record-card">
+            <div class="rec-header">
+              <strong>{{ rec.sender_role }}</strong> 
+              <span class="rec-time">{{ formatTime(rec.created_at) }}</span>
+            </div>
+            <div class="rec-body">{{ rec.content }}</div>
+          </div>
         </div>
       </div>
 
@@ -159,7 +203,6 @@ const studentIdLast4 = ref('')
 const emailPrefix = ref('')
 const teacherPwdInput = ref('')
 const expectedTeacherPwd = ref('168168168')
-const teacherEmail = ref('')
 
 // ===== 請假表單變數 =====
 const leaveDate = ref('')
@@ -169,7 +212,11 @@ const leaveReason = ref('')
 const isSubmitting = ref(false)
 const periodList = ['早修', '第1節', '第2節', '第3節', '第4節', '午休', '第5節', '第6節', '第7節', '第8節']
 
-// ===== 導師管理變數 =====
+// ===== 導師管理變數 (新增 Email 範本狀態) =====
+const teacherEmail = ref('')
+const emailSubjectTpl = ref('[線上請假通知] {student_name}')
+const emailBodyTpl = ref('導師您好：\n\n系統收到了一則家長請假通知。\n\n【詳細資訊】\n- 學生：{student_name}\n- 請假日期：{leave_date}\n- 請假節數：{leave_periods}\n- 假別/事由：{leave_reason}\n\n此致\n系統自動通知')
+
 const defaultNotice = `⚠️ <strong>重要提醒：</strong><br>本系統之線上請假僅為「事前通知導師」，方便班級點名與安全掌握。<br>學生返校後，<strong>仍必須依學校規定完成「書面請假手續」</strong>（請假本位於新生訓練手冊中，或可至合作社購買單本），以避免學務處記曠課。`
 const systemNotice = ref(defaultNotice)
 const editingNotice = ref('')
@@ -183,15 +230,29 @@ const todayDate = computed(() => {
 const currentStudent = computed(() => students.value.find(s => s.id === selectedStudentId.value))
 const systemNoticeNL = computed(() => systemNotice.value.replace(/\n/g, '<br>'))
 
+// ===== 導師 Email 預覽運算 =====
+const previewSubject = computed(() => emailSubjectTpl.value.replace(/{student_name}/g, '27號 皇茹月'))
+const previewBody = computed(() => {
+  return emailBodyTpl.value
+    .replace(/{student_name}/g, '27號 皇茹月')
+    .replace(/{leave_date}/g, todayDate.value)
+    .replace(/{leave_periods}/g, '早修、第1節、第2節')
+    .replace(/{leave_reason}/g, '病假')
+})
+const previewBodyNL = computed(() => previewBody.value.replace(/\n/g, '<br>'))
+
 onMounted(async () => {
   leaveDate.value = todayDate.value
   
-  // 抓取學生資料 (保留 hidden_name 用於下拉選單隱私)
   const { data: sData } = await supabase.from('students').select('id, seat_number, hidden_name, real_name, birthday, id_number, id_last_5, parent_email').order('seat_number')
   if (sData) students.value = sData
 
-  // 抓取系統設定 (包含密碼、公告、導師信箱)
-  const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', ['admin_password', 'leave_application_notice', 'teacher_msg_notify_email'])
+  // 抓取系統設定 (包含信箱、信件主旨與內文)
+  const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', [
+    'admin_password', 'leave_application_notice', 'teacher_msg_notify_email', 
+    'leave_email_subject_template', 'leave_email_body_template'
+  ])
+  
   if (sysData) {
     sysData.forEach(s => {
       if (s.setting_key === 'admin_password' && s.setting_value) {
@@ -204,6 +265,8 @@ onMounted(async () => {
       }
       if (s.setting_key === 'leave_application_notice' && s.setting_value) systemNotice.value = s.setting_value
       if (s.setting_key === 'teacher_msg_notify_email' && s.setting_value) teacherEmail.value = s.setting_value
+      if (s.setting_key === 'leave_email_subject_template' && s.setting_value) emailSubjectTpl.value = s.setting_value
+      if (s.setting_key === 'leave_email_body_template' && s.setting_value) emailBodyTpl.value = s.setting_value
     })
   }
   editingNotice.value = systemNotice.value.replace(/<br>/g, '\n').replace(/<\/?strong>/g, '').replace(/⚠️ /g, '')
@@ -236,14 +299,16 @@ const saveNotice = async () => {
   alert('✅ 介面公告已成功更新！')
 }
 
-// ===== 💡 從 parent-message 移植過來的 Email 字母萃取工具 =====
-const extractAlphanumericPrefix = (email) => {
-  if (!email || typeof email !== 'string') return ''
-  const beforeAt = email.split('@')[0]
-  return beforeAt.replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toLowerCase()
+const saveEmailSettings = async () => {
+  await supabase.from('system_settings').upsert([
+    { setting_key: 'teacher_msg_notify_email', setting_value: teacherEmail.value },
+    { setting_key: 'leave_email_subject_template', setting_value: emailSubjectTpl.value },
+    { setting_key: 'leave_email_body_template', setting_value: emailBodyTpl.value }
+  ], { onConflict: 'setting_key' })
+  alert('✅ Email 通知與推播設定已成功儲存！')
 }
 
-// ===== 💡 雙重認證核心邏輯 (與 parent-message.vue 100% 同步) =====
+// ===== 💡 修復版的 Email 雙重認證邏輯 (不受缺表影響) =====
 const verifyAuth = async () => {
   if (!selectedStudentId.value) {
     authError.value = '❌ 請先選擇學生！'
@@ -254,13 +319,7 @@ const verifyAuth = async () => {
   authError.value = ''
 
   try {
-    // 拉取最新的單一學生資料以確保安全性
-    const { data: stData, error: stError } = await supabase
-      .from('students')
-      .select('*')
-      .eq('id', selectedStudentId.value)
-      .single()
-
+    const { data: stData, error: stError } = await supabase.from('students').select('*').eq('id', selectedStudentId.value).single()
     if (stError || !stData) throw new Error('找不到該學生資料')
 
     let isValid = false
@@ -268,8 +327,6 @@ const verifyAuth = async () => {
     // 方式 A：生日 + 身分證後四碼
     if (authMethod.value === 'id') {
       const idStr = (stData.id_number || stData.id_last_5 || '').slice(-4)
-      
-      // 自動轉換資料庫可能的日期格式為純 8 碼數字
       const bMatch = String(stData.birthday || '').match(/(\d{4})[-/]?(\d{1,2})[-/]?(\d{1,2})/)
       const dbBday = bMatch ? `${bMatch[1]}${bMatch[2].padStart(2, '0')}${bMatch[3].padStart(2, '0')}` : ''
       
@@ -277,43 +334,48 @@ const verifyAuth = async () => {
         isValid = true
       }
     } 
-    // 方式 B：Email 前五碼 (嚴格查詢 parents 與 parent_bindings 資料表)
+    // 方式 B：Email 前五碼 (強化防呆版)
     else if (authMethod.value === 'email') {
-      // 過濾家長輸入的字串
-      const userInputPrefix = emailPrefix.value.replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toLowerCase()
-      let emailsToCheck = []
-
-      // 1. 學生資料表本身的 parent_email (雙重保險)
-      if (stData.parent_email) {
-        emailsToCheck.push(stData.parent_email)
+      const userInputPrefix = emailPrefix.value.trim().toLowerCase().substring(0, 5)
+      if (!userInputPrefix) {
+        authError.value = '❌ 請輸入有效的 Email 前五碼！'
+        isLoading.value = false; return
       }
 
-      // 2. parents 資料表
-      const { data: parentsData } = await supabase.from('parents').select('email').eq('student_id', selectedStudentId.value)
-      if (parentsData) emailsToCheck.push(...parentsData.map(p => p.email).filter(Boolean))
+      let emailsToCheck = []
 
-      // 3. parent_bindings 資料表
-      const { data: bindings } = await supabase.from('parent_bindings').select('email').eq('student_id', selectedStudentId.value)
-      if (bindings) emailsToCheck.push(...bindings.map(b => b.email).filter(Boolean))
+      // 1. 本身表
+      if (stData.parent_email) emailsToCheck.push(stData.parent_email)
+
+      // 2. parents 表 (加上 try-catch 防止沒有資料表導致崩潰)
+      try {
+        const { data: parentsData } = await supabase.from('parents').select('email').eq('student_id', selectedStudentId.value)
+        if (parentsData) emailsToCheck.push(...parentsData.map(p => p.email).filter(Boolean))
+      } catch (e) { /* 略過不存在的表 */ }
+
+      // 3. parent_bindings 表
+      try {
+        const { data: bindings } = await supabase.from('parent_bindings').select('email').eq('student_id', selectedStudentId.value)
+        if (bindings) emailsToCheck.push(...bindings.map(b => b.email).filter(Boolean))
+      } catch (e) { /* 略過不存在的表 */ }
 
       if (emailsToCheck.length === 0) {
         authError.value = '❌ 系統尚未綁定該名學生的家長 Email，請聯繫導師。'
-        isLoading.value = false
-        return
+        isLoading.value = false; return
       }
 
+      // 直接比對 @ 前方的前 5 個字元
       isValid = emailsToCheck.some(email => {
-        return extractAlphanumericPrefix(email) === userInputPrefix
+        const dbPrefix = String(email).split('@')[0].trim().toLowerCase().substring(0, 5)
+        return dbPrefix === userInputPrefix
       })
     }
 
     if (!isValid) {
       authError.value = '❌ 驗證失敗：您輸入的資料錯誤或尚未綁定！'
-      isLoading.value = false
-      return
+      isLoading.value = false; return
     }
 
-    // 驗證成功放行
     isAuthenticated.value = true
 
   } catch (error) { 
@@ -323,7 +385,7 @@ const verifyAuth = async () => {
   }
 }
 
-// ===== 請假操作功能 =====
+// ===== 請假操作與寄信功能 =====
 const selectAllPeriods = () => selectedPeriods.value = [...periodList]
 const clearPeriods = () => selectedPeriods.value = []
 
@@ -332,27 +394,38 @@ const submitLeave = async () => {
   if (leaveType.value === '其他' && !leaveReason.value.trim()) return alert('⚠️ 請填寫請假事由！')
 
   isSubmitting.value = true
+  const studentNameInfo = `${currentStudent.value.seat_number}號 ${currentStudent.value.real_name}`
   const finalReason = leaveType.value === '其他' ? leaveReason.value : leaveType.value
 
   try {
+    // 1. 寫入資料庫私訊 (維持系統預設格式)
     const msgContent = `【系統自動推播：線上請假通知】\n請假日期：${leaveDate.value}\n請假節數：${selectedPeriods.value.join('、')}\n假別/事由：${finalReason}`
     
-    // 1. 寫入資料庫
     await supabase.from('private_messages').insert({
       chat_type: '家長', student_id: currentStudent.value.id, sender_role: `家長(${currentStudent.value.real_name})`, content: msgContent, is_read_by_teacher: false
     })
 
-    // 2. 自動寄信通知導師
+    // 2. 發送自訂 Email 給導師
     if (teacherEmail.value && teacherEmail.value.includes('@')) {
+      const actualSubject = emailSubjectTpl.value.replace(/{student_name}/g, studentNameInfo)
+      const actualBody = emailBodyTpl.value
+        .replace(/{student_name}/g, studentNameInfo)
+        .replace(/{leave_date}/g, leaveDate.value)
+        .replace(/{leave_periods}/g, selectedPeriods.value.join('、'))
+        .replace(/{leave_reason}/g, finalReason)
+
       try { 
+        // 將導師信箱、自訂主旨與內文送給您的 API
         await $fetch('/api/send-email', { 
           method: 'POST', 
-          body: { subject: `[線上請假通知] ${currentStudent.value.seat_number}號 ${currentStudent.value.real_name}`, text: `導師您好：\n\n系統收到了一則家長請假通知。\n\n【詳細資訊】\n- 學生：${currentStudent.value.seat_number}號 ${currentStudent.value.real_name}\n${msgContent}\n\n此致\n系統自動通知` } 
+          body: { to: teacherEmail.value, subject: actualSubject, text: actualBody } 
         }) 
-      } catch (e) {}
+      } catch (e) {
+        console.error('Email 發送發生錯誤', e)
+      }
     }
 
-    alert('✅ 請假通知已成功送出！導師將會收到系統訊息。\n\n提醒您：學生返校後仍需補妥書面請假卡手續。')
+    alert('✅ 請假通知已成功送出！導師將會收到系統訊息與 Email。\n\n提醒您：學生返校後仍需補妥書面請假卡手續。')
     logout()
   } catch (err) { alert('❌ 送出失敗，請稍後再試。') } finally { isSubmitting.value = false }
 }
@@ -390,7 +463,7 @@ h2 { text-align: center; color: #064e3b; margin-top: 0; margin-bottom: 20px; fon
 .tab-btn.active { background: white; color: #10b981; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
 
 .period-controls { display: flex; gap: 10px; margin-bottom: 10px; }
-.quick-btn { background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: bold;}
+.quick-btn { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 0.95rem; font-weight: bold; transition: 0.2s;}
 .quick-btn.outline { background: transparent; border: 1px solid #10b981; color: #10b981; }
 
 .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; }
@@ -406,12 +479,21 @@ h2 { text-align: center; color: #064e3b; margin-top: 0; margin-bottom: 20px; fon
 .submit-btn { width: 100%; background: #10b981; color: white; border: none; padding: 14px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s; margin-top: 10px;}
 .submit-btn:hover:not(:disabled) { background: #059669; }
 .submit-btn:disabled { background: #9ca3af; cursor: not-allowed; }
-.admin-btn { background: #3b82f6; } .admin-btn:hover { background: #2563eb; }
 
-/* 導師紀錄表 */
+/* 導師後台專用樣式 */
+.admin-btn { background: #3b82f6; } .admin-btn:hover:not(:disabled) { background: #2563eb; }
+.admin-section { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+.admin-section h3 { margin-top: 0; color: #1e40af; border-bottom: 2px solid #bfdbfe; padding-bottom: 10px; margin-bottom: 15px;}
+.var-tips { font-size: 0.85rem; color: #64748b; margin-bottom: 8px; }
+.var-tips code { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; color: #b91c1c; font-family: monospace; }
+.preview-box { background: #fef9c3; border: 1px dashed #fde047; padding: 15px; border-radius: 8px; margin-top: 15px; }
+.preview-box h4 { margin: 0 0 10px 0; color: #854d0e; }
+.preview-subject { font-size: 0.95rem; margin-bottom: 10px; border-bottom: 1px dashed #fde047; padding-bottom: 10px; }
+.preview-body { font-size: 0.95rem; color: #3f6212; line-height: 1.5; }
+
 .record-title { border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; color: #334155; }
-.record-list { max-height: 350px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; }
-.record-card { background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; border-radius: 8px; }
+.record-list { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+.record-card { background: white; border: 1px solid #cbd5e1; padding: 12px; border-radius: 8px; }
 .rec-header { display: flex; justify-content: space-between; margin-bottom: 5px; color: #1e40af; font-size: 0.95rem;}
 .rec-time { color: #64748b; font-size: 0.85rem; }
 .rec-body { color: #334155; white-space: pre-wrap; font-size: 0.95rem; line-height: 1.5; }
