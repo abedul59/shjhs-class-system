@@ -13,33 +13,40 @@
       </div>
     </div>
 
+    <!-- 💡 已修復外觀的按鈕群，請確認 to="..." 的路徑是否符合您的專案 -->
     <div class="buttons-grid">
       <!-- 學生/家長主要功能 -->
-      <NuxtLink v-if="indexButtonSettings.parentBind" to="/parent-bind" class="nav-btn btn-yellow">👨‍👩‍👦 綁定</NuxtLink>
-      <NuxtLink v-if="indexButtonSettings.parentMsg" to="/messages/parent" class="nav-btn btn-green">
+      <NuxtLink v-if="indexButtonSettings.parentBind" to="/bind" class="nav-btn btn-yellow">👨‍👩‍👦 綁定</NuxtLink>
+      
+      <NuxtLink v-if="indexButtonSettings.parentMsg" to="/parent" class="nav-btn btn-green">
         💬 家長私訊 <span v-if="unreadMsgCount > 0" class="badge">{{ unreadMsgCount }}</span>
       </NuxtLink>
-      <NuxtLink v-if="indexButtonSettings.studentMsg" to="/messages/student" class="nav-btn btn-blue">💬 學生私訊</NuxtLink>
       
-      <!-- 💡 修復了外觀的請假按鈕 -->
+      <NuxtLink v-if="indexButtonSettings.studentMsg" to="/student" class="nav-btn btn-blue">💬 學生私訊</NuxtLink>
+      
       <NuxtLink v-if="indexButtonSettings.parentLeave" to="/leave-application" class="nav-btn btn-teal">📝 家長代學生請假</NuxtLink>
       
+      <!-- 觸發彈窗或畫面的按鈕 (不需路由跳轉) -->
       <button v-if="indexButtonSettings.schedule" @click="$emit('openLargeSchedule')" class="nav-btn btn-light-green">📅 顯示班級大課表</button>
-      <NuxtLink v-if="indexButtonSettings.assignments" to="/assignments" class="nav-btn btn-purple">📚 作業管理</NuxtLink>
+      
+      <NuxtLink v-if="indexButtonSettings.assignments" to="/assignment" class="nav-btn btn-purple">📚 作業管理</NuxtLink>
       <NuxtLink v-if="indexButtonSettings.discipline" to="/discipline" class="nav-btn btn-dark-blue">⚖️ 秩序管理</NuxtLink>
       <NuxtLink v-if="indexButtonSettings.hygiene" to="/hygiene" class="nav-btn btn-cyan">🧹 衛生管理</NuxtLink>
-      <NuxtLink v-if="indexButtonSettings.seats" to="/seats" class="nav-btn btn-dark-green">🪑 座位管理</NuxtLink>
+      <NuxtLink v-if="indexButtonSettings.seats" to="/seat" class="nav-btn btn-dark-green">🪑 座位管理</NuxtLink>
       
       <!-- 老師/幹部管理功能 -->
-      <NuxtLink v-if="indexButtonSettings.manageSchedule" to="/admin/schedule" class="nav-btn btn-orange">⚙️ 課表管理</NuxtLink>
-      <NuxtLink v-if="indexButtonSettings.exams" to="/admin/exams" class="nav-btn btn-crimson">📝 大考管理</NuxtLink>
+      <NuxtLink v-if="indexButtonSettings.manageSchedule" to="/schedule" class="nav-btn btn-orange">⚙️ 課表管理</NuxtLink>
+      <NuxtLink v-if="indexButtonSettings.exams" to="/exam" class="nav-btn btn-crimson">📝 大考管理</NuxtLink>
+      
       <button v-if="indexButtonSettings.emergency" @click="$emit('openPwd', 'emergency')" class="nav-btn btn-red">🚨 緊急通知</button>
+      
       <NuxtLink v-if="indexButtonSettings.admin" to="/admin" class="nav-btn btn-grey">⚙️ 後台</NuxtLink>
 
-      <!-- 黑板顯示切換 -->
+      <!-- 黑板顯示切換開關 -->
       <button v-if="indexButtonSettings.showSeats" @click="$emit('update:showSeatingChartLocal', !showSeatingChartLocal)" class="nav-btn btn-indigo">👀 顯示教室座位表</button>
       <button v-if="indexButtonSettings.showHygiene" @click="$emit('update:showHygieneLocal', !showHygieneLocal)" class="nav-btn btn-sky">🧹 顯示衛生工作</button>
-      <NuxtLink v-if="indexButtonSettings.contactHistory" to="/contact-history" class="nav-btn btn-pink">📅 查詢近期聯絡簿</NuxtLink>
+      
+      <NuxtLink v-if="indexButtonSettings.contactHistory" to="/history" class="nav-btn btn-pink">📅 查詢近期聯絡簿</NuxtLink>
     </div>
 
     <!-- 目前/下節課狀態列 -->
@@ -86,7 +93,7 @@ const actualClockConfig = computed(() => {
 <style scoped>
 .control-panel { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
 
-/* --- 時鐘樣式略 --- */
+/* --- 時鐘樣式 --- */
 .clock-container { display: flex; justify-content: center; align-items: center; width: 100%; margin: 10px 0 25px 0; }
 .clock-wrapper { display: inline-flex; justify-content: center; align-items: center; gap: 15px; font-size: var(--clk-size); color: var(--clk-color); font-variant-numeric: tabular-nums; transition: all 0.3s ease; }
 .clock-icon { font-size: calc(var(--clk-size) * 1.1); display: flex; align-items: center; line-height: 1; }
@@ -109,7 +116,7 @@ const actualClockConfig = computed(() => {
 .theme-chalk { background: #1f4d36; padding: 15px 40px; border: 6px solid var(--clk-color); border-radius: 8px; box-shadow: inset 0 0 20px rgba(0,0,0,0.6), 0 5px 15px rgba(0,0,0,0.3); color: #f8fafc !important; }
 .theme-chalk .clock-display { font-family: 'Comic Sans MS', 'Chalkboard SE', cursive; font-style: italic; letter-spacing: 2px; text-shadow: 1px 1px 2px rgba(255,255,255,0.4); }
 
-/* --- 💡 按鈕樣式 (強制清除 a 標籤預設外觀) --- */
+/* --- 💡 按鈕樣式 (強制清除 a 標籤預設底線與顏色) --- */
 .buttons-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 25px; }
 .nav-btn { display: inline-flex; align-items: center; justify-content: center; padding: 10px 15px; border-radius: 6px; color: white !important; text-decoration: none !important; font-weight: bold; font-size: 0.95rem; border: none; cursor: pointer; transition: 0.2s; position: relative;}
 .nav-btn:hover { filter: brightness(0.9); transform: translateY(-1px); }
@@ -117,7 +124,7 @@ const actualClockConfig = computed(() => {
 .btn-yellow { background-color: #d97706; }
 .btn-green { background-color: #10b981; }
 .btn-blue { background-color: #3b82f6; }
-.btn-teal { background-color: #14b8a6; } /* 💡 請假按鈕的專屬顏色 */
+.btn-teal { background-color: #14b8a6; } /* 請假按鈕 */
 .btn-light-green { background-color: #84cc16; }
 .btn-purple { background-color: #8b5cf6; }
 .btn-dark-blue { background-color: #1e3a8a; }
