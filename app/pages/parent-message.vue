@@ -1,505 +1,377 @@
 <template>
-  <div class="leave-page">
-    <!-- ============================================== -->
-    <!-- 認證與登入區塊 -->
-    <!-- ============================================== -->
-    <div class="auth-container" v-if="!isAuthenticated && !isTeacherLogged">
-      <h2>📝 家長代為請假系統</h2>
-      
-      <div class="warning-box">
-        🔒 <strong>提醒家長：</strong>為維護資安與嚴格保護學生個資，請擇一方式進行身分驗證，完成後即可填寫請假單。<br>
-        （學生的身份證後4碼和生日已經建構完成，可用來認證登入。也可先用 email 綁定功能，或提供 email 給導師為您綁定，再用 email 前五碼即可進入）。
-      </div>
-
-      <div class="form-group">
-        <label>👩‍🎓 選擇學生</label>
-        <select v-model="selectedStudentId" class="custom-input" :disabled="isLoading">
-          <option value="" disabled selected>請選擇座號與姓名...</option>
-          <option v-for="s in students" :key="s.id" :value="s.id">
-            {{ s.seat_number }}號 {{ getMaskedName(s) }}
-          </option>
-        </select>
-      </div>
-
-      <div class="tab-container">
-        <button class="tab-btn" :class="{ active: authMethod === 'id' }" @click="authMethod = 'id'">📝 生日 + 身分證</button>
-        <button class="tab-btn" :class="{ active: authMethod === 'email' }" @click="authMethod = 'email'">✉️ 家長綁定的 Email 前五碼</button>
-        <button class="tab-btn" :class="{ active: authMethod === 'teacher' }" @click="authMethod = 'teacher'">👨‍🏫 導師管理</button>
-      </div>
-
-      <!-- 認證 A：生日 + 身分證 -->
-      <div v-if="authMethod === 'id'" class="auth-fields">
-        <div class="form-group">
-          <label>🎂 學生出生西元年和生日</label>
-          <input type="password" v-model="studentBirthday" class="custom-input" placeholder="西元生日 (例: 20130514)" :disabled="isLoading" />
-        </div>
-        <div class="form-group">
-          <label>🪪 學生身分證末 4 碼</label>
-          <input type="password" v-model="studentIdLast4" class="custom-input" placeholder="請輸入身分證後四碼" maxlength="4" :disabled="isLoading" />
-        </div>
-      </div>
-
-      <!-- 認證 B：Email -->
-      <div v-if="authMethod === 'email'" class="auth-fields">
-        <div class="form-group">
-          <label>✉️ 綁定之 Email 前五碼</label>
-          <input type="text" v-model="emailPrefix" class="custom-input" placeholder="請輸入 Email @ 前面的 5 個英數字" maxlength="5" :disabled="isLoading" />
-        </div>
-      </div>
-
-      <!-- 認證 C：導師登入 -->
-      <div v-if="authMethod === 'teacher'" class="auth-fields">
-        <div class="form-group">
-          <label>🔑 系統授權密碼</label>
-          <input type="password" v-model="teacherPwdInput" @keyup.enter="loginTeacher" class="custom-input" placeholder="請輸入密碼..." :disabled="isLoading" />
-        </div>
-      </div>
-
-      <p v-if="authError" class="error-msg">{{ authError }}</p>
-
-      <button v-if="authMethod !== 'teacher'" class="submit-btn" @click="verifyAuth" :disabled="isLoading">
-        {{ isLoading ? '驗證中...' : '🔓 雙重驗證並進入' }}
-      </button>
-      <button v-else class="submit-btn admin-btn" @click="loginTeacher" :disabled="isLoading">進入導師管理後台</button>
-      
-      <div class="back-link"><NuxtLink to="/">返回打卡首頁</NuxtLink></div>
-    </div>
-
-    <!-- ============================================== -->
-    <!-- 導師管理後台區塊 -->
-    <!-- ============================================== -->
-    <div class="leave-form-container teacher-dashboard" v-else-if="isTeacherLogged">
-      <h2>👨‍🏫 請假系統管理後台</h2>
-      
-      <!-- 區塊 1：介面公告設定 -->
-      <div class="admin-section">
-        <h3>📢 介面公告設定</h3>
-        <div class="form-group">
-          <label>修改家長端介面「請假注意事項」：</label>
-          <textarea v-model="editingNotice" class="custom-input" rows="3"></textarea>
-          <button class="quick-btn" style="margin-top: 10px;" @click="saveNotice">💾 儲存公告</button>
-        </div>
-      </div>
-
-      <!-- 區塊 2：Email 通知設定 -->
-      <div class="admin-section">
-        <h3>📧 Email 通知推播設定</h3>
-        
-        <div class="form-group">
-          <label>導師接收通知之 Email 信箱：</label>
-          <input type="email" v-model="teacherEmail" class="custom-input" placeholder="例如: teacher@school.edu.tw" />
-        </div>
-
-        <div class="form-group">
-          <label>信件主旨範本：</label>
-          <input type="text" v-model="emailSubjectTpl" class="custom-input" />
-        </div>
-
-        <div class="form-group">
-          <label>信件內容範本：</label>
-          <div class="var-tips">
-            💡 <strong>可用變數：</strong> <code>{student_name}</code> (學生姓名), <code>{leave_date}</code> (請假日期), <code>{leave_periods}</code> (請假節數), <code>{leave_reason}</code> (事由)
-          </div>
-          <textarea v-model="emailBodyTpl" class="custom-input" rows="6"></textarea>
-        </div>
-
-        <!-- 即時預覽區塊 -->
-        <div class="preview-box">
-          <h4>👁️ 信件預覽 (範例)</h4>
-          <div class="preview-subject"><strong>主旨：</strong> {{ previewSubject }}</div>
-          <div class="preview-body" v-html="previewBodyNL"></div>
-        </div>
-
-        <button class="quick-btn admin-btn" style="margin-top: 15px; width: 100%;" @click="saveEmailSettings">
-          💾 儲存 Email 推播設定
-        </button>
-      </div>
-
-      <!-- 區塊 3：請假紀錄 -->
-      <div class="admin-section" style="margin-bottom: 0;">
-        <h3 class="record-title">📋 近期家長線上請假紀錄</h3>
-        <div class="record-list">
-          <div v-if="leaveRecords.length === 0" class="empty-msg">目前沒有請假紀錄。</div>
-          <div v-for="rec in leaveRecords" :key="rec.id" class="record-card">
-            <div class="rec-header">
-              <strong>{{ rec.sender_role }}</strong> 
-              <span class="rec-time">{{ formatTime(rec.created_at) }}</span>
-            </div>
-            <div class="rec-body">{{ rec.content }}</div>
+  <div class="message-container">
+    <div class="message-card">
+      <div v-if="!isVerified" class="verify-section">
+        <div class="card-header">
+          <h2>💬 班級私訊聊天室</h2>
+          <div class="security-notice">
+            🔒 提醒家長：為維護資安與嚴格保護學生個資，請擇一方式進行身分驗證，完成後即可檢視與導師的對話紀錄。<br>
+            （學生的身份證後4碼和生日已經建構完成，可用來認證登入。也可先用email綁定功能，或提供email給導師為您綁定，再用email前五碼即可進入和導師私訊或請假。）
           </div>
         </div>
-      </div>
 
-      <div class="back-link"><button @click="logout" class="text-btn">登出</button> | <NuxtLink to="/">回首頁</NuxtLink></div>
-    </div>
-
-    <!-- ============================================== -->
-    <!-- 家長請假填寫表單區塊 -->
-    <!-- ============================================== -->
-    <div class="leave-form-container" v-else>
-      <h2>填寫請假單：{{ currentStudent?.real_name }}</h2>
-      <div class="important-notice" v-html="systemNoticeNL"></div>
-
-      <div class="form-grid">
-        <div class="form-group">
-          <label>📅 請假日期</label>
-          <input type="date" v-model="leaveDate" class="custom-input" :min="todayDate" />
-        </div>
-
-        <div class="form-group">
-          <label>🕒 請假節數 (可複選)</label>
-          <div class="period-controls">
-            <button @click="selectAllPeriods" class="quick-btn">全天請假</button>
-            <button @click="clearPeriods" class="quick-btn outline">清除</button>
+        <form @submit.prevent="verifyIdentity" class="message-form">
+          <div class="form-group">
+            <label>👩‍🎓 選擇學生</label>
+            <select v-model="selectedStudentId" required :disabled="isLoading">
+              <option value="" disabled selected>請選擇座號與姓名...</option>
+              <option v-for="student in students" :key="student.id" :value="student.id">
+                {{ student.seat_number }}號 - {{ student.hidden_name }}
+              </option>
+            </select>
           </div>
-          <div class="checkbox-grid">
-            <label v-for="period in periodList" :key="period" class="period-checkbox">
-              <input type="checkbox" v-model="selectedPeriods" :value="period" />
-              <span>{{ period }}</span>
+
+          <div class="auth-method-toggle">
+            <label :class="{ 'active': authMethod === 'id' }">
+              <input type="radio" v-model="authMethod" value="id" />
+              📝 生日 + 身分證
+            </label>
+            <label :class="{ 'active': authMethod === 'email' }">
+              <input type="radio" v-model="authMethod" value="email" />
+              📧 家長綁定的Email 前五碼
             </label>
           </div>
-        </div>
 
-        <div class="form-group">
-          <label>🏷️ 假別</label>
-          <div class="radio-grid">
-            <label class="radio-label"><input type="radio" v-model="leaveType" value="病假" /> 😷 病假</label>
-            <label class="radio-label"><input type="radio" v-model="leaveType" value="事假" /> 📝 事假</label>
-            <label class="radio-label"><input type="radio" v-model="leaveType" value="其他" /> ❓ 其他</label>
+          <!-- 驗證方式一：生日與身分證後四碼 -->
+          <template v-if="authMethod === 'id'">
+            <div class="form-group">
+              <label>🎂 學生生日</label>
+              <input v-model="studentBirthday" type="password" placeholder="西元生日 (例: 20130514)" required :disabled="isLoading" />
+            </div>
+            <div class="form-group">
+              <label>🪪 身分證後四碼</label>
+              <input v-model="studentIdLast4" type="password" maxlength="4" placeholder="請輸入身分證後四碼" required :disabled="isLoading" />
+            </div>
+          </template>
+
+          <!-- 驗證方式二：綁定的 Email 前五碼 -->
+          <template v-if="authMethod === 'email'">
+            <div class="form-group">
+              <label>📧 綁定之 Email 前五碼</label>
+              <input 
+                v-model="emailPrefix" 
+                type="text" 
+                maxlength="5" 
+                placeholder="請輸入 Email @ 前面的 5 個英數字" 
+                required 
+                :disabled="isLoading" 
+              />
+              <p class="input-hint">例如您的信箱為 abcde.fgh@gmail.com，請輸入 <strong>abcde</strong> (任一家長的email皆可)</p>
+            </div>
+          </template>
+
+          <div v-if="sysMessage.text" :class="['message-box', sysMessage.type]">{{ sysMessage.text }}</div>
+
+          <button type="submit" class="submit-btn" :disabled="isLoading">
+            {{ isLoading ? '驗證中...' : '🔐 雙重驗證並進入' }}
+          </button>
+          <div style="text-align: center; margin-top: 15px;">
+            <NuxtLink to="/" class="back-link">返回打卡首頁</NuxtLink>
           </div>
-        </div>
-
-        <div class="form-group" v-if="leaveType === '其他'">
-          <label>✍️ 請假事由說明 (必填)</label>
-          <input type="text" v-model="leaveReason" class="custom-input" placeholder="請簡述請假原因..." />
-        </div>
+        </form>
       </div>
 
-      <button class="submit-btn" @click="submitLeave" :disabled="isSubmitting">
-        {{ isSubmitting ? '送出中...' : '📤 確認送出請假通知' }}
-      </button>
-
-      <div class="back-link"><button @click="logout" class="text-btn">返回重新認證</button> | <NuxtLink to="/">回首頁</NuxtLink></div>
+      <!-- 聊天室介面 -->
+      <div v-else class="chat-section">
+        <div class="chat-header">
+          <h3>💬 與導師的私訊 ({{ verifiedStudentName }})</h3>
+          <button @click="logout" class="logout-btn">登出</button>
+        </div>
+        <div class="chat-history" id="chatContainer">
+          <div v-if="chatMessages.length === 0" class="empty-chat">目前尚無對話紀錄，請在下方輸入訊息開始溝通。</div>
+          <div v-for="msg in chatMessages" :key="msg.id" :class="['chat-bubble', msg.sender_role === '家長' ? 'my-msg' : 'teacher-msg']">
+            <div class="msg-info">
+              <span class="sender">{{ msg.sender_role === '家長' ? '我 (家長)' : '👨‍🏫 導師' }}</span>
+              <span class="time">{{ formatTime(msg.created_at) }}</span>
+            </div>
+            <div class="msg-content">{{ msg.content }}</div>
+          </div>
+        </div>
+        <form @submit.prevent="sendMessage" class="reply-form">
+          <textarea v-model="newMessage" rows="2" placeholder="請輸入訊息..." required :disabled="isSending"></textarea>
+          <button type="submit" class="send-btn" :disabled="isSending">{{ isSending ? '...' : '📤 傳送' }}</button>
+        </form>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 const supabase = useSupabaseClient()
 
-// ===== 認證與 UI 狀態 =====
-const isLoading = ref(false)
-const isAuthenticated = ref(false)
-const isTeacherLogged = ref(false)
 const students = ref([])
 const selectedStudentId = ref('')
 const authMethod = ref('id') 
-const authError = ref('')
 
-// ===== 綁定的變數 =====
 const studentBirthday = ref('')
 const studentIdLast4 = ref('')
 const emailPrefix = ref('')
-const teacherPwdInput = ref('')
-const expectedTeacherPwd = ref('168168168')
 
-// ===== 請假表單變數 =====
-const leaveDate = ref('')
-const selectedPeriods = ref([])
-const leaveType = ref('病假')
-const leaveReason = ref('')
-const isSubmitting = ref(false)
-const periodList = ['早修', '第1節', '第2節', '第3節', '第4節', '午休', '第5節', '第6節', '第7節', '第8節']
+const isLoading = ref(false)
+const isSending = ref(false)
+const isVerified = ref(false)
+const verifiedStudentName = ref('')
+const sysMessage = ref({ type: '', text: '' })
+const chatMessages = ref([])
+const newMessage = ref('')
 
-// ===== 導師管理變數 (新增 Email 範本狀態) =====
+// 💡 存放從資料庫抓取的導師信箱
 const teacherEmail = ref('')
-const emailSubjectTpl = ref('[線上請假通知] {student_name}')
-const emailBodyTpl = ref('導師您好：\n\n系統收到了一則家長請假通知。\n\n【詳細資訊】\n- 學生：{student_name}\n- 請假日期：{leave_date}\n- 請假節數：{leave_periods}\n- 假別/事由：{leave_reason}\n\n此致\n系統自動通知')
 
-const defaultNotice = `⚠️ <strong>重要提醒：</strong><br>本系統之線上請假僅為「事前通知導師」，方便班級點名與安全掌握。<br>學生返校後，<strong>仍必須依學校規定完成「書面請假手續」</strong>（請假本位於新生訓練手冊中，或可至合作社購買單本），以避免學務處記曠課。`
-const systemNotice = ref(defaultNotice)
-const editingNotice = ref('')
-const leaveRecords = ref([])
+const checkSchoolNetwork = async () => {
+  try {
+    const res = await fetch('https://api.ipify.org?format=json')
+    const { ip: clientIp } = await res.json()
+    
+    const { data: blacklists } = await supabase
+      .from('ip_rules') 
+      .select('ip_range') 
+      .eq('rule_type', '黑名單')
 
-const todayDate = computed(() => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-})
-
-const currentStudent = computed(() => students.value.find(s => s.id === selectedStudentId.value))
-const systemNoticeNL = computed(() => systemNotice.value.replace(/\n/g, '<br>'))
-
-// ===== 導師 Email 預覽運算 =====
-const previewSubject = computed(() => emailSubjectTpl.value.replace(/{student_name}/g, '27號 皇茹月'))
-const previewBody = computed(() => {
-  return emailBodyTpl.value
-    .replace(/{student_name}/g, '27號 皇茹月')
-    .replace(/{leave_date}/g, todayDate.value)
-    .replace(/{leave_periods}/g, '早修、第1節、第2節')
-    .replace(/{leave_reason}/g, '病假')
-})
-const previewBodyNL = computed(() => previewBody.value.replace(/\n/g, '<br>'))
-
-onMounted(async () => {
-  leaveDate.value = todayDate.value
-  
-  const { data: sData } = await supabase.from('students').select('id, seat_number, hidden_name, real_name, birthday, id_number, id_last_5, parent_email').order('seat_number')
-  if (sData) students.value = sData
-
-  // 抓取系統設定 (包含信箱、信件主旨與內文)
-  const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', [
-    'admin_password', 'leave_application_notice', 'teacher_msg_notify_email', 
-    'leave_email_subject_template', 'leave_email_body_template'
-  ])
-  
-  if (sysData) {
-    sysData.forEach(s => {
-      if (s.setting_key === 'admin_password' && s.setting_value) {
-        if (s.setting_value.type === 'dynamic') {
-          const d = new Date(); const yy = String(d.getFullYear()).slice(2); const mm = String(d.getMonth() + 1).padStart(2, '0'); const dd = String(d.getDate()).padStart(2, '0')
-          expectedTeacherPwd.value = `${yy}${mm}${dd}59`
-        } else {
-          expectedTeacherPwd.value = s.setting_value.custom_pwd || '168168168'
-        }
+    if (blacklists && blacklists.length > 0) {
+      const isBlocked = blacklists.some(rule => {
+        return rule.ip_range && clientIp.startsWith(rule.ip_range.trim())
+      })
+      
+      if (isBlocked) {
+        alert('🚫 學校網域限制：為維護上課專注度，校內網路禁止使用私訊功能。請回家或使用個人手機網路再進行操作！')
+        navigateTo('/') 
       }
-      if (s.setting_key === 'leave_application_notice' && s.setting_value) systemNotice.value = s.setting_value
-      if (s.setting_key === 'teacher_msg_notify_email' && s.setting_value) teacherEmail.value = s.setting_value
-      if (s.setting_key === 'leave_email_subject_template' && s.setting_value) emailSubjectTpl.value = s.setting_value
-      if (s.setting_key === 'leave_email_body_template' && s.setting_value) emailBodyTpl.value = s.setting_value
-    })
-  }
-  editingNotice.value = systemNotice.value.replace(/<br>/g, '\n').replace(/<\/?strong>/g, '').replace(/⚠️ /g, '')
-})
-
-const getMaskedName = (stu) => {
-  if (stu.hidden_name) return stu.hidden_name
-  const name = stu.real_name || ''
-  if (name.length > 2) return name[0] + 'Ｏ' + name[name.length - 1]
-  return name[0] + 'Ｏ'
-}
-
-const formatTime = (iso) => new Date(iso).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
-
-// ===== 導師管理功能 =====
-const loginTeacher = async () => {
-  if (teacherPwdInput.value === expectedTeacherPwd.value || teacherPwdInput.value === '168168168') {
-    isTeacherLogged.value = true; authError.value = ''
-    const { data } = await supabase.from('private_messages')
-      .select('*').eq('chat_type', '家長').ilike('content', '%線上請假通知%').order('created_at', { ascending: false })
-    if (data) leaveRecords.value = data
-  } else {
-    authError.value = '❌ 導師密碼錯誤'
+    }
+  } catch (error) {
+    console.error('IP 驗證發生錯誤:', error)
   }
 }
 
-const saveNotice = async () => {
-  await supabase.from('system_settings').upsert({ setting_key: 'leave_application_notice', setting_value: editingNotice.value }, { onConflict: 'setting_key' })
-  systemNotice.value = editingNotice.value
-  alert('✅ 介面公告已成功更新！')
+const showMessage = (type, text) => { 
+  sysMessage.value = { type, text }
+  if (type === 'success') setTimeout(() => sysMessage.value = { type: '', text: '' }, 3000) 
 }
 
-const saveEmailSettings = async () => {
-  await supabase.from('system_settings').upsert([
-    { setting_key: 'teacher_msg_notify_email', setting_value: teacherEmail.value },
-    { setting_key: 'leave_email_subject_template', setting_value: emailSubjectTpl.value },
-    { setting_key: 'leave_email_body_template', setting_value: emailBodyTpl.value }
-  ], { onConflict: 'setting_key' })
-  alert('✅ Email 通知與推播設定已成功儲存！')
+const fetchStudents = async () => { 
+  // 💡 在抓取時連同 real_name 一起拉出來，寄給導師的信件中會顯示真名
+  const { data } = await supabase.from('students').select('id, seat_number, hidden_name, real_name').order('seat_number')
+  if (data) students.value = data 
+
+  // 💡 同時抓取後台 (AdminMessages.vue) 設定的導師私訊通知信箱
+  const { data: emailData } = await supabase
+    .from('system_settings')
+    .select('setting_value')
+    .eq('setting_key', 'teacher_msg_notify_email')
+    .maybeSingle()
+    
+  if (emailData && emailData.setting_value) {
+    teacherEmail.value = emailData.setting_value
+  }
 }
 
-// ===== 💡 修復版的 Email 雙重認證邏輯 (不受缺表影響) =====
-const verifyAuth = async () => {
+const extractAlphanumericPrefix = (email) => {
+  if (!email || typeof email !== 'string') return ''
+  const beforeAt = email.split('@')[0]
+  return beforeAt.replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toLowerCase()
+}
+
+const verifyIdentity = async () => {
   if (!selectedStudentId.value) {
-    authError.value = '❌ 請先選擇學生！'
+    showMessage('error', '❌ 請先選擇學生！')
     return
   }
 
   isLoading.value = true
-  authError.value = ''
+  sysMessage.value = { type: '', text: '' }
 
   try {
-    const { data: stData, error: stError } = await supabase.from('students').select('*').eq('id', selectedStudentId.value).single()
-    if (stError || !stData) throw new Error('找不到該學生資料')
+    const { data: stData, error: stError } = await supabase
+      .from('students')
+      .select('*')
+      .eq('id', selectedStudentId.value)
+      .single()
+
+    if (stError || !stData) throw new Error('Student not found')
 
     let isValid = false
 
-    // 方式 A：生日 + 身分證後四碼
     if (authMethod.value === 'id') {
       const idStr = (stData.id_number || stData.id_last_5 || '').slice(-4)
-      const bMatch = String(stData.birthday || '').match(/(\d{4})[-/]?(\d{1,2})[-/]?(\d{1,2})/)
-      const dbBday = bMatch ? `${bMatch[1]}${bMatch[2].padStart(2, '0')}${bMatch[3].padStart(2, '0')}` : ''
-      
-      if (dbBday === studentBirthday.value && idStr === studentIdLast4.value) {
+      if (stData.birthday === studentBirthday.value && idStr === studentIdLast4.value) {
         isValid = true
       }
     } 
-    // 方式 B：Email 前五碼 (強化防呆版)
     else if (authMethod.value === 'email') {
-      const userInputPrefix = emailPrefix.value.trim().toLowerCase().substring(0, 5)
-      if (!userInputPrefix) {
-        authError.value = '❌ 請輸入有效的 Email 前五碼！'
-        isLoading.value = false; return
-      }
-
+      const userInputPrefix = emailPrefix.value.replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toLowerCase()
       let emailsToCheck = []
 
-      // 1. 本身表
-      if (stData.parent_email) emailsToCheck.push(stData.parent_email)
-
-      // 2. parents 表 (加上 try-catch 防止沒有資料表導致崩潰)
-      try {
-        const { data: parentsData } = await supabase.from('parents').select('email').eq('student_id', selectedStudentId.value)
-        if (parentsData) emailsToCheck.push(...parentsData.map(p => p.email).filter(Boolean))
-      } catch (e) { /* 略過不存在的表 */ }
-
-      // 3. parent_bindings 表
-      try {
-        const { data: bindings } = await supabase.from('parent_bindings').select('email').eq('student_id', selectedStudentId.value)
-        if (bindings) emailsToCheck.push(...bindings.map(b => b.email).filter(Boolean))
-      } catch (e) { /* 略過不存在的表 */ }
-
-      if (emailsToCheck.length === 0) {
-        authError.value = '❌ 系統尚未綁定該名學生的家長 Email，請聯繫導師。'
-        isLoading.value = false; return
+      // 💡 正確抓取 parents 資料表中的信箱
+      const { data: parentsData } = await supabase
+        .from('parents')
+        .select('email')
+        .eq('student_id', selectedStudentId.value)
+        
+      if (parentsData) {
+        emailsToCheck.push(...parentsData.map(p => p.email).filter(Boolean))
       }
 
-      // 直接比對 @ 前方的前 5 個字元
+      // 備用：若有額外的 parent_bindings 資料表
+      const { data: bindings } = await supabase
+        .from('parent_bindings')
+        .select('email')
+        .eq('student_id', selectedStudentId.value)
+        
+      if (bindings) {
+        emailsToCheck.push(...bindings.map(b => b.email).filter(Boolean))
+      }
+
       isValid = emailsToCheck.some(email => {
-        const dbPrefix = String(email).split('@')[0].trim().toLowerCase().substring(0, 5)
-        return dbPrefix === userInputPrefix
+        return extractAlphanumericPrefix(email) === userInputPrefix
       })
     }
 
     if (!isValid) {
-      authError.value = '❌ 驗證失敗：您輸入的資料錯誤或尚未綁定！'
-      isLoading.value = false; return
+      showMessage('error', '❌ 驗證失敗：您輸入的資料錯誤或尚未綁定！')
+      isLoading.value = false
+      return
     }
 
-    isAuthenticated.value = true
+    verifiedStudentName.value = stData.real_name
+    isVerified.value = true
+    await loadChatHistory()
 
   } catch (error) { 
-    authError.value = '❌ 系統發生異常，請稍後再試。' 
+    showMessage('error', '❌ 系統發生異常，請稍後再試。') 
   } finally { 
     isLoading.value = false 
   }
 }
 
-// ===== 請假操作與寄信功能 =====
-const selectAllPeriods = () => selectedPeriods.value = [...periodList]
-const clearPeriods = () => selectedPeriods.value = []
-
-const submitLeave = async () => {
-  if (selectedPeriods.value.length === 0) return alert('⚠️ 請至少選擇一節要請假的節數！')
-  if (leaveType.value === '其他' && !leaveReason.value.trim()) return alert('⚠️ 請填寫請假事由！')
-
-  isSubmitting.value = true
-  const studentNameInfo = `${currentStudent.value.seat_number}號 ${currentStudent.value.real_name}`
-  const finalReason = leaveType.value === '其他' ? leaveReason.value : leaveType.value
-
-  try {
-    // 1. 寫入資料庫私訊 (維持系統預設格式)
-    const msgContent = `【系統自動推播：線上請假通知】\n請假日期：${leaveDate.value}\n請假節數：${selectedPeriods.value.join('、')}\n假別/事由：${finalReason}`
+const loadChatHistory = async () => { 
+  const { data } = await supabase
+    .from('private_messages')
+    .select('*')
+    .eq('student_id', selectedStudentId.value)
+    .eq('chat_type', '家長')
+    .order('created_at', { ascending: true })
     
-    await supabase.from('private_messages').insert({
-      chat_type: '家長', student_id: currentStudent.value.id, sender_role: `家長(${currentStudent.value.real_name})`, content: msgContent, is_read_by_teacher: false
-    })
-
-    // 2. 發送自訂 Email 給導師
-    if (teacherEmail.value && teacherEmail.value.includes('@')) {
-      const actualSubject = emailSubjectTpl.value.replace(/{student_name}/g, studentNameInfo)
-      const actualBody = emailBodyTpl.value
-        .replace(/{student_name}/g, studentNameInfo)
-        .replace(/{leave_date}/g, leaveDate.value)
-        .replace(/{leave_periods}/g, selectedPeriods.value.join('、'))
-        .replace(/{leave_reason}/g, finalReason)
-
-      try { 
-        // 將導師信箱、自訂主旨與內文送給您的 API
-        await $fetch('/api/send-email', { 
-          method: 'POST', 
-          body: { to: teacherEmail.value, subject: actualSubject, text: actualBody } 
-        }) 
-      } catch (e) {
-        console.error('Email 發送發生錯誤', e)
-      }
-    }
-
-    alert('✅ 請假通知已成功送出！導師將會收到系統訊息與 Email。\n\n提醒您：學生返校後仍需補妥書面請假卡手續。')
-    logout()
-  } catch (err) { alert('❌ 送出失敗，請稍後再試。') } finally { isSubmitting.value = false }
+  if (data) { 
+    chatMessages.value = data
+    scrollToBottom() 
+  } 
 }
 
-const logout = () => {
-  isAuthenticated.value = false
-  isTeacherLogged.value = false
+// 💡 寄送通知信給導師的獨立函式
+const notifyTeacher = async (messageContent) => {
+  // 如果導師沒在後台設定信箱，就不寄送
+  if (!teacherEmail.value || !teacherEmail.value.includes('@')) return; 
+  
+  try {
+    const nowStr = new Date().toLocaleString('zh-TW', { hour12: false })
+    
+    // 從學生清單中找出對應的真實姓名 (因為導師看信件時不需要隱藏)
+    const student = students.value.find(s => s.id === selectedStudentId.value)
+    const studentNameInfo = student ? `${student.seat_number}號 ${student.real_name}` : '未知學生'
+
+    const subject = `🔔 班級系統通知：有家長傳送了新私訊 (${studentNameInfo})`
+    const content = `導師您好：\n\n系統紀錄顯示，於 ${nowStr} 收到了一則家長的新私訊。\n\n【私訊資訊】\n- 學生：${studentNameInfo}\n- 內容摘要：${messageContent}\n\n煩請抽空登入班級系統後台，進入「班級私訊管理」查看完整內容並進行回覆。\n\n此致\n系統自動通知`
+    
+    await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: teacherEmail.value,
+        subject: subject,
+        content: content
+      })
+    });
+  } catch (err) {
+    console.error('發送導師私訊通知信失敗:', err);
+  }
+}
+
+const sendMessage = async () => {
+  if (!newMessage.value.trim()) return
+  isSending.value = true
+  try {
+    // 💡 先把訊息內容存進變數，稍後寄信會用到
+    const contentToSend = newMessage.value
+    
+    await supabase.from('private_messages').insert({ 
+      student_id: selectedStudentId.value, 
+      sender_role: '家長', 
+      chat_type: '家長', 
+      content: contentToSend, 
+      is_read_by_teacher: false 
+    })
+    
+    newMessage.value = ''
+    await loadChatHistory()
+    
+    // 💡 發送背景通知信給導師
+    notifyTeacher(contentToSend)
+
+  } catch (error) { 
+    alert('傳送失敗') 
+  } finally { 
+    isSending.value = false 
+  }
+}
+
+const logout = () => { 
+  isVerified.value = false
   studentBirthday.value = ''
   studentIdLast4.value = ''
   emailPrefix.value = ''
-  teacherPwdInput.value = ''
-  selectedPeriods.value = []
-  leaveReason.value = ''
-  leaveDate.value = todayDate.value
+  chatMessages.value = [] 
 }
+
+const formatTime = (isoString) => new Date(isoString).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+const scrollToBottom = () => { nextTick(() => { const c = document.getElementById('chatContainer'); if (c) c.scrollTop = c.scrollHeight }) }
+
+onMounted(async () => {
+  await checkSchoolNetwork() 
+  fetchStudents()
+})
 </script>
 
 <style scoped>
-.leave-page { display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; background-color: #f0fdf4; padding: 40px 20px; font-family: sans-serif; box-sizing: border-box;}
-.auth-container, .leave-form-container { background: white; width: 100%; max-width: 550px; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border-top: 6px solid #10b981; }
-.teacher-dashboard { border-top-color: #3b82f6; max-width: 600px; }
+.message-container { min-height: 100vh; display: flex; justify-content: center; align-items: center; background-color: #f0fdf4; padding: 10px; font-family: 'sans-serif'; }
+.message-card { background: white; width: 100%; max-width: 500px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); overflow: hidden; border-top: 8px solid #10b981; }
+.verify-section { padding: 30px; }
+.card-header { text-align: center; margin-bottom: 25px; }
+.card-header h2 { color: #047857; margin-bottom: 15px; font-size: 1.6rem; }
 
-h2 { text-align: center; color: #064e3b; margin-top: 0; margin-bottom: 20px; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; gap: 10px;}
+.security-notice { background-color: #fef2f2; color: #991b1b; padding: 12px 15px; border-radius: 8px; font-size: 0.9rem; line-height: 1.5; border: 1px solid #fecaca; text-align: left; }
 
-.warning-box { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 15px; border-radius: 8px; font-size: 0.95rem; line-height: 1.5; margin-bottom: 25px;}
-.important-notice { background: #fffbeb; border: 1px solid #fde68a; color: #b45309; padding: 15px; border-radius: 8px; font-size: 0.95rem; line-height: 1.6; margin-bottom: 25px; box-shadow: 0 2px 5px rgba(0,0,0,0.02);}
+.auth-method-toggle { display: flex; gap: 10px; margin-bottom: 20px; background: #f1f5f9; padding: 5px; border-radius: 10px; }
+.auth-method-toggle label { flex: 1; text-align: center; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: bold; color: #64748b; transition: all 0.2s; font-size: 0.95rem; }
+.auth-method-toggle label input { display: none; }
+.auth-method-toggle label.active { background: white; color: #10b981; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 
 .form-group { margin-bottom: 20px; }
-.form-group label { display: block; font-weight: bold; color: #1f2937; margin-bottom: 8px; font-size: 1.05rem;}
-.custom-input { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 1rem; box-sizing: border-box; transition: 0.2s;}
-.custom-input:focus { border-color: #10b981; outline: none; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2); }
+.form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #374151; }
+select, input { width: 100%; padding: 12px 15px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 1.1rem; background-color: #f9fafb; box-sizing: border-box; }
+select:focus, input:focus { outline: none; border-color: #10b981; background-color: white; }
+.input-hint { font-size: 0.85rem; color: #6b7280; margin-top: 6px; }
 
-.tab-container { display: flex; background: #f3f4f6; padding: 5px; border-radius: 10px; margin-bottom: 20px;}
-.tab-btn { flex: 1; padding: 10px; border: none; background: transparent; cursor: pointer; border-radius: 8px; font-weight: bold; color: #6b7280; font-size: 0.95rem; transition: 0.2s;}
-.tab-btn.active { background: white; color: #10b981; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+.submit-btn { width: 100%; padding: 14px; background-color: #10b981; color: white; border: none; border-radius: 8px; font-size: 1.2rem; font-weight: bold; cursor: pointer; transition: 0.2s; margin-top: 10px; }
+.message-box { padding: 12px; border-radius: 8px; margin-bottom: 20px; text-align: center; font-weight: bold; }
+.message-box.error { background-color: #fee2e2; color: #dc2626; border: 1px solid #fecaca; }
+.back-link { color: #10b981; text-decoration: none; font-weight: bold; font-size: 0.9rem; }
 
-.period-controls { display: flex; gap: 10px; margin-bottom: 10px; }
-.quick-btn { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 0.95rem; font-weight: bold; transition: 0.2s;}
-.quick-btn.outline { background: transparent; border: 1px solid #10b981; color: #10b981; }
-
-.checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; }
-.period-checkbox { display: flex; align-items: center; gap: 5px; cursor: pointer; background: #f9fafb; padding: 8px; border-radius: 6px; border: 1px solid #e5e7eb;}
-.period-checkbox input { accent-color: #10b981; transform: scale(1.2);}
-
-.radio-grid { display: flex; gap: 15px; }
-.radio-label { display: flex; align-items: center; gap: 5px; cursor: pointer; font-weight: bold; color: #374151;}
-.radio-label input { accent-color: #10b981; transform: scale(1.2);}
-
-.error-msg { color: #dc2626; text-align: center; font-weight: bold; margin-bottom: 15px; background: #fee2e2; padding: 10px; border-radius: 8px;}
-
-.submit-btn { width: 100%; background: #10b981; color: white; border: none; padding: 14px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s; margin-top: 10px;}
-.submit-btn:hover:not(:disabled) { background: #059669; }
-.submit-btn:disabled { background: #9ca3af; cursor: not-allowed; }
-
-/* 導師後台專用樣式 */
-.admin-btn { background: #3b82f6; } .admin-btn:hover:not(:disabled) { background: #2563eb; }
-.admin-section { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-.admin-section h3 { margin-top: 0; color: #1e40af; border-bottom: 2px solid #bfdbfe; padding-bottom: 10px; margin-bottom: 15px;}
-.var-tips { font-size: 0.85rem; color: #64748b; margin-bottom: 8px; }
-.var-tips code { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; color: #b91c1c; font-family: monospace; }
-.preview-box { background: #fef9c3; border: 1px dashed #fde047; padding: 15px; border-radius: 8px; margin-top: 15px; }
-.preview-box h4 { margin: 0 0 10px 0; color: #854d0e; }
-.preview-subject { font-size: 0.95rem; margin-bottom: 10px; border-bottom: 1px dashed #fde047; padding-bottom: 10px; }
-.preview-body { font-size: 0.95rem; color: #3f6212; line-height: 1.5; }
-
-.record-title { border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; color: #334155; }
-.record-list { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
-.record-card { background: white; border: 1px solid #cbd5e1; padding: 12px; border-radius: 8px; }
-.rec-header { display: flex; justify-content: space-between; margin-bottom: 5px; color: #1e40af; font-size: 0.95rem;}
-.rec-time { color: #64748b; font-size: 0.85rem; }
-.rec-body { color: #334155; white-space: pre-wrap; font-size: 0.95rem; line-height: 1.5; }
-.empty-msg { text-align: center; color: #94a3b8; font-style: italic; padding: 20px;}
-
-.back-link { text-align: center; margin-top: 20px; font-size: 0.95rem;}
-.back-link a, .text-btn { color: #10b981; text-decoration: none; font-weight: bold; background: none; border: none; cursor: pointer; font-size: 0.95rem; display: inline;}
-.back-link a:hover, .text-btn:hover { text-decoration: underline; color: #059669; }
+.chat-section { display: flex; flex-direction: column; height: 80vh; max-height: 650px; }
+.chat-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: #ecfdf5; border-bottom: 1px solid #d1fae5; }
+.chat-header h3 { margin: 0; color: #065f46; font-size: 1.1rem; }
+.logout-btn { background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.9rem; cursor: pointer; }
+.chat-history { flex: 1; overflow-y: auto; padding: 20px; background: #f8fafc; display: flex; flex-direction: column; gap: 15px; }
+.empty-chat { text-align: center; color: #94a3b8; font-size: 0.95rem; margin-top: 50px; }
+.chat-bubble { max-width: 80%; padding: 10px 14px; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+.my-msg { background: #dbeafe; align-self: flex-end; border-bottom-right-radius: 2px; }
+.teacher-msg { background: #dcfce7; align-self: flex-start; border-bottom-left-radius: 2px; }
+.msg-info { display: flex; justify-content: space-between; gap: 15px; margin-bottom: 4px; font-size: 0.75rem; color: #64748b; }
+.my-msg .sender { color: #1d4ed8; font-weight: bold; }
+.teacher-msg .sender { color: #15803d; font-weight: bold; }
+.msg-content { font-size: 1.05rem; color: #1e293b; line-height: 1.4; white-space: pre-wrap; word-break: break-all; }
+.reply-form { display: flex; gap: 10px; padding: 15px; background: white; border-top: 1px solid #e2e8f0; }
+.reply-form textarea { flex: 1; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1rem; resize: none; font-family: inherit; }
+.reply-form textarea:focus { outline: none; border-color: #10b981; }
+.send-btn { background: #10b981; color: white; border: none; padding: 0 20px; border-radius: 8px; font-weight: bold; cursor: pointer; white-space: nowrap; }
 </style>
