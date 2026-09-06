@@ -681,4 +681,25 @@ const saveClassNoteItems = async () => {
 :deep(.text-xs) { font-size: 0.75rem !important; color: #64748b; font-weight: normal; line-height: 1.4; }
 :deep(.mt-10) { margin-top: 10px; }
 :deep(.mt-15) { margin-top: 15px; }
+
+/* ========================================================= */
+/* 🧹 恢復：衛生工作與座位表的專屬深度樣式 (Deep CSS) */
+/* ========================================================= */
+:deep(.custom-table) { width: 100%; border-collapse: collapse; min-width: 800px; text-align: center; font-size: 0.95rem; }
+:deep(.custom-table th), :deep(.custom-table td) { border: 1px solid #000; padding: 8px; vertical-align: middle; }
+:deep(.custom-table th) { background-color: #f1f5f9; font-weight: bold; }
+:deep(.header-row th) { background-color: #e2e8f0; }
+:deep(.morning-table td:nth-child(1)), :deep(.morning-table td:nth-child(2)) { font-weight: bold; }
+:deep(.lunch-table th) { background: transparent; font-weight: bold; }
+:deep(.lunch-table td) { background: transparent; }
+:deep(.seat-num), :deep(.seat-number) { font-size: 1.2rem; font-weight: bold; }
+
+/* 針對各表單「成員名單/座號」欄位強制放大字體 */
+:deep(.morning-table tbody tr td:nth-child(2)) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
+:deep(.morning-table tbody tr td[rowspan] + td) { font-size: inherit !important; font-weight: normal !important; }
+:deep(.morning-table tbody tr td[rowspan] + td + td) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
+:deep(.lunch-table tbody tr:nth-child(even) td) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
+:deep(.squad-table tbody tr td:nth-child(2)) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
+:deep(.squad-table tbody tr td[rowspan] + td) { font-size: inherit !important; font-weight: normal !important; }
+:deep(.squad-table tbody tr td[rowspan] + td + td) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
 </style>
