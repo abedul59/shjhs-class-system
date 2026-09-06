@@ -248,8 +248,13 @@ const previewBodyNL = computed(() => previewBody.value.replace(/\n/g, '<br>'))
 onMounted(async () => {
   leaveDate.value = todayDate.value
   
-  const { data: sData } = await supabase.from('students').select('id, seat_number, hidden_name, real_name, birthday, id_number, id_last_5, parent_email').order('seat_number')
-  if (sData) students.value = sData
+  // 💡 修正點：改回最安全的 select('*')，保證資料表欄位不管怎麼變都不會報錯崩潰！
+  const { data: sData, error: sError } = await supabase.from('students').select('*').order('seat_number')
+  if (sError) {
+    console.error('抓取學生資料發生錯誤：', sError)
+  } else if (sData) {
+    students.value = sData
+  }
 
   // 抓取系統設定 (包含信箱、信件主旨與內文)
   const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', [
@@ -280,7 +285,7 @@ const getMaskedName = (stu) => {
   if (stu.hidden_name) return stu.hidden_name
   const name = stu.real_name || ''
   if (name.length > 2) return name[0] + 'Ｏ' + name[name.length - 1]
-  return name[0] + 'Ｏ'
+  return name ? name[0] + 'Ｏ' : '未知'
 }
 
 const formatTime = (iso) => new Date(iso).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
@@ -312,15 +317,14 @@ const saveEmailSettings = async () => {
   alert('✅ Email 通知與推播設定已成功儲存！')
 }
 
-// ===== 💡 從 parent-message 移植過來的 Email 字母萃取工具 =====
+// ===== Email 字母萃取工具 (拔除所有標點符號) =====
 const extractAlphanumericPrefix = (email) => {
   if (!email || typeof email !== 'string') return ''
   const beforeAt = email.split('@')[0]
-  // 關鍵修復：拔除所有標點符號後再取前 5 碼
   return beforeAt.replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toLowerCase()
 }
 
-// ===== 💡 雙重認證核心邏輯 (與 parent-message.vue 100% 同步) =====
+// ===== 雙重認證核心邏輯 =====
 const verifyAuth = async () => {
   if (!selectedStudentId.value) {
     authError.value = '❌ 請先選擇學生！'
@@ -345,7 +349,6 @@ const verifyAuth = async () => {
         isValid = true
       }
     } 
-    // 💡 方式 B：Email 驗證，套用嚴格字元過濾與跨表查詢
     else if (authMethod.value === 'email') {
       const userInputPrefix = emailPrefix.value.replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toLowerCase()
       if (!userInputPrefix) {
@@ -355,20 +358,17 @@ const verifyAuth = async () => {
 
       let emailsToCheck = []
 
-      // 1. 本身表
       if (stData.parent_email) emailsToCheck.push(stData.parent_email)
 
-      // 2. parents 表
       try {
         const { data: parentsData } = await supabase.from('parents').select('email').eq('student_id', selectedStudentId.value)
         if (parentsData) emailsToCheck.push(...parentsData.map(p => p.email).filter(Boolean))
-      } catch (e) { /* 略過 */ }
+      } catch (e) {}
 
-      // 3. parent_bindings 表
       try {
         const { data: bindings } = await supabase.from('parent_bindings').select('email').eq('student_id', selectedStudentId.value)
         if (bindings) emailsToCheck.push(...bindings.map(b => b.email).filter(Boolean))
-      } catch (e) { /* 略過 */ }
+      } catch (e) {}
 
       if (emailsToCheck.length === 0) {
         authError.value = '❌ 系統尚未綁定該名學生的家長 Email，請聯繫導師。'
@@ -407,14 +407,12 @@ const submitLeave = async () => {
   const finalReason = leaveType.value === '其他' ? leaveReason.value : leaveType.value
 
   try {
-    // 1. 寫入資料庫私訊 (維持系統預設格式)
     const msgContent = `【系統自動推播：線上請假通知】\n請假日期：${leaveDate.value}\n請假節數：${selectedPeriods.value.join('、')}\n假別/事由：${finalReason}`
     
     await supabase.from('private_messages').insert({
       chat_type: '家長', student_id: currentStudent.value.id, sender_role: `家長(${currentStudent.value.real_name})`, content: msgContent, is_read_by_teacher: false
     })
 
-    // 2. 發送自訂 Email 給導師
     if (teacherEmail.value && teacherEmail.value.includes('@')) {
       const actualSubject = emailSubjectTpl.value.replace(/{student_name}/g, studentNameInfo)
       const actualBody = emailBodyTpl.value
