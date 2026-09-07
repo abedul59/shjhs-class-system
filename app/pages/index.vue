@@ -1,4 +1,4 @@
-<template><template>
+<template>
   <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
     
     <ExamDashboard 
