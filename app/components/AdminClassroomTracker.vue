@@ -2,9 +2,15 @@
   <div class="tracking-container">
     <div class="table-header">
       <h3>🖥️ 教室電腦專屬監控系統</h3>
-      <button @click="fetchLogs" class="refresh-btn" :disabled="isLoading">
-        {{ isLoading ? '🔄 載入中...' : '🔄 重新整理' }}
-      </button>
+      <div class="header-actions">
+        <!-- 💡 遠端強制登出按鈕 -->
+        <button @click="triggerForceLogout" class="force-logout-btn" :disabled="isSendingSignal">
+          {{ isSendingSignal ? '發送訊號中...' : '🚨 強制登出教室電腦帳號' }}
+        </button>
+        <button @click="fetchLogs" class="refresh-btn" :disabled="isLoading">
+          {{ isLoading ? '🔄 載入中...' : '🔄 重新整理' }}
+        </button>
+      </div>
     </div>
 
     <!-- 綁定教室 IP 設定區塊 -->
@@ -67,6 +73,7 @@ const targetIP = ref('120.116.34.13')
 const logs = ref([])
 const isLoading = ref(false)
 const isSaving = ref(false)
+const isSendingSignal = ref(false)
 
 // 載入綁定的 IP
 const loadSettings = async () => {
@@ -99,6 +106,35 @@ const fetchLogs = async () => {
   isLoading.value = false
 }
 
+// 💡 遠端強制登出訊號發送函式
+const triggerForceLogout = async () => {
+  if (!confirm('🚨 確定要強制登出教室電腦的所有身分嗎？\n這將會透過背景訊號清除該電腦上的導師與幹部登入狀態。')) return;
+
+  isSendingSignal.value = true
+  try {
+    // 寫入當下時間戳記作為「強制登出訊號」
+    await supabase.from('system_settings').upsert({
+      setting_key: 'force_logout_timestamp',
+      setting_value: Date.now()
+    }, { onConflict: 'setting_key' });
+
+    alert('✅ 強制登出訊號已發出！\n只要教室電腦的網路正常，將在下一次背景資料更新時（預設60秒內）被強制登出並恢復為匿名狀態。');
+    
+    // 寫入一筆 Log，紀錄是誰踢的
+    await supabase.from('visitor_logs').insert([{
+       ip_address: '後台指令', 
+       role: '系統管理員', 
+       action_details: '🚨 發送指令：遠端強制登出教室電腦所有帳號' 
+    }]);
+
+    fetchLogs() // 重新整理日誌
+  } catch (error) {
+    alert('❌ 訊號發送失敗，請檢查資料庫連線。');
+  } finally {
+    isSendingSignal.value = false
+  }
+}
+
 onMounted(async () => {
   await loadSettings()
   await fetchLogs()
@@ -113,6 +149,7 @@ const getActionCategory = (action) => {
   if (action.includes('點擊') || action.includes('按鈕')) return '🖱️ 點擊'
   if (action.includes('瀏覽') || action.includes('進入')) return '👁️ 瀏覽'
   if (action.includes('登入') || action.includes('解鎖')) return '🔑 驗證'
+  if (action.includes('強制登出')) return '🚨 系統'
   return '📌 動作'
 }
 
@@ -121,16 +158,23 @@ const getActionClass = (action) => {
   if (action.includes('點擊') || action.includes('按鈕')) return 'tag-click'
   if (action.includes('瀏覽') || action.includes('進入')) return 'tag-view'
   if (action.includes('登入') || action.includes('解鎖')) return 'tag-auth'
+  if (action.includes('強制登出')) return 'tag-danger'
   return 'tag-default'
 }
 </script>
 
 <style scoped>
 .tracking-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); font-family: sans-serif; }
-.table-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; }
+.table-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;}
 .table-header h3 { margin: 0; color: #1e293b; font-size: 1.4rem; }
+
+.header-actions { display: flex; gap: 10px; }
 .refresh-btn { background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
 .refresh-btn:hover:not(:disabled) { background: #e2e8f0; }
+
+.force-logout-btn { background-color: #ef4444; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2); }
+.force-logout-btn:hover:not(:disabled) { background-color: #dc2626; box-shadow: 0 4px 6px rgba(220, 38, 38, 0.3); transform: translateY(-1px); }
+.force-logout-btn:disabled { background-color: #fca5a5; cursor: not-allowed; transform: none; }
 
 .settings-card { background: #f0fdfa; border: 1px dashed #0f766e; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; }
 .settings-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -165,6 +209,7 @@ const getActionClass = (action) => {
 .tag-view { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
 .tag-click { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
 .tag-auth { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+.tag-danger { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
 .tag-default { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
 
 .loading-state, .empty-state { text-align: center; padding: 60px 20px; color: #64748b; font-style: italic; font-size: 1.1rem; }
