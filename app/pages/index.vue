@@ -182,6 +182,22 @@ import IdentityModal from '~~/components/home/IdentityModal.vue'
 
 const supabase = useSupabaseClient()
 
+// ===== 系統時間與常數 =====
+const dDate = new Date()
+const todayISO = `${dDate.getFullYear()}-${String(dDate.getMonth()+1).padStart(2,'0')}-${String(dDate.getDate()).padStart(2,'0')}`
+const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+const todayDisplay = `${dDate.getFullYear()}年${dDate.getMonth()+1}月${dDate.getDate()}日${days[dDate.getDay()]}`
+const isWeekday = dDate.getDay() !== 0 && dDate.getDay() !== 6
+
+const currentTime = ref('')
+const nowTick = ref(Date.now())
+let timer = null
+
+const updateTime = () => {
+  nowTick.value = Date.now()
+  currentTime.value = new Date().toLocaleTimeString('zh-TW', { hour12: false })
+}
+
 // ===== UI 控制狀態 =====
 const showEmergencyModal = ref(false)
 const showSeatingChartLocal = ref(false)
@@ -239,6 +255,27 @@ const defaultRoleSettings = {
   teacher: { parentBind: true, parentMsg: true, studentMsg: true, parentLeave: true, assignments: true, discipline: true, hygiene: true, seats: true, schedule: true, exams: true, emergency: true, admin: true }
 }
 const roleButtonSettings = ref(JSON.parse(JSON.stringify(defaultRoleSettings)))
+
+// =====================================================================
+// 💡 從 Composables 引入被抽離的「運算大腦」
+// =====================================================================
+
+// 1. 點名大腦
+const { 
+  allStudents, allStudentsForLogin, todayAttendances,
+  expectedCount, presentCount, leaveCount, lateLeaveCount, earlyLeaveCount, lateCount, absentCount,
+  toggleAttendanceLogic
+} = useAttendance(todayISO)
+
+// 串接畫面點擊事件
+const toggleAttendance = (student) => {
+  toggleAttendanceLogic(student, isWeekday, expectedTeacherPwd.value)
+}
+
+// 2. 大考大腦
+const { currentThemeStyles, examStatus, countdownMinutes, countdownText } = useExamMode(examData, nowTick)
+
+// =====================================================================
 
 const activeRoleCategory = computed(() => {
   const id = currentIdentity.value;
@@ -308,11 +345,6 @@ const handleIdentityVerified = async (finalIdentity) => {
   }])
 }
 
-const currentThemeStyles = computed(() => {
-  const t = examThemes[examData.value.theme] || examThemes.midnight
-  return { '--ex-bg': t.bg, '--ex-border': t.border, '--ex-title': t.title, '--ex-clock': t.clock, '--ex-text': t.text, '--ex-accent': t.accent, '--ex-success': t.success, '--ex-danger': t.danger, '--ex-panel-bg': t.panelBg }
-})
-
 const checkIpRules = async () => {
   try {
     const ipRes = await fetch('https://api.ipify.org?format=json')
@@ -363,22 +395,6 @@ const formatDateTime = (dtStr) => {
   return new Date(dtStr).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
-const dDate = new Date()
-const todayISO = `${dDate.getFullYear()}-${String(dDate.getMonth()+1).padStart(2,'0')}-${String(dDate.getDate()).padStart(2,'0')}`
-const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
-const todayDisplay = `${dDate.getFullYear()}年${dDate.getMonth()+1}月${dDate.getDate()}日${days[dDate.getDay()]}`
-
-const isWeekday = dDate.getDay() !== 0 && dDate.getDay() !== 6
-
-const currentTime = ref('')
-const nowTick = ref(Date.now())
-let timer = null
-
-const updateTime = () => {
-  nowTick.value = Date.now()
-  currentTime.value = new Date().toLocaleTimeString('zh-TW', { hour12: false })
-}
-
 const scheduleDisplay = computed(() => {
   if (!scheduleData.value || !scheduleData.value.periods) return null
   const now = new Date(nowTick.value)
@@ -419,51 +435,6 @@ const scheduleDisplay = computed(() => {
   return { current: currentClass, next: nextClass }
 })
 
-const examThemes = {
-  midnight: { name: '午夜藍 (Midnight)', bg: '#0f172a', border: '#334155', title: '#f8fafc', clock: '#fbbf24', text: '#cbd5e1', accent: '#3b82f6', success: '#10b981', danger: '#ef4444', panelBg: '#1e293b' },
-  blackboard: { name: '經典黑板 (Blackboard)', bg: '#1a3627', border: '#5b3a1a', title: '#ffffff', clock: '#fbbf24', text: '#e2e8f0', accent: '#fca5a5', success: '#a7f3d0', danger: '#f87171', panelBg: '#234a36' },
-  slate: { name: '沉穩灰 (Slate)', bg: '#334155', border: '#64748b', title: '#f8fafc', clock: '#38bdf8', text: '#f1f5f9', accent: '#818cf8', success: '#34d399', danger: '#f87171', panelBg: '#475569' },
-  matcha: { name: '抹茶綠 (Matcha)', bg: '#2f3e36', border: '#5b6a5a', title: '#ecfdf5', clock: '#a7f3d0', text: '#d1fae5', accent: '#6ee7b7', success: '#10b981', danger: '#fca5a5', panelBg: '#3b4d45' },
-  burgundy: { name: '勃根地紅 (Burgundy)', bg: '#450a0a', border: '#7f1d1d', title: '#fee2e2', clock: '#fca5a5', text: '#fecaca', accent: '#f87171', success: '#a7f3d0', danger: '#fbbf24', panelBg: '#591111' }
-}
-
-const examStatus = computed(() => {
-  if (!examData.value || !examData.value.periods || examData.value.periods.length === 0) return { state: 'WAITING', periods: [] }
-  const now = new Date(nowTick.value); const nowMins = now.getHours() * 60 + now.getMinutes()
-  let current = null; let next = null; let state = 'WAITING'; const periods = JSON.parse(JSON.stringify(examData.value.periods))
-  for (let i = 0; i < periods.length; i++) {
-    const p = periods[i]; if (!p.startTime || !p.endTime) continue
-    const [sh, sm] = p.startTime.split(':').map(Number); const [eh, em] = p.endTime.split(':').map(Number)
-    const startMins = sh * 60 + sm; const endMins = eh * 60 + em; p.isActive = false
-    if (nowMins >= startMins && nowMins <= endMins) { state = 'TESTING'; current = p; p.isActive = true; if (i + 1 < periods.length) next = periods[i + 1]; break }
-    if (nowMins < startMins) { if (state !== 'TESTING') { state = i === 0 ? 'WAITING' : 'BREAK'; next = p }; break }
-  }
-  const lastP = periods[periods.length - 1]
-  if (lastP && lastP.endTime) {
-    const [lsh, lsm] = lastP.endTime.split(':').map(Number)
-    if (!current && !next && nowMins >= (lsh * 60 + lsm)) { state = 'FINISHED' }
-  }
-  return { state, current, next, periods }
-})
-
-const countdownMinutes = computed(() => {
-  if (examStatus.value.state !== 'TESTING' || !examStatus.value.current) return 999;
-  const currentTick = nowTick.value; const now = new Date(currentTick)
-  const [eh, em] = examStatus.value.current.endTime.split(':').map(Number)
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em, 0)
-  return Math.floor((end.getTime() - currentTick) / 60000)
-})
-
-const countdownText = computed(() => {
-  if (examStatus.value.state !== 'TESTING' || !examStatus.value.current) return '';
-  const currentTick = nowTick.value; const now = new Date(currentTick)
-  const [eh, em] = examStatus.value.current.endTime.split(':').map(Number)
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em, 0)
-  const diffMs = end.getTime() - currentTick; if (diffMs <= 0) return '00:00'
-  const diffMins = Math.floor(diffMs / 60000); const diffSecs = Math.floor((diffMs % 60000) / 1000)
-  return `${String(diffMins).padStart(2, '0')}:${String(diffSecs).padStart(2, '0')}`
-})
-
 const showPwdModal = ref(false)
 const pwdTarget = ref('')
 const pwdModalTitle = ref('')
@@ -485,84 +456,10 @@ const handlePwdSuccess = async ({ target, role }) => {
   await logRoleVisit(role)
 }
 
-// ===== 點名統計邏輯 =====
-const allStudents = ref([]); const allStudentsForLogin = ref([]); const todayAttendances = ref([])
-
-const expectedCount = computed(() => allStudents.value.length)
-const presentCount = computed(() => todayAttendances.value.filter(a => a.status === '已到').length)
-const leaveCount = computed(() => todayAttendances.value.filter(a => a.status === '請假' || a.status === '全天請假').length)
-const lateLeaveCount = computed(() => todayAttendances.value.filter(a => a.status && a.status.startsWith('晚到請假')).length)
-const earlyLeaveCount = computed(() => todayAttendances.value.filter(a => a.status && a.status.startsWith('早退請假')).length)
-const lateCount = computed(() => todayAttendances.value.filter(a => a.status && a.status.startsWith('遲到')).length)
-const absentCount = computed(() => expectedCount.value - presentCount.value - leaveCount.value - lateLeaveCount.value - earlyLeaveCount.value - lateCount.value)
-
-// ===== 💡 點名切換與超時密碼鎖定機制 =====
-const toggleAttendance = async (student) => {
-  const now = new Date()
-  
-  // 💡 規定點名截止時間：預設早上 08:00 (可自行修改)
-  const deadlineHour = 8
-  const deadlineMinute = 0
-  const isPastDeadline = now.getHours() > deadlineHour || (now.getHours() === deadlineHour && now.getMinutes() >= deadlineMinute)
-
-  // 1. 檢查週末或超時，若成立則強制要求密碼
-  if (!isWeekday) {
-    const pwd = prompt("🌴 週末預設不開放點名。\n若需強制修改，請輸入導師密碼：")
-    if (pwd !== expectedTeacherPwd.value && pwd !== '168168168' && pwd !== '1681681681') {
-      if (pwd !== null) alert("❌ 密碼錯誤，無法變更點名狀態！"); return
-    }
-  } else if (isPastDeadline) {
-    // 💡 恢復：規定時間後鎖定點名板
-    const timeStr = `${String(deadlineHour).padStart(2, '0')}:${String(deadlineMinute).padStart(2, '0')}`
-    const pwd = prompt(`⏰ 目前已超過點名規定時間 (${timeStr})。\n為確保出缺席紀錄正確，若需強制修改請輸入「導師密碼」：`)
-    if (pwd !== expectedTeacherPwd.value && pwd !== '168168168' && pwd !== '1681681681') {
-      if (pwd !== null) alert("❌ 密碼錯誤，無法變更點名狀態！"); return
-    }
-  }
-
-  // 2. 狀態輪播切換邏輯
-  const currentStatusFull = todayAttendances.value.find(a => a.student_id === student.id)?.status || '未到'
-  let currentBaseStatus = currentStatusFull
-  if (currentStatusFull.startsWith('晚到請假')) currentBaseStatus = '晚到請假'
-  else if (currentStatusFull.startsWith('早退請假')) currentBaseStatus = '早退請假'
-  else if (currentStatusFull.startsWith('遲到')) currentBaseStatus = '遲到'
-
-  let nextStatus = '已到'
-  
-  if (currentBaseStatus === '未到') {
-    nextStatus = '已到'
-  } else if (currentBaseStatus === '已到') {
-    nextStatus = '全天請假'
-  } else if (currentBaseStatus === '全天請假' || currentBaseStatus === '請假') {
-    const time = prompt("請輸入【預計到校】時間 (例如 10:00) :", "10:00")
-    if (time === null) return 
-    nextStatus = `晚到請假(${time})`
-  } else if (currentBaseStatus === '晚到請假') {
-    const time = prompt("請輸入【早退離開】時間 (例如 14:00) :", "14:00")
-    if (time === null) return 
-    nextStatus = `早退請假(${time})`
-  } else if (currentBaseStatus === '早退請假') {
-    nextStatus = '遲到'
-  } else if (currentBaseStatus === '遲到') {
-    nextStatus = '未到'
-  }
-
-  // 3. 寫入畫面與資料庫
-  let record = todayAttendances.value.find(a => a.student_id === student.id)
-  if (record) { record.status = nextStatus } else { todayAttendances.value.push({ student_id: student.id, record_date: todayISO, status: nextStatus }) }
-
-  try {
-    const { data: existing } = await supabase.from('attendances').select('id').eq('student_id', student.id).eq('record_date', todayISO).maybeSingle()
-    if (existing) { await supabase.from('attendances').update({ status: nextStatus }).eq('id', existing.id) } 
-    else { await supabase.from('attendances').insert({ student_id: student.id, record_date: todayISO, status: nextStatus }) }
-  } catch (err) {}
-}
-
 const fetchData = async () => {
   const { data: boardData } = await supabase.from('contact_books').select('contact_items').eq('record_date', todayISO).maybeSingle()
   contactBookItems.value = boardData?.contact_items || []
 
-  // 擴充抓取清單，加入 force_logout_timestamp
   const keysToFetch = [
     'board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 
     'contact_history_visible', 'index_button_settings', 'announcements_data', 
@@ -599,7 +496,6 @@ const fetchData = async () => {
           case 'seating_chart_data': if (typeof v === 'object') { seatingChart.value = { isVisible: v.isVisible || false, isRotated: v.isRotated || false, seats: (Array.isArray(v.seats) ? v.seats : []).map(seat => seat.content !== undefined ? { id: seat.id, isHidden: seat.isHidden, seatNum: String(seat.content).split('\n')[0] || '', name: String(seat.content).split('\n')[1] || '', other: String(seat.content).split('\n').slice(2).join(' ') || '' } : seat), settings: v.settings || {} }; } break;
           case 'hygiene_management_data': if (typeof v === 'object') hygieneData.value = { ...hygieneData.value, ...v }; break;
           
-          // 接收遠端強制登出訊號 (僅限教室網路生效)
           case 'force_logout_timestamp': {
             const dbLogoutTime = Number(v) || 0;
             const localLogoutTime = Number(localStorage.getItem('local_logout_timestamp')) || 0;
@@ -625,6 +521,7 @@ const fetchData = async () => {
     }
   }
 
+  // 將資料餵給 composable 管理的變數
   const { data: sData } = await supabase.from('students').select('*').order('seat_number')
   if (sData) { allStudentsForLogin.value = sData; allStudents.value = sData.filter(s => !s.hide_attendance) }
   
@@ -731,7 +628,6 @@ const saveClassNoteItems = async () => {
 :deep(.lunch-table td) { background: transparent; }
 :deep(.seat-num), :deep(.seat-number) { font-size: 1.2rem; font-weight: bold; }
 
-/* 針對各表單「成員名單/座號」欄位強制放大字體 */
 :deep(.morning-table tbody tr td:nth-child(2)) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
 :deep(.morning-table tbody tr td[rowspan] + td) { font-size: inherit !important; font-weight: normal !important; }
 :deep(.morning-table tbody tr td[rowspan] + td + td) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
