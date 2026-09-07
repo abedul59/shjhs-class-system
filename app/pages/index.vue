@@ -1,4 +1,4 @@
-<template>
+<template><template>
   <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
     
     <ExamDashboard 
@@ -60,7 +60,7 @@
               @update:showHygieneLocal="showHygieneLocal = $event"
             />
 
-            <!-- 💡 新增了 lateLeaveCount 和 earlyLeaveCount 屬性綁定 -->
+            <!-- 點名網格元件 (支援早退/晚到) -->
             <AttendanceGrid 
               v-if="isIpBrownlisted"
               :allStudents="allStudents"
@@ -112,6 +112,7 @@
           </div>
         </div>
         
+        <!-- 座位與衛生工作版 -->
         <SeatingAndHygiene 
           :seatingChart="seatingChart"
           :showSeatingChartLocal="showSeatingChartLocal"
@@ -130,6 +131,7 @@
       </div>
     </div> 
 
+    <!-- 彈窗群組 -->
     <PasswordModal 
       :show="showPwdModal" 
       :title="pwdModalTitle" 
@@ -483,19 +485,18 @@ const handlePwdSuccess = async ({ target, role }) => {
   await logRoleVisit(role)
 }
 
-// ===== 💡 點名狀態計數 (加入晚到請假、早退請假) =====
+// ===== 點名統計邏輯 =====
 const allStudents = ref([]); const allStudentsForLogin = ref([]); const todayAttendances = ref([])
 
 const expectedCount = computed(() => allStudents.value.length)
 const presentCount = computed(() => todayAttendances.value.filter(a => a.status === '已到').length)
-// 兼容舊資料，'請假' 與 '全天請假' 均算入
 const leaveCount = computed(() => todayAttendances.value.filter(a => a.status === '請假' || a.status === '全天請假').length)
 const lateLeaveCount = computed(() => todayAttendances.value.filter(a => a.status && a.status.startsWith('晚到請假')).length)
 const earlyLeaveCount = computed(() => todayAttendances.value.filter(a => a.status && a.status.startsWith('早退請假')).length)
 const lateCount = computed(() => todayAttendances.value.filter(a => a.status && a.status.startsWith('遲到')).length)
 const absentCount = computed(() => expectedCount.value - presentCount.value - leaveCount.value - lateLeaveCount.value - earlyLeaveCount.value - lateCount.value)
 
-// 💡 更新後的點名切換邏輯 (加入時間輸入視窗)
+// 點名切換邏輯
 const toggleAttendance = async (student) => {
   if (!isWeekday) {
     const pwd = prompt("🌴 週末預設不開放點名。\n若需強制修改，請輸入導師密碼：")
@@ -505,8 +506,6 @@ const toggleAttendance = async (student) => {
   }
 
   const currentStatusFull = todayAttendances.value.find(a => a.student_id === student.id)?.status || '未到'
-  
-  // 萃取基礎狀態 (去掉時間後綴)
   let currentBaseStatus = currentStatusFull
   if (currentStatusFull.startsWith('晚到請假')) currentBaseStatus = '晚到請假'
   else if (currentStatusFull.startsWith('早退請假')) currentBaseStatus = '早退請假'
@@ -520,11 +519,11 @@ const toggleAttendance = async (student) => {
     nextStatus = '全天請假'
   } else if (currentBaseStatus === '全天請假' || currentBaseStatus === '請假') {
     const time = prompt("請輸入【預計到校】時間 (例如 10:00) :", "10:00")
-    if (time === null) return // 按取消中止
+    if (time === null) return 
     nextStatus = `晚到請假(${time})`
   } else if (currentBaseStatus === '晚到請假') {
     const time = prompt("請輸入【早退離開】時間 (例如 14:00) :", "14:00")
-    if (time === null) return // 按取消中止
+    if (time === null) return 
     nextStatus = `早退請假(${time})`
   } else if (currentBaseStatus === '早退請假') {
     nextStatus = '遲到'
@@ -546,13 +545,15 @@ const fetchData = async () => {
   const { data: boardData } = await supabase.from('contact_books').select('contact_items').eq('record_date', todayISO).maybeSingle()
   contactBookItems.value = boardData?.contact_items || []
 
+  // 💡 擴充抓取清單，加入 force_logout_timestamp
   const keysToFetch = [
     'board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 
     'contact_history_visible', 'index_button_settings', 'announcements_data', 
     'class_schedule_data', 'exam_schedule_data', 'parent_notices_data', 
     'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible',
     'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings',
-    'index_clock_size', 'index_clock_config', 'index_auto_refresh_seconds', 'role_button_settings'
+    'index_clock_size', 'index_clock_config', 'index_auto_refresh_seconds', 'role_button_settings',
+    'force_logout_timestamp'
   ]
 
   const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', keysToFetch)
@@ -580,6 +581,30 @@ const fetchData = async () => {
           case 'class_notes_data': if (typeof v === 'object') classNoteItems.value = v[todayISO] || []; break;
           case 'seating_chart_data': if (typeof v === 'object') { seatingChart.value = { isVisible: v.isVisible || false, isRotated: v.isRotated || false, seats: (Array.isArray(v.seats) ? v.seats : []).map(seat => seat.content !== undefined ? { id: seat.id, isHidden: seat.isHidden, seatNum: String(seat.content).split('\n')[0] || '', name: String(seat.content).split('\n')[1] || '', other: String(seat.content).split('\n').slice(2).join(' ') || '' } : seat), settings: v.settings || {} }; } break;
           case 'hygiene_management_data': if (typeof v === 'object') hygieneData.value = { ...hygieneData.value, ...v }; break;
+          
+          // 💡 接收遠端強制登出訊號 (僅限教室網路生效，避免踢掉在家的家長)
+          case 'force_logout_timestamp': {
+            const dbLogoutTime = Number(v) || 0;
+            const localLogoutTime = Number(localStorage.getItem('local_logout_timestamp')) || 0;
+            
+            if (dbLogoutTime > localLogoutTime) {
+              // 紀錄已處理過此訊號
+              localStorage.setItem('local_logout_timestamp', dbLogoutTime);
+              
+              // 嚴格判定：只針對教室電腦 (褐名單 IP) 且非匿名狀態執行強制登出
+              if (isIpBrownlisted.value && currentIdentity.value !== '匿名來訪者') {
+                // 拔除所有特權
+                localStorage.removeItem('visitor_known_identity');
+                sessionStorage.removeItem('schedule_admin_logged_in');
+                sessionStorage.removeItem('exams_admin_logged_in');
+                
+                currentIdentity.value = '匿名來訪者';
+                alert('⚠️ 系統安全機制：管理員已遠端強制登出此設備的帳號。\n為保護班級資訊，請重新驗證身分。');
+                window.location.reload(); // 強制重整畫面以清除所有暫存狀態
+              }
+            }
+            break;
+          }
         }
       } catch (err) {}
     })
