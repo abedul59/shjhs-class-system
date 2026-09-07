@@ -1,4 +1,4 @@
-<template>
+<template><template>
   <div class="page-container" :class="{ 'is-exam-mode': isExamModeView }">
     
     <ExamDashboard 
@@ -60,7 +60,7 @@
               @update:showHygieneLocal="showHygieneLocal = $event"
             />
 
-            <!-- 點名網格元件 (支援早退/晚到) -->
+            <!-- 點名網格元件 -->
             <AttendanceGrid 
               v-if="isIpBrownlisted"
               :allStudents="allStudents"
@@ -496,15 +496,31 @@ const earlyLeaveCount = computed(() => todayAttendances.value.filter(a => a.stat
 const lateCount = computed(() => todayAttendances.value.filter(a => a.status && a.status.startsWith('遲到')).length)
 const absentCount = computed(() => expectedCount.value - presentCount.value - leaveCount.value - lateLeaveCount.value - earlyLeaveCount.value - lateCount.value)
 
-// 點名切換邏輯
+// ===== 💡 點名切換與超時密碼鎖定機制 =====
 const toggleAttendance = async (student) => {
+  const now = new Date()
+  
+  // 💡 規定點名截止時間：預設早上 08:00 (可自行修改)
+  const deadlineHour = 8
+  const deadlineMinute = 0
+  const isPastDeadline = now.getHours() > deadlineHour || (now.getHours() === deadlineHour && now.getMinutes() >= deadlineMinute)
+
+  // 1. 檢查週末或超時，若成立則強制要求密碼
   if (!isWeekday) {
     const pwd = prompt("🌴 週末預設不開放點名。\n若需強制修改，請輸入導師密碼：")
     if (pwd !== expectedTeacherPwd.value && pwd !== '168168168' && pwd !== '1681681681') {
       if (pwd !== null) alert("❌ 密碼錯誤，無法變更點名狀態！"); return
     }
+  } else if (isPastDeadline) {
+    // 💡 恢復：規定時間後鎖定點名板
+    const timeStr = `${String(deadlineHour).padStart(2, '0')}:${String(deadlineMinute).padStart(2, '0')}`
+    const pwd = prompt(`⏰ 目前已超過點名規定時間 (${timeStr})。\n為確保出缺席紀錄正確，若需強制修改請輸入「導師密碼」：`)
+    if (pwd !== expectedTeacherPwd.value && pwd !== '168168168' && pwd !== '1681681681') {
+      if (pwd !== null) alert("❌ 密碼錯誤，無法變更點名狀態！"); return
+    }
   }
 
+  // 2. 狀態輪播切換邏輯
   const currentStatusFull = todayAttendances.value.find(a => a.student_id === student.id)?.status || '未到'
   let currentBaseStatus = currentStatusFull
   if (currentStatusFull.startsWith('晚到請假')) currentBaseStatus = '晚到請假'
@@ -531,6 +547,7 @@ const toggleAttendance = async (student) => {
     nextStatus = '未到'
   }
 
+  // 3. 寫入畫面與資料庫
   let record = todayAttendances.value.find(a => a.student_id === student.id)
   if (record) { record.status = nextStatus } else { todayAttendances.value.push({ student_id: student.id, record_date: todayISO, status: nextStatus }) }
 
@@ -545,7 +562,7 @@ const fetchData = async () => {
   const { data: boardData } = await supabase.from('contact_books').select('contact_items').eq('record_date', todayISO).maybeSingle()
   contactBookItems.value = boardData?.contact_items || []
 
-  // 💡 擴充抓取清單，加入 force_logout_timestamp
+  // 擴充抓取清單，加入 force_logout_timestamp
   const keysToFetch = [
     'board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 
     'contact_history_visible', 'index_button_settings', 'announcements_data', 
@@ -582,25 +599,20 @@ const fetchData = async () => {
           case 'seating_chart_data': if (typeof v === 'object') { seatingChart.value = { isVisible: v.isVisible || false, isRotated: v.isRotated || false, seats: (Array.isArray(v.seats) ? v.seats : []).map(seat => seat.content !== undefined ? { id: seat.id, isHidden: seat.isHidden, seatNum: String(seat.content).split('\n')[0] || '', name: String(seat.content).split('\n')[1] || '', other: String(seat.content).split('\n').slice(2).join(' ') || '' } : seat), settings: v.settings || {} }; } break;
           case 'hygiene_management_data': if (typeof v === 'object') hygieneData.value = { ...hygieneData.value, ...v }; break;
           
-          // 💡 接收遠端強制登出訊號 (僅限教室網路生效，避免踢掉在家的家長)
+          // 接收遠端強制登出訊號 (僅限教室網路生效)
           case 'force_logout_timestamp': {
             const dbLogoutTime = Number(v) || 0;
             const localLogoutTime = Number(localStorage.getItem('local_logout_timestamp')) || 0;
             
             if (dbLogoutTime > localLogoutTime) {
-              // 紀錄已處理過此訊號
               localStorage.setItem('local_logout_timestamp', dbLogoutTime);
-              
-              // 嚴格判定：只針對教室電腦 (褐名單 IP) 且非匿名狀態執行強制登出
               if (isIpBrownlisted.value && currentIdentity.value !== '匿名來訪者') {
-                // 拔除所有特權
                 localStorage.removeItem('visitor_known_identity');
                 sessionStorage.removeItem('schedule_admin_logged_in');
                 sessionStorage.removeItem('exams_admin_logged_in');
-                
                 currentIdentity.value = '匿名來訪者';
                 alert('⚠️ 系統安全機制：管理員已遠端強制登出此設備的帳號。\n為保護班級資訊，請重新驗證身分。');
-                window.location.reload(); // 強制重整畫面以清除所有暫存狀態
+                window.location.reload(); 
               }
             }
             break;
