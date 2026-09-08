@@ -39,6 +39,7 @@
           <div class="left-panel">
             
             <ControlPanel 
+              :marqueeSettings="marqueeSettings"
               :clockConfig="clockConfig"
               :currentTime="currentTime"
               :unreadMsgCount="unreadMsgCount"
@@ -214,6 +215,7 @@ const isIpBrownlisted = ref(false)
 const currentIpStr = ref('')
 
 const unreadMsgCount = ref(0)
+const marqueeSettings = ref({}) // 💡 跑馬燈設定容器
 const clockConfig = ref({ theme: 'classic', color: '#1e293b', size: 35, showIcon: true })
 const autoRefreshSeconds = ref(60) 
 let dataRefreshTimer = null
@@ -256,27 +258,6 @@ const defaultRoleSettings = {
 }
 const roleButtonSettings = ref(JSON.parse(JSON.stringify(defaultRoleSettings)))
 
-// =====================================================================
-// 💡 從 Composables 引入被抽離的「運算大腦」
-// =====================================================================
-
-// 1. 點名大腦
-const { 
-  allStudents, allStudentsForLogin, todayAttendances,
-  expectedCount, presentCount, leaveCount, lateLeaveCount, earlyLeaveCount, lateCount, absentCount,
-  toggleAttendanceLogic
-} = useAttendance(todayISO)
-
-// 串接畫面點擊事件
-const toggleAttendance = (student) => {
-  toggleAttendanceLogic(student, isWeekday, expectedTeacherPwd.value)
-}
-
-// 2. 大考大腦
-const { currentThemeStyles, examStatus, countdownMinutes, countdownText } = useExamMode(examData, nowTick)
-
-// =====================================================================
-
 const activeRoleCategory = computed(() => {
   const id = currentIdentity.value;
   if (!id) return 'anonymous';
@@ -292,24 +273,16 @@ const indexButtonSettings = computed(() => {
   const roleSettings = roleButtonSettings.value[activeRoleCategory.value] || defaultRoleSettings.anonymous
   const effectiveSettings = {}
   for (const key in roleSettings) {
-    if (globalButtonSettings.value && globalButtonSettings.value[key] === false) {
-      effectiveSettings[key] = false
-    } else {
-      effectiveSettings[key] = roleSettings[key] 
-    }
+    if (globalButtonSettings.value && globalButtonSettings.value[key] === false) effectiveSettings[key] = false
+    else effectiveSettings[key] = roleSettings[key] 
   }
   return effectiveSettings
 })
 
-const isContentVisible = computed(() => {
-  return isIpBrownlisted.value || currentIdentity.value !== '匿名來訪者'
-})
-
+const isContentVisible = computed(() => isIpBrownlisted.value || currentIdentity.value !== '匿名來訪者')
 const availableSchools = computed(() => {
   if (!allStudentsForLogin.value || allStudentsForLogin.value.length === 0) return []
-  const schools = allStudentsForLogin.value
-    .map(s => s.graduated_school || s.elementary_school || s.elem_school || s.school || s.school_name)
-    .filter(Boolean)
+  const schools = allStudentsForLogin.value.map(s => s.graduated_school || s.elementary_school || s.elem_school || s.school || s.school_name).filter(Boolean)
   const uniqueSchools = [...new Set(schools)].sort()
   return uniqueSchools.length === 0 ? ['【資料庫尚未建立國小資料】'] : uniqueSchools
 })
@@ -320,29 +293,20 @@ const loadTeacherPwd = async () => {
     if (data.setting_value.type === 'dynamic') {
       const d = new Date(); const yy = String(d.getFullYear()).slice(2); const mm = String(d.getMonth() + 1).padStart(2, '0'); const dd = String(d.getDate()).padStart(2, '0')
       expectedTeacherPwd.value = `${yy}${mm}${dd}59`
-    } else {
-      expectedTeacherPwd.value = data.setting_value.custom_pwd || '168168168'
-    }
+    } else { expectedTeacherPwd.value = data.setting_value.custom_pwd || '168168168' }
   }
 }
 
 const checkIdentity = () => {
   currentIdentity.value = localStorage.getItem('visitor_known_identity') || '匿名來訪者'
-  if (!isIpBrownlisted.value && currentIdentity.value === '匿名來訪者') {
-    showIdentityModal.value = true
-  }
+  if (!isIpBrownlisted.value && currentIdentity.value === '匿名來訪者') showIdentityModal.value = true
 }
 
 const handleIdentityVerified = async (finalIdentity) => {
   localStorage.setItem('visitor_known_identity', finalIdentity)
   currentIdentity.value = finalIdentity
   showIdentityModal.value = false
-  await supabase.from('visitor_logs').insert([{ 
-    ip_address: currentIpStr.value || '未知IP', 
-    device_info: navigator.userAgent, 
-    role: finalIdentity,
-    action_details: `🔑 綁定設備身分：${finalIdentity}` 
-  }])
+  await supabase.from('visitor_logs').insert([{ ip_address: currentIpStr.value || '未知IP', device_info: navigator.userAgent, role: finalIdentity, action_details: `🔑 綁定設備身分：${finalIdentity}` }])
 }
 
 const checkIpRules = async () => {
@@ -364,7 +328,6 @@ const logVisit = async () => {
     const ua = navigator.userAgent
     let role = localStorage.getItem('visitor_known_identity') || '匿名來訪者'
     if (sessionStorage.getItem('schedule_admin_logged_in') === 'true' || sessionStorage.getItem('exams_admin_logged_in') === 'true') role = '導師'
-    
     await supabase.from('visitor_logs').insert([{ ip_address: currentIpStr.value || '未知IP', device_info: ua, role: role, action_details: '👁️ 瀏覽頁面：班級首頁' }])
     sessionStorage.setItem('visit_logged', 'true')
   } catch (e) {}
@@ -390,10 +353,7 @@ const privacyFilter = (txt) => {
 }
 
 const formatNL = (txt) => privacyFilter(txt).replace(/\n/g, '<br>')
-const formatDateTime = (dtStr) => {
-  if (!dtStr) return ''
-  return new Date(dtStr).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
-}
+const formatDateTime = (dtStr) => dtStr ? new Date(dtStr).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : ''
 
 const scheduleDisplay = computed(() => {
   if (!scheduleData.value || !scheduleData.value.periods) return null
@@ -435,6 +395,57 @@ const scheduleDisplay = computed(() => {
   return { current: currentClass, next: nextClass }
 })
 
+// ===== 大考模式邏輯 =====
+const examThemes = {
+  midnight: { name: '午夜藍', bg: '#0f172a', border: '#334155', title: '#f8fafc', clock: '#fbbf24', text: '#cbd5e1', accent: '#3b82f6', success: '#10b981', danger: '#ef4444', panelBg: '#1e293b' },
+  blackboard: { name: '經典黑板', bg: '#1a3627', border: '#5b3a1a', title: '#ffffff', clock: '#fbbf24', text: '#e2e8f0', accent: '#fca5a5', success: '#a7f3d0', danger: '#f87171', panelBg: '#234a36' },
+  slate: { name: '沉穩灰', bg: '#334155', border: '#64748b', title: '#f8fafc', clock: '#38bdf8', text: '#f1f5f9', accent: '#818cf8', success: '#34d399', danger: '#f87171', panelBg: '#475569' },
+  matcha: { name: '抹茶綠', bg: '#2f3e36', border: '#5b6a5a', title: '#ecfdf5', clock: '#a7f3d0', text: '#d1fae5', accent: '#6ee7b7', success: '#10b981', danger: '#fca5a5', panelBg: '#3b4d45' },
+  burgundy: { name: '勃根地紅', bg: '#450a0a', border: '#7f1d1d', title: '#fee2e2', clock: '#fca5a5', text: '#fecaca', accent: '#f87171', success: '#a7f3d0', danger: '#fbbf24', panelBg: '#591111' }
+}
+
+const currentThemeStyles = computed(() => {
+  const t = examThemes[examData.value.theme] || examThemes.midnight
+  return { '--ex-bg': t.bg, '--ex-border': t.border, '--ex-title': t.title, '--ex-clock': t.clock, '--ex-text': t.text, '--ex-accent': t.accent, '--ex-success': t.success, '--ex-danger': t.danger, '--ex-panel-bg': t.panelBg }
+})
+
+const examStatus = computed(() => {
+  if (!examData.value || !examData.value.periods || examData.value.periods.length === 0) return { state: 'WAITING', periods: [] }
+  const now = new Date(nowTick.value); const nowMins = now.getHours() * 60 + now.getMinutes()
+  let current = null; let next = null; let state = 'WAITING'; const periods = JSON.parse(JSON.stringify(examData.value.periods))
+  for (let i = 0; i < periods.length; i++) {
+    const p = periods[i]; if (!p.startTime || !p.endTime) continue
+    const [sh, sm] = p.startTime.split(':').map(Number); const [eh, em] = p.endTime.split(':').map(Number)
+    const startMins = sh * 60 + sm; const endMins = eh * 60 + em; p.isActive = false
+    if (nowMins >= startMins && nowMins <= endMins) { state = 'TESTING'; current = p; p.isActive = true; if (i + 1 < periods.length) next = periods[i + 1]; break }
+    if (nowMins < startMins) { if (state !== 'TESTING') { state = i === 0 ? 'WAITING' : 'BREAK'; next = p }; break }
+  }
+  const lastP = periods[periods.length - 1]
+  if (lastP && lastP.endTime) {
+    const [lsh, lsm] = lastP.endTime.split(':').map(Number)
+    if (!current && !next && nowMins >= (lsh * 60 + lsm)) { state = 'FINISHED' }
+  }
+  return { state, current, next, periods }
+})
+
+const countdownMinutes = computed(() => {
+  if (examStatus.value.state !== 'TESTING' || !examStatus.value.current) return 999;
+  const currentTick = nowTick.value; const now = new Date(currentTick)
+  const [eh, em] = examStatus.value.current.endTime.split(':').map(Number)
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em, 0)
+  return Math.floor((end.getTime() - currentTick) / 60000)
+})
+
+const countdownText = computed(() => {
+  if (examStatus.value.state !== 'TESTING' || !examStatus.value.current) return '';
+  const currentTick = nowTick.value; const now = new Date(currentTick)
+  const [eh, em] = examStatus.value.current.endTime.split(':').map(Number)
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em, 0)
+  const diffMs = end.getTime() - currentTick; if (diffMs <= 0) return '00:00'
+  const diffMins = Math.floor(diffMs / 60000); const diffSecs = Math.floor((diffMs % 60000) / 1000)
+  return `${String(diffMins).padStart(2, '0')}:${String(diffSecs).padStart(2, '0')}`
+})
+
 const showPwdModal = ref(false)
 const pwdTarget = ref('')
 const pwdModalTitle = ref('')
@@ -456,6 +467,73 @@ const handlePwdSuccess = async ({ target, role }) => {
   await logRoleVisit(role)
 }
 
+// ===== 點名統計與操作邏輯 =====
+const allStudents = ref([]); const allStudentsForLogin = ref([]); const todayAttendances = ref([])
+
+const expectedCount = computed(() => allStudents.value.length)
+const presentCount = computed(() => todayAttendances.value.filter(a => a.status === '已到').length)
+const leaveCount = computed(() => todayAttendances.value.filter(a => a.status === '請假' || a.status === '全天請假').length)
+const lateLeaveCount = computed(() => todayAttendances.value.filter(a => a.status && a.status.startsWith('晚到請假')).length)
+const earlyLeaveCount = computed(() => todayAttendances.value.filter(a => a.status && a.status.startsWith('早退請假')).length)
+const lateCount = computed(() => todayAttendances.value.filter(a => a.status && a.status.startsWith('遲到')).length)
+const absentCount = computed(() => expectedCount.value - presentCount.value - leaveCount.value - lateLeaveCount.value - earlyLeaveCount.value - lateCount.value)
+
+// 💡 點名切換邏輯 (含防護鎖)
+const toggleAttendance = async (student) => {
+  const now = new Date()
+  
+  // 💡 規定點名截止時間：預設早上 08:00
+  const deadlineHour = 8
+  const deadlineMinute = 0
+  const isPastDeadline = now.getHours() > deadlineHour || (now.getHours() === deadlineHour && now.getMinutes() >= deadlineMinute)
+
+  // 1. 檢查週末或超時
+  if (!isWeekday) {
+    const pwd = prompt("🌴 週末預設不開放點名。\n若需強制修改，請輸入導師密碼：")
+    if (pwd !== expectedTeacherPwd.value && pwd !== '168168168' && pwd !== '1681681681') {
+      if (pwd !== null) alert("❌ 密碼錯誤，無法變更點名狀態！"); return
+    }
+  } else if (isPastDeadline) {
+    const timeStr = `${String(deadlineHour).padStart(2, '0')}:${String(deadlineMinute).padStart(2, '0')}`
+    const pwd = prompt(`⏰ 目前已超過點名規定時間 (${timeStr})。\n為確保出缺席紀錄正確，若需強制修改請輸入「導師密碼」：`)
+    if (pwd !== expectedTeacherPwd.value && pwd !== '168168168' && pwd !== '1681681681') {
+      if (pwd !== null) alert("❌ 密碼錯誤，無法變更點名狀態！"); return
+    }
+  }
+
+  // 2. 狀態輪播切換邏輯
+  const currentStatusFull = todayAttendances.value.find(a => a.student_id === student.id)?.status || '未到'
+  let currentBaseStatus = currentStatusFull
+  if (currentStatusFull.startsWith('晚到請假')) currentBaseStatus = '晚到請假'
+  else if (currentStatusFull.startsWith('早退請假')) currentBaseStatus = '早退請假'
+  else if (currentStatusFull.startsWith('遲到')) currentBaseStatus = '遲到'
+
+  let nextStatus = '已到'
+  
+  if (currentBaseStatus === '未到') nextStatus = '已到'
+  else if (currentBaseStatus === '已到') nextStatus = '全天請假'
+  else if (currentBaseStatus === '全天請假' || currentBaseStatus === '請假') {
+    const time = prompt("請輸入【預計到校】時間 (例如 10:00) :", "10:00")
+    if (time === null) return 
+    nextStatus = `晚到請假(${time})`
+  } else if (currentBaseStatus === '晚到請假') {
+    const time = prompt("請輸入【早退離開】時間 (例如 14:00) :", "14:00")
+    if (time === null) return 
+    nextStatus = `早退請假(${time})`
+  } else if (currentBaseStatus === '早退請假') nextStatus = '遲到'
+  else if (currentBaseStatus === '遲到') nextStatus = '未到'
+
+  // 3. 寫入畫面與資料庫
+  let record = todayAttendances.value.find(a => a.student_id === student.id)
+  if (record) { record.status = nextStatus } else { todayAttendances.value.push({ student_id: student.id, record_date: todayISO, status: nextStatus }) }
+
+  try {
+    const { data: existing } = await supabase.from('attendances').select('id').eq('student_id', student.id).eq('record_date', todayISO).maybeSingle()
+    if (existing) { await supabase.from('attendances').update({ status: nextStatus }).eq('id', existing.id) } 
+    else { await supabase.from('attendances').insert({ student_id: student.id, record_date: todayISO, status: nextStatus }) }
+  } catch (err) {}
+}
+
 const fetchData = async () => {
   const { data: boardData } = await supabase.from('contact_books').select('contact_items').eq('record_date', todayISO).maybeSingle()
   contactBookItems.value = boardData?.contact_items || []
@@ -467,7 +545,7 @@ const fetchData = async () => {
     'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible',
     'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings',
     'index_clock_size', 'index_clock_config', 'index_auto_refresh_seconds', 'role_button_settings',
-    'force_logout_timestamp'
+    'force_logout_timestamp', 'marquee_settings' 
   ]
 
   const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', keysToFetch)
@@ -495,11 +573,11 @@ const fetchData = async () => {
           case 'class_notes_data': if (typeof v === 'object') classNoteItems.value = v[todayISO] || []; break;
           case 'seating_chart_data': if (typeof v === 'object') { seatingChart.value = { isVisible: v.isVisible || false, isRotated: v.isRotated || false, seats: (Array.isArray(v.seats) ? v.seats : []).map(seat => seat.content !== undefined ? { id: seat.id, isHidden: seat.isHidden, seatNum: String(seat.content).split('\n')[0] || '', name: String(seat.content).split('\n')[1] || '', other: String(seat.content).split('\n').slice(2).join(' ') || '' } : seat), settings: v.settings || {} }; } break;
           case 'hygiene_management_data': if (typeof v === 'object') hygieneData.value = { ...hygieneData.value, ...v }; break;
+          case 'marquee_settings': marqueeSettings.value = v; break;
           
           case 'force_logout_timestamp': {
             const dbLogoutTime = Number(v) || 0;
             const localLogoutTime = Number(localStorage.getItem('local_logout_timestamp')) || 0;
-            
             if (dbLogoutTime > localLogoutTime) {
               localStorage.setItem('local_logout_timestamp', dbLogoutTime);
               if (isIpBrownlisted.value && currentIdentity.value !== '匿名來訪者') {
@@ -521,7 +599,6 @@ const fetchData = async () => {
     }
   }
 
-  // 將資料餵給 composable 管理的變數
   const { data: sData } = await supabase.from('students').select('*').order('seat_number')
   if (sData) { allStudentsForLogin.value = sData; allStudents.value = sData.filter(s => !s.hide_attendance) }
   
@@ -616,9 +693,7 @@ const saveClassNoteItems = async () => {
 :deep(.mt-10) { margin-top: 10px; }
 :deep(.mt-15) { margin-top: 15px; }
 
-/* ========================================================= */
-/* 🧹 恢復：衛生工作與座位表的專屬深度樣式 (Deep CSS) */
-/* ========================================================= */
+/* 恢復：衛生工作與座位表的專屬深度樣式 (Deep CSS) */
 :deep(.custom-table) { width: 100%; border-collapse: collapse; min-width: 800px; text-align: center; font-size: 0.95rem; }
 :deep(.custom-table th), :deep(.custom-table td) { border: 1px solid #000; padding: 8px; vertical-align: middle; }
 :deep(.custom-table th) { background-color: #f1f5f9; font-weight: bold; }
