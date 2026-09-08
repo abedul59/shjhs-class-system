@@ -22,8 +22,17 @@ let pollingInterval = null
 let scheduleInterval = null
 const lastManualTrigger = ref(0)
 const lastTriggeredScheduleTime = ref('')
+const myIp = ref('') // 💡 存放本機 IP 用於精準比對
 
-// === 擴充 25 種高穩定性音效庫 (Google 官方開源) ===
+// 抓取本機 IP
+const fetchMyIp = async () => {
+  try {
+    const res = await fetch('https://api.ipify.org?format=json')
+    const data = await res.json()
+    myIp.value = data.ip
+  } catch (e) {}
+}
+
 const sounds = {
   bell: 'https://actions.google.com/sounds/v1/alarms/school_bell.ogg',
   alert: 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg',
@@ -52,72 +61,77 @@ const sounds = {
   cat: 'https://actions.google.com/sounds/v1/animals/cat_meow.ogg'
 }
 
-// === 精準等待音效播放完畢的 Promise ===
 const playSoundSingle = (soundUrl) => {
   return new Promise((resolve) => {
     const audio = new Audio(soundUrl)
     audio.onended = resolve
     audio.onerror = resolve
-    audio.play().catch(resolve) // 防止瀏覽器阻擋自動播放導致卡死
+    audio.play().catch(resolve) 
   })
 }
 
-// === 語音朗讀 (TTS) Promise ===
 const speakText = (text) => {
   return new Promise((resolve) => {
     if (!text || !window.speechSynthesis) return resolve()
-    window.speechSynthesis.cancel() // 先切斷之前的聲音
+    window.speechSynthesis.cancel() 
     const utterance = new SpeechSynthesisUtterance(text)
     utterance.lang = 'zh-TW'
-    utterance.rate = 1.0 // 正常語速
+    utterance.rate = 1.0 
     utterance.onend = resolve
     utterance.onerror = resolve
     window.speechSynthesis.speak(utterance)
   })
 }
 
-// === 核心：依序執行 音效 -> TTS -> 關閉畫面 ===
 const triggerBroadcast = async (broadcastData) => {
   activeBroadcast.value = { text: broadcastData.text }
   
-  // 1. 先播放音效 (依設定次數)
+  // 1. 播放音效 (依設定次數)
   if (broadcastData.sound && broadcastData.sound !== 'none' && sounds[broadcastData.sound]) {
     const count = broadcastData.playCount || 1
     for (let i = 0; i < count; i++) {
       await playSoundSingle(sounds[broadcastData.sound])
-      await new Promise(r => setTimeout(r, 500)) // 每次音效間隔 0.5 秒
+      await new Promise(r => setTimeout(r, 500)) 
     }
   }
 
-  // 2. 音效播完後，唸出廣播文字
-  await speakText(broadcastData.text)
+  // 2. 💡 語音朗讀 (支援自訂重複次數)
+  const ttsCount = broadcastData.textPlayCount || 1
+  for (let i = 0; i < ttsCount; i++) {
+    await speakText(broadcastData.text)
+    if (i < ttsCount - 1) await new Promise(r => setTimeout(r, 800)) // 重複之間的停頓
+  }
 
-  // 3. 語音結束後，畫面多停留 5 秒再收起
+  // 3. 語音結束後，畫面停留 5 秒收起
   setTimeout(() => { activeBroadcast.value = null }, 5000)
 }
 
-// === 1. 監聽手動廣播 ===
-const pollManualBroadcast = async () => {
-  // 🛡️ 絕對防線：如果不是教室 IP，直接中斷執行！(家長在家看絕對不會觸發)
-  if (!props.isIpBrownlisted) return;
+// 💡 核心驗證函數：判斷此電腦是否該響應廣播
+const shouldProcessBroadcast = (targetIP) => {
+  if (!props.isIpBrownlisted) return false; // 大前提：必須在褐色名單內
+  if (targetIP && targetIP.trim() !== '') {
+    // 若有指定單一 IP，則必須完全吻合本機 IP
+    return myIp.value === targetIP.trim();
+  }
+  return true; // 若留空，則所有褐色名單皆響應
+}
 
+const pollManualBroadcast = async () => {
   try {
     const { data } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'broadcast_settings').maybeSingle()
-    if (data && data.setting_value) {
-      const config = data.setting_value
-      if (config.manual && config.manual.triggerTimestamp > lastManualTrigger.value) {
-        if (lastManualTrigger.value !== 0) { triggerBroadcast(config.manual) }
-        lastManualTrigger.value = config.manual.triggerTimestamp
+    if (data && data.setting_value && data.setting_value.manual) {
+      const config = data.setting_value.manual
+      if (config.triggerTimestamp > lastManualTrigger.value) {
+        if (lastManualTrigger.value !== 0 && shouldProcessBroadcast(config.targetIP)) { 
+          triggerBroadcast(config) 
+        }
+        lastManualTrigger.value = config.triggerTimestamp
       }
     }
   } catch (e) {}
 }
 
-// === 2. 監聽定時排程 ===
 const checkSchedules = async () => {
-  // 🛡️ 絕對防線：如果不是教室 IP，直接中斷執行！
-  if (!props.isIpBrownlisted) return;
-
   const now = new Date()
   const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
   const currentSec = now.getSeconds()
@@ -129,7 +143,8 @@ const checkSchedules = async () => {
     if (data && data.setting_value && data.setting_value.schedules) {
       const activeSchedules = data.setting_value.schedules.filter(s => s.isActive)
       for (const schedule of activeSchedules) {
-        if (schedule.time === currentHHMM) {
+        // 💡 觸發前驗證 IP 權限
+        if (schedule.time === currentHHMM && shouldProcessBroadcast(schedule.targetIP)) {
           lastTriggeredScheduleTime.value = currentHHMM
           triggerBroadcast(schedule)
           break
@@ -140,9 +155,11 @@ const checkSchedules = async () => {
 }
 
 onMounted(() => {
-  pollManualBroadcast()
-  pollingInterval = setInterval(pollManualBroadcast, 5000) 
-  scheduleInterval = setInterval(checkSchedules, 1000)     
+  fetchMyIp().then(() => {
+    pollManualBroadcast()
+    pollingInterval = setInterval(pollManualBroadcast, 5000) 
+    scheduleInterval = setInterval(checkSchedules, 1000)     
+  })
 })
 
 onUnmounted(() => {
