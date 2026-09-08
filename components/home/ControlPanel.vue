@@ -1,6 +1,9 @@
 <template>
   <div class="control-card">
     
+    <!-- 📢 獨立跑馬燈區塊 (放置在最上方) -->
+    <MarqueeWidget :marqueeData="marqueeSettings" />
+
     <!-- 🕒 時鐘與 ⛅ 天氣區塊 -->
     <div class="top-status-bar">
       <ClockWidget 
@@ -9,8 +12,6 @@
         :currentTime="currentTime"
         :unreadMsgCount="unreadMsgCount"
       />
-
-      <!-- 💡 新增的獨立天氣元件 -->
       <WeatherWidget />
     </div>
 
@@ -38,11 +39,13 @@
 </template>
 
 <script setup>
+import MarqueeWidget from './MarqueeWidget.vue'
 import ClockWidget from './ClockWidget.vue'
 import HomeActionButtons from './HomeActionButtons.vue'
-import WeatherWidget from './WeatherWidget.vue' // 引入天氣元件
+import WeatherWidget from './WeatherWidget.vue'
 
 const props = defineProps({
+  marqueeSettings: { type: Object, default: () => ({}) }, // 💡 新增接收跑馬燈設定
   clockConfig: { type: Object, default: () => ({}) },
   clockFontSize: Number,
   currentTime: String,
@@ -72,21 +75,6 @@ const emit = defineEmits(['enterExam', 'openLargeSchedule', 'openPwd', 'update:s
   border: 1px solid #e2e8f0; 
   text-align: center; 
 }
-
-/* 將時鐘與天氣水平並排，手機版自動換行 */
-.top-status-bar {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 15px;
-  margin-bottom: 25px;
-}
-
-@media (min-width: 768px) {
-  .top-status-bar {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-}
+.top-status-bar { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px; margin-bottom: 25px; }
+@media (min-width: 768px) { .top-status-bar { flex-direction: row; flex-wrap: wrap; } }
 </style>
