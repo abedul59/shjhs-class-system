@@ -2,12 +2,12 @@
   <div class="admin-section">
     <div class="header-box">
       <h3>📡 教室廣播遙控與定時系統</h3>
-      <p class="help-text">💡 本系統可將文字與音效遠端傳送至班級首頁（教室電腦）。手動發送將於 5 秒內觸發，定時排程精準度為 1 分鐘。</p>
+      <p class="help-text">💡 本系統可將文字與音效遠端傳送至班級首頁。為解決學校共用 IP 問題，請在首頁點擊設定「廣播設備名稱」（如：701教室），並在此指定名稱即可單獨發送。</p>
       
       <div class="ip-security-banner" :class="isCurrentDeviceClassroom ? 'is-safe' : 'is-warning'">
         <strong>🛡️ 廣播安全隔離檢測：</strong> 
         您的目前 IP 為 <span class="highlight-ip">{{ currentIP }}</span>。<br>
-        狀態：{{ isCurrentDeviceClassroom ? '✅ 這台是教室電腦（位於褐色名單內）！若未指定單一 IP，首頁將會接收並發出廣播。' : '⚠️ 這台不是教室電腦。為保護隱私，您的首頁已啟動靜音隔離，家長在家絕對聽不到廣播。' }}
+        狀態：{{ isCurrentDeviceClassroom ? '✅ 位於褐色名單內！若未指定單一名稱，將廣播至全校首頁。' : '⚠️ 這台不是教室電腦。為保護隱私，您的首頁已啟動靜音隔離，家長在家絕對聽不到廣播。' }}
       </div>
     </div>
 
@@ -65,16 +65,17 @@
           </select>
         </div>
 
+        <!-- 💡 這裡將 IP 提示改為設備名稱 -->
         <div class="form-group full-width">
-          <label>🎯 指定接收單一 IP (選填)：</label>
+          <label>🎯 指定接收單一【設備名稱】 (解決學校共用IP)：</label>
           <div class="ip-control-group">
             <select v-model="manualConfig.targetIP" class="custom-input flex-2">
-              <option value="">🌐 全發送 (所有褐色名單內的教室電腦)</option>
-              <option v-for="ip in savedIPs" :key="ip" :value="ip">💻 {{ ip }}</option>
+              <option value="">🌐 全發送 (所有褐色名單內的電腦)</option>
+              <option v-for="target in savedIPs" :key="target" :value="target">🎯 {{ target }}</option>
             </select>
-            <input type="text" v-model="newIPInput" class="custom-input flex-1" placeholder="新增 IP..." />
+            <input type="text" v-model="newIPInput" class="custom-input flex-1" placeholder="輸入名稱 (如: 701教室)..." />
             <button @click="saveNewIP" class="btn-sub">💾 加入選單</button>
-            <button v-if="manualConfig.targetIP" @click="removeSavedIP(manualConfig.targetIP)" class="btn-sub-del">🗑️ 刪除選取 IP</button>
+            <button v-if="manualConfig.targetIP" @click="removeSavedIP(manualConfig.targetIP)" class="btn-sub-del">🗑️ 刪除選取</button>
           </div>
         </div>
       </div>
@@ -133,10 +134,10 @@
               </select>
             </div>
             <div class="mini-group ip-group">
-              <label>IP:</label>
+              <label>對象:</label>
               <select v-model="sch.targetIP" class="custom-input ip-select">
                 <option value="">🌐 全發送</option>
-                <option v-for="ip in savedIPs" :key="ip" :value="ip">{{ ip }}</option>
+                <option v-for="target in savedIPs" :key="target" :value="target">{{ target }}</option>
               </select>
             </div>
           </div>
@@ -157,7 +158,6 @@
 import { ref, onMounted } from 'vue'
 const supabase = useSupabaseClient()
 
-// 💡 擴充為 30 種選單
 const soundOptions = [
   { value: 'none', label: '🔇 無音效 (純文字)' },
   { value: 'bell_ring', label: '🛎️ 服務鈴 (叮叮)' },
@@ -259,18 +259,18 @@ onMounted(() => fetchSettingsAndCheckIP())
 
 const saveNewIP = async () => {
   if (!newIPInput.value.trim()) return;
-  const newIP = newIPInput.value.trim();
-  if (!savedIPs.value.includes(newIP)) {
-    savedIPs.value.push(newIP);
-    manualConfig.value.targetIP = newIP;
+  const newTarget = newIPInput.value.trim();
+  if (!savedIPs.value.includes(newTarget)) {
+    savedIPs.value.push(newTarget);
+    manualConfig.value.targetIP = newTarget;
     newIPInput.value = '';
     await saveSettingsToDB(false);
   }
 }
 
-const removeSavedIP = async (ipToRemove) => {
-  if (confirm(`確定要將 ${ipToRemove} 從 IP 清單中移除嗎？`)) {
-    savedIPs.value = savedIPs.value.filter(ip => ip !== ipToRemove);
+const removeSavedIP = async (targetToRemove) => {
+  if (confirm(`確定要將「${targetToRemove}」從名單中移除嗎？`)) {
+    savedIPs.value = savedIPs.value.filter(t => t !== targetToRemove);
     manualConfig.value.targetIP = '';
     await saveSettingsToDB(false);
   }
