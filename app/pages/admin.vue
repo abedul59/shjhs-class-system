@@ -31,17 +31,17 @@
           <button @click="currentTab = 'officers'" :class="{ active: currentTab === 'officers' }">🔐 幹部職位密碼管理</button>
           
           <button @click="currentTab = 'settings'" :class="{ active: currentTab === 'settings' }">⚙️ 系統密碼設定</button>
+          <!-- 💡 加入首頁跑馬燈設定按鈕 -->
+          <button @click="currentTab = 'marqueeSettings'" :class="{ active: currentTab === 'marqueeSettings' }">📢 首頁跑馬燈設定</button>
+          
           <button @click="currentTab = 'backup'" :class="{ active: currentTab === 'backup' }">📦 系統備份</button>
           
           <button @click="currentTab = 'visitors'" :class="{ active: currentTab === 'visitors' }">👁️ 全網站訪客紀錄</button>
           <button @click="currentTab = 'visitor'" :class="{ active: currentTab === 'visitor' }">📦 訪客足跡進階追蹤</button>
-          <button @click="currentTab = 'classroomTracker'">🖥️ 教室電腦監視器</button>
-          <button @click="currentTab = 'identityTracking'">🕵️ （家長與）實名足跡追蹤</button>
+          <button @click="currentTab = 'classroomTracker'" :class="{ active: currentTab === 'classroomTracker' }">🖥️ 教室電腦監視器</button>
+          <button @click="currentTab = 'identityTracking'" :class="{ active: currentTab === 'identityTracking' }">🕵️ （家長與）實名足跡追蹤</button>
           <button @click="currentTab = 'indexButtons'" :class="{ active: currentTab === 'indexButtons' }">🎛️ 首頁按鈕控制</button>
-          <!-- 🎯 依身分按鈕權限設定 -->
           <button @click="currentTab = 'roleSettings'" :class="{ active: currentTab === 'roleSettings' }">🎯 首頁按鈕權限設定</button>
-
-  
 
           <button @click="handleLogout" class="logout-btn">🚪 導師登出</button>
           <NuxtLink to="/" class="back-btn">⬅️ 返回前台</NuxtLink>
@@ -64,12 +64,15 @@
         <AdminCommunication v-if="currentTab === 'communication'" />
         <AdminOfficers v-if="currentTab === 'officers'" />
        
-        <!-- 💡 直接把這行加進去，並在選單加一個新按鈕即可 -->
         <AdminClassroomTracker v-if="currentTab === 'classroomTracker'" />
         <AdminIdentityTracking v-if="currentTab === 'identityTracking'" />
         <AdminVisitorTracking v-if="currentTab === 'visitor'" />
         <AdminSettings v-if="currentTab === 'settings'" />
-         <AdminIndexButtons v-if="currentTab === 'indexButtons'" />
+        
+        <!-- 💡 掛載跑馬燈獨立設定面板 -->
+        <AdminMarqueeSettings v-if="currentTab === 'marqueeSettings'" />
+        
+        <AdminIndexButtons v-if="currentTab === 'indexButtons'" />
         <AdminRoleButtonSettings v-if="currentTab === 'roleSettings'" />
         <AdminBackup v-if="currentTab === 'backup'" />
       </main>
@@ -85,7 +88,7 @@ const isUnlocked = ref(false)
 const passwordInput = ref('')
 const currentTab = ref('board')
 
-// 💡 頁面載入時檢查是否已經登入過
+// 頁面載入時檢查是否已經登入過
 onMounted(() => {
   if (sessionStorage.getItem('main_admin_logged_in') === 'true') {
     isUnlocked.value = true
@@ -110,7 +113,7 @@ const verifyPassword = async () => {
     }
     if (passwordInput.value === expectedPwd || passwordInput.value === '168168168') {
       isUnlocked.value = true
-      sessionStorage.setItem('main_admin_logged_in', 'true') // 💡 記錄登入狀態，讓返回首頁不會被登出
+      sessionStorage.setItem('main_admin_logged_in', 'true') 
       try {
         const ipRes = await fetch('https://api.ipify.org?format=json')
         const { ip } = await ipRes.json()
@@ -120,18 +123,16 @@ const verifyPassword = async () => {
   } catch (e) {
     if (passwordInput.value === '168168168') {
       isUnlocked.value = true
-      sessionStorage.setItem('main_admin_logged_in', 'true') // 💡 記錄登入狀態
+      sessionStorage.setItem('main_admin_logged_in', 'true') 
     } else { alert('❌ 密碼錯誤或無法連線至設定檔！') }
   }
 }
 
-// 💡 確實登出功能
 const handleLogout = () => {
   isUnlocked.value = false
   passwordInput.value = ''
   sessionStorage.removeItem('main_admin_logged_in')
   
-  // 順便清除可能存在的其他子系統的登入狀態，確保徹底登出
   sessionStorage.removeItem('exams_admin_logged_in')
   sessionStorage.removeItem('hygiene_admin_logged_in')
   sessionStorage.removeItem('schedule_admin_logged_in')
@@ -158,7 +159,6 @@ const handleLogout = () => {
 .header-buttons button:hover { background: #cbd5e1; }
 .header-buttons button.active { background: #3b82f6; color: white; }
 
-/* 💡 登出按鈕專屬樣式 */
 .logout-btn { background: #f97316 !important; color: white !important; }
 .logout-btn:hover { background: #ea580c !important; }
 
