@@ -20,9 +20,8 @@ const props = defineProps({
 const activeBroadcast = ref(null) 
 let pollingInterval = null
 let scheduleInterval = null
-const lastManualTrigger = ref(0)
 const lastTriggeredScheduleTime = ref('')
-const myIp = ref('') // 💡 存放本機 IP 用於精準比對
+const myIp = ref('') // 存放本機 IP
 
 // 抓取本機 IP
 const fetchMyIp = async () => {
@@ -61,24 +60,40 @@ const sounds = {
   cat: 'https://actions.google.com/sounds/v1/animals/cat_meow.ogg'
 }
 
+// 播放音效 (防卡死機制)
 const playSoundSingle = (soundUrl) => {
   return new Promise((resolve) => {
     const audio = new Audio(soundUrl)
-    audio.onended = resolve
-    audio.onerror = resolve
-    audio.play().catch(resolve) 
+    let isResolved = false
+    const finish = () => { if (!isResolved) { isResolved = true; resolve() } }
+    
+    audio.onended = finish
+    audio.onerror = finish
+    setTimeout(finish, 8000) // 強制 8 秒後無論如何往下走
+    
+    audio.play().catch((e) => {
+      console.warn("⚠️ 瀏覽器阻擋自動播放，請確認已點擊過網頁！", e)
+      finish()
+    }) 
   })
 }
 
+// 語音朗讀 (防卡死機制)
 const speakText = (text) => {
   return new Promise((resolve) => {
     if (!text || !window.speechSynthesis) return resolve()
+    
+    let isResolved = false
+    const finish = () => { if (!isResolved) { isResolved = true; resolve() } }
+
     window.speechSynthesis.cancel() 
     const utterance = new SpeechSynthesisUtterance(text)
     utterance.lang = 'zh-TW'
     utterance.rate = 1.0 
-    utterance.onend = resolve
-    utterance.onerror = resolve
+    utterance.onend = finish
+    utterance.onerror = finish
+    
+    setTimeout(finish, 15000) // 強制 15 秒後往下走
     window.speechSynthesis.speak(utterance)
   })
 }
@@ -86,7 +101,7 @@ const speakText = (text) => {
 const triggerBroadcast = async (broadcastData) => {
   activeBroadcast.value = { text: broadcastData.text }
   
-  // 1. 播放音效 (依設定次數)
+  // 1. 播放音效
   if (broadcastData.sound && broadcastData.sound !== 'none' && sounds[broadcastData.sound]) {
     const count = broadcastData.playCount || 1
     for (let i = 0; i < count; i++) {
@@ -95,43 +110,50 @@ const triggerBroadcast = async (broadcastData) => {
     }
   }
 
-  // 2. 💡 語音朗讀 (支援自訂重複次數)
+  // 2. 語音朗讀
   const ttsCount = broadcastData.textPlayCount || 1
   for (let i = 0; i < ttsCount; i++) {
     await speakText(broadcastData.text)
-    if (i < ttsCount - 1) await new Promise(r => setTimeout(r, 800)) // 重複之間的停頓
+    if (i < ttsCount - 1) await new Promise(r => setTimeout(r, 800)) 
   }
 
-  // 3. 語音結束後，畫面停留 5 秒收起
+  // 3. 關閉畫面
   setTimeout(() => { activeBroadcast.value = null }, 5000)
 }
 
-// 💡 核心驗證函數：判斷此電腦是否該響應廣播
+// 驗證 IP
 const shouldProcessBroadcast = (targetIP) => {
-  if (!props.isIpBrownlisted) return false; // 大前提：必須在褐色名單內
+  if (!props.isIpBrownlisted) return false; 
   if (targetIP && targetIP.trim() !== '') {
-    // 若有指定單一 IP，則必須完全吻合本機 IP
     return myIp.value === targetIP.trim();
   }
-  return true; // 若留空，則所有褐色名單皆響應
+  return true; 
 }
 
+// 💡 監聽手動廣播 (改用 localStorage 紀錄，絕不漏接！)
 const pollManualBroadcast = async () => {
+  if (!props.isIpBrownlisted) return; 
+  
   try {
     const { data } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'broadcast_settings').maybeSingle()
     if (data && data.setting_value && data.setting_value.manual) {
       const config = data.setting_value.manual
-      if (config.triggerTimestamp > lastManualTrigger.value) {
-        if (lastManualTrigger.value !== 0 && shouldProcessBroadcast(config.targetIP)) { 
+      const lastPlayedStamp = Number(localStorage.getItem('last_played_broadcast')) || 0
+      
+      // 如果資料庫的發送時間戳記 > 本機播過的時間戳記 = 有新廣播！
+      if (config.triggerTimestamp > lastPlayedStamp) {
+        if (shouldProcessBroadcast(config.targetIP)) { 
           triggerBroadcast(config) 
         }
-        lastManualTrigger.value = config.triggerTimestamp
+        localStorage.setItem('last_played_broadcast', config.triggerTimestamp)
       }
     }
   } catch (e) {}
 }
 
 const checkSchedules = async () => {
+  if (!props.isIpBrownlisted) return; 
+
   const now = new Date()
   const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
   const currentSec = now.getSeconds()
@@ -143,7 +165,6 @@ const checkSchedules = async () => {
     if (data && data.setting_value && data.setting_value.schedules) {
       const activeSchedules = data.setting_value.schedules.filter(s => s.isActive)
       for (const schedule of activeSchedules) {
-        // 💡 觸發前驗證 IP 權限
         if (schedule.time === currentHHMM && shouldProcessBroadcast(schedule.targetIP)) {
           lastTriggeredScheduleTime.value = currentHHMM
           triggerBroadcast(schedule)
@@ -173,7 +194,7 @@ onUnmounted(() => {
   width: 100%; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); color: #78350f;
   padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
   border: 2px solid #b45309; position: relative; overflow: hidden;
-  animation: slide-down 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-sizing: border-box;
+  animation: slide-down 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-sizing: border-box; z-index: 50;
 }
 .broadcast-container::after { content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%; background: linear-gradient(to right, transparent, rgba(255,255,255,0.6), transparent); animation: shine 3s infinite; }
 .broadcast-content { display: flex; align-items: center; font-size: 1.3rem; font-weight: 900; }
