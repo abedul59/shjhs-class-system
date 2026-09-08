@@ -20,7 +20,7 @@ const props = defineProps({
 const activeBroadcast = ref(null) 
 let pollingInterval = null
 let scheduleInterval = null
-let hideTimeout = null // 💡 用來控制畫面關閉的計時器
+let hideTimeout = null 
 const lastTriggeredScheduleTime = ref('')
 const myIp = ref('')
 
@@ -32,16 +32,38 @@ const fetchMyIp = async () => {
   } catch (e) {}
 }
 
-// 💡 全面換成 100% 相容所有瀏覽器的 .mp3 格式 (開源 CDN)
+// 💡 擴充為 30 種 100% 相容的 MP3 音效庫
 const sounds = {
   bell_ring: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/bell_ring.mp3',
   door_bell: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/door_bell.mp3',
-  button_tiny: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/button_tiny.mp3',
   computer_error: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/computer_error.mp3',
   water_droplet: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/water_droplet.mp3',
   glass: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/glass.mp3',
   tap: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/tap.mp3',
-  branch_break: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/branch_break.mp3'
+  branch_break: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/branch_break.mp3',
+  button_tiny: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/button_tiny.mp3',
+  button_click: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/button_click.mp3',
+  button_push: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/button_push.mp3',
+  camera_flashing: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/camera_flashing.mp3',
+  cd_tray: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/cd_tray.mp3',
+  door_bump: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/door_bump.mp3',
+  keyboard_desk: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/keyboard_desk.mp3',
+  metal_plate: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/metal_plate.mp3',
+  pop_cork: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/pop_cork.mp3',
+  snap: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/snap.mp3',
+  staple_gun: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/staple_gun.mp3',
+  chord_1: 'https://s3.amazonaws.com/freecodecamp/drums/Chord_1.mp3',
+  chord_2: 'https://s3.amazonaws.com/freecodecamp/drums/Chord_2.mp3',
+  chord_3: 'https://s3.amazonaws.com/freecodecamp/drums/Chord_3.mp3',
+  heater_1: 'https://s3.amazonaws.com/freecodecamp/drums/Heater-1.mp3',
+  heater_2: 'https://s3.amazonaws.com/freecodecamp/drums/Heater-2.mp3',
+  heater_3: 'https://s3.amazonaws.com/freecodecamp/drums/Heater-3.mp3',
+  kick_n_hat: 'https://s3.amazonaws.com/freecodecamp/drums/Kick_n_Hat.mp3',
+  punchy_kick: 'https://s3.amazonaws.com/freecodecamp/drums/punchy_kick_1.mp3',
+  side_stick: 'https://s3.amazonaws.com/freecodecamp/drums/side_stick_1.mp3',
+  brk_snr: 'https://s3.amazonaws.com/freecodecamp/drums/Brk_Snr.mp3',
+  dry_ohh: 'https://s3.amazonaws.com/freecodecamp/drums/Dry_Ohh.mp3',
+  dsc_oh: 'https://s3.amazonaws.com/freecodecamp/drums/Dsc_Oh.mp3'
 }
 
 const playSoundSingle = (soundUrl) => {
@@ -83,10 +105,8 @@ const speakText = (text) => {
 const triggerBroadcast = async (broadcastData) => {
   activeBroadcast.value = { text: broadcastData.text }
   
-  // 每次觸發新廣播時，清除舊的關閉計時器
   if (hideTimeout) clearTimeout(hideTimeout)
   
-  // 1. 播放 .mp3 音效
   if (broadcastData.sound && broadcastData.sound !== 'none' && sounds[broadcastData.sound]) {
     const count = broadcastData.playCount || 1
     for (let i = 0; i < count; i++) {
@@ -95,14 +115,12 @@ const triggerBroadcast = async (broadcastData) => {
     }
   }
 
-  // 2. 語音朗讀
   const ttsCount = broadcastData.textPlayCount || 1
   for (let i = 0; i < ttsCount; i++) {
     await speakText(broadcastData.text)
     if (i < ttsCount - 1) await new Promise(r => setTimeout(r, 800)) 
   }
 
-  // 3. 💡 語音結束後，依照設定的時間保留在畫面上 (預設 120 秒 = 2 分鐘)
   const durationSec = broadcastData.displayDuration || 120 
   hideTimeout = setTimeout(() => { 
     activeBroadcast.value = null 
