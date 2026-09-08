@@ -31,8 +31,9 @@
           <button @click="currentTab = 'officers'" :class="{ active: currentTab === 'officers' }">🔐 幹部職位密碼管理</button>
           
           <button @click="currentTab = 'settings'" :class="{ active: currentTab === 'settings' }">⚙️ 系統密碼設定</button>
-          <!-- 💡 加入首頁跑馬燈設定按鈕 -->
           <button @click="currentTab = 'marqueeSettings'" :class="{ active: currentTab === 'marqueeSettings' }">📢 首頁跑馬燈設定</button>
+          <!-- 💡 加入廣播系統按鈕 -->
+          <button @click="currentTab = 'broadcast'" :class="{ active: currentTab === 'broadcast' }">📢 遠端廣播與定時</button>
           
           <button @click="currentTab = 'backup'" :class="{ active: currentTab === 'backup' }">📦 系統備份</button>
           
@@ -68,9 +69,10 @@
         <AdminIdentityTracking v-if="currentTab === 'identityTracking'" />
         <AdminVisitorTracking v-if="currentTab === 'visitor'" />
         <AdminSettings v-if="currentTab === 'settings'" />
-        
-        <!-- 💡 掛載跑馬燈獨立設定面板 -->
         <AdminMarqueeSettings v-if="currentTab === 'marqueeSettings'" />
+        
+        <!-- 💡 掛載廣播獨立設定面板 -->
+        <AdminBroadcast v-if="currentTab === 'broadcast'" />
         
         <AdminIndexButtons v-if="currentTab === 'indexButtons'" />
         <AdminRoleButtonSettings v-if="currentTab === 'roleSettings'" />
@@ -88,7 +90,6 @@ const isUnlocked = ref(false)
 const passwordInput = ref('')
 const currentTab = ref('board')
 
-// 頁面載入時檢查是否已經登入過
 onMounted(() => {
   if (sessionStorage.getItem('main_admin_logged_in') === 'true') {
     isUnlocked.value = true
