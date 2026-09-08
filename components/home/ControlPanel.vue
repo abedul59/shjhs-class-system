@@ -2,7 +2,8 @@
   <div class="control-card">
     
     <!-- 🔊 新增：獨立運作的廣播接收器 (放在最頂層) -->
-    <BroadcastWidget />
+    <!-- 🔊 獨立運作的廣播接收器 (加入 IP 限制防護) -->
+    <BroadcastWidget :isIpBrownlisted="isIpBrownlisted" />
 
     <!-- 📢 獨立跑馬燈區塊 -->
     <MarqueeWidget :marqueeData="marqueeSettings" />
