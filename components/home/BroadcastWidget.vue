@@ -1,12 +1,12 @@
 <template>
   <div class="broadcast-wrapper">
-    <!-- 💡 新增：常駐的設備名稱設定鈕 (僅在教室網路下顯示) -->
+    <!-- 設備名稱設定鈕 (僅在教室網路下顯示) -->
     <div v-if="isIpBrownlisted && !activeBroadcast" class="device-badge" @click="setDeviceName" title="點擊設定此台電腦的廣播專屬名稱">
       <span v-if="!deviceName" class="pulse-dot"></span>
       💻 廣播接收名稱：<span class="d-name">{{ deviceName || '尚未設定 (點擊綁定)' }}</span>
     </div>
 
-    <!-- 原本的廣播橫幅 -->
+    <!-- 廣播橫幅本體 -->
     <div v-if="activeBroadcast" class="broadcast-container">
       <div class="broadcast-content">
         <span class="broadcast-icon">📢 系統廣播：</span>
@@ -15,6 +15,9 @@
         </div>
       </div>
     </div>
+
+    <!-- 💡 核心修正：隱藏的實體音效播放器，大幅提高背景分頁的播放成功率 -->
+    <audio ref="audioPlayerRef" style="display: none;" preload="auto"></audio>
   </div>
 </template>
 
@@ -32,9 +35,10 @@ let scheduleInterval = null
 let hideTimeout = null 
 const lastTriggeredScheduleTime = ref('')
 const myIp = ref('')
-
-// 💡 存放這台電腦專屬的名稱 (存在瀏覽器本地)
 const deviceName = ref('')
+
+// 綁定實體播放器
+const audioPlayerRef = ref(null)
 
 const fetchMyIp = async () => {
   try {
@@ -77,7 +81,6 @@ const sounds = {
   dsc_oh: 'https://s3.amazonaws.com/freecodecamp/drums/Dsc_Oh.mp3'
 }
 
-// 💡 手動設定這台電腦的名稱
 const setDeviceName = () => {
   const input = prompt('請為這台電腦設定專屬名稱（例如：701教室），以便後台進行單獨廣播：', deviceName.value)
   if (input !== null) {
@@ -87,17 +90,38 @@ const setDeviceName = () => {
   }
 }
 
+// 💡 核心修正：透過實體的 <audio> 標籤播放，抵抗背景分頁阻擋
 const playSoundSingle = (soundUrl) => {
   return new Promise((resolve) => {
-    const audio = new Audio(soundUrl)
+    if (!audioPlayerRef.value) return resolve() // 防呆
+
     let isResolved = false
-    const finish = () => { if (!isResolved) { isResolved = true; resolve() } }
+    const finish = () => { 
+      if (!isResolved) { 
+        isResolved = true
+        audioPlayerRef.value.onended = null
+        audioPlayerRef.value.onerror = null
+        resolve() 
+      } 
+    }
     
-    audio.onended = finish
-    audio.onerror = finish
+    audioPlayerRef.value.src = soundUrl
+    audioPlayerRef.value.load()
+    audioPlayerRef.value.onended = finish
+    audioPlayerRef.value.onerror = finish
+    
+    // 強制 8 秒後必定往下走，避免任何卡死
     setTimeout(finish, 8000) 
     
-    audio.play().catch((e) => { finish() }) 
+    const playPromise = audioPlayerRef.value.play()
+    if (playPromise !== undefined) {
+      playPromise.catch((e) => {
+        console.warn("⚠️ 背景分頁自動播放可能被阻擋", e)
+        finish()
+      })
+    } else {
+      finish()
+    }
   })
 }
 
@@ -125,35 +149,37 @@ const triggerBroadcast = async (broadcastData) => {
   
   if (hideTimeout) clearTimeout(hideTimeout)
   
-  if (broadcastData.sound && broadcastData.sound !== 'none' && sounds[broadcastData.sound]) {
+  // 1. 播放音效 (加入防錯保護)
+  const soundKey = broadcastData.sound || 'bell_ring'
+  if (soundKey !== 'none' && sounds[soundKey]) {
     const count = broadcastData.playCount || 1
     for (let i = 0; i < count; i++) {
-      await playSoundSingle(sounds[broadcastData.sound])
+      await playSoundSingle(sounds[soundKey])
       await new Promise(r => setTimeout(r, 500)) 
     }
   }
 
+  // 2. 語音朗讀
   const ttsCount = broadcastData.textPlayCount || 1
   for (let i = 0; i < ttsCount; i++) {
     await speakText(broadcastData.text)
     if (i < ttsCount - 1) await new Promise(r => setTimeout(r, 800)) 
   }
 
+  // 3. 畫面保留時間
   const durationSec = broadcastData.displayDuration || 120 
   hideTimeout = setTimeout(() => { 
     activeBroadcast.value = null 
   }, durationSec * 1000)
 }
 
-// 💡 核心驗證：支援比對「公共 IP」與「自訂設備名稱」
 const shouldProcessBroadcast = (targetNameOrIP) => {
   if (!props.isIpBrownlisted) return false; 
   if (targetNameOrIP && targetNameOrIP.trim() !== '') {
     const target = targetNameOrIP.trim()
-    // 若後台輸入的是本機的 IP 或是 本機自訂的名稱，就通過！
     return myIp.value === target || deviceName.value === target;
   }
-  return true; // 若留空，則所有褐色名單全播
+  return true; 
 }
 
 const pollManualBroadcast = async () => {
@@ -182,7 +208,8 @@ const checkSchedules = async () => {
   const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
   const currentSec = now.getSeconds()
 
-  if (currentSec > 2 || lastTriggeredScheduleTime.value === currentHHMM) return
+  // 💡 核心修正：將觸發寬容度拉長到 15 秒，避免背景分頁被瀏覽器降速而錯過廣播
+  if (currentSec > 15 || lastTriggeredScheduleTime.value === currentHHMM) return
 
   try {
     const { data } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'broadcast_settings').maybeSingle()
@@ -200,7 +227,6 @@ const checkSchedules = async () => {
 }
 
 onMounted(() => {
-  // 載入儲存在本地的設備名稱
   deviceName.value = localStorage.getItem('broadcast_device_name') || ''
   
   fetchMyIp().then(() => {
@@ -218,23 +244,12 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.broadcast-wrapper {
-  width: 100%;
-}
+.broadcast-wrapper { width: 100%; }
 
-/* 設備名稱小標籤 */
 .device-badge {
-  text-align: right;
-  font-size: 0.85rem;
-  color: #94a3b8;
-  cursor: pointer;
-  margin-bottom: 8px;
-  padding-right: 5px;
-  transition: 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 5px;
+  text-align: right; font-size: 0.85rem; color: #94a3b8; cursor: pointer;
+  margin-bottom: 8px; padding-right: 5px; transition: 0.2s;
+  display: flex; align-items: center; justify-content: flex-end; gap: 5px;
 }
 .device-badge:hover { color: #3b82f6; }
 .d-name { font-weight: bold; color: #64748b; }
@@ -246,7 +261,6 @@ onUnmounted(() => {
 }
 @keyframes pulse-dot-anim { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0.4; transform: scale(1.2); } }
 
-/* 廣播橫幅本體 */
 .broadcast-container {
   width: 100%; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); color: #78350f;
   padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
