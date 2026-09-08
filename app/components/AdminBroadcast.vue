@@ -11,7 +11,7 @@
       </div>
     </div>
 
-    <!-- 罐頭訊息 -->
+    <!-- 1. 罐頭訊息 -->
     <div v-if="presets.length > 0" class="presets-section">
       <div class="presets-header">📦 快速載入罐頭訊息：</div>
       <div class="presets-list">
@@ -22,7 +22,7 @@
       </div>
     </div>
 
-    <!-- 手動廣播 -->
+    <!-- 2. 手動廣播 -->
     <div class="card manual-card">
       <div class="card-header-row">
         <h4 class="card-title">🚨 即時遙控發送 (手動廣播)</h4>
@@ -34,38 +34,31 @@
           <label>📝 廣播文字內容 (將於音效後自動語音朗讀)：</label>
           <input type="text" v-model="manualConfig.text" class="custom-input large-input" placeholder="例如：請各組組長現在到導師辦公室集合！" />
         </div>
-
         <div class="form-group">
           <label>🔊 播放音效 (高相容 MP3)：</label>
           <select v-model="manualConfig.sound" class="custom-input">
             <option v-for="opt in soundOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
         </div>
-
         <div class="form-group">
           <label>🔁 音效次數：</label>
           <select v-model.number="manualConfig.playCount" class="custom-input">
             <option value="1">1 次</option><option value="2">2 次</option><option value="3">3 次</option>
           </select>
         </div>
-
         <div class="form-group">
           <label>🗣️ 語音朗讀次數：</label>
           <select v-model.number="manualConfig.textPlayCount" class="custom-input">
             <option value="1">1 次</option><option value="2">2 次 (建議)</option><option value="3">3 次</option>
           </select>
         </div>
-
         <div class="form-group">
           <label>⏳ 畫面保留時間：</label>
           <select v-model.number="manualConfig.displayDuration" class="custom-input">
-            <option value="10">10 秒</option><option value="30">30 秒</option>
-            <option value="60">1 分鐘</option><option value="120">2 分鐘</option>
-            <option value="300">5 分鐘</option><option value="600">10 分鐘</option>
+            <option value="10">10 秒</option><option value="30">30 秒</option><option value="60">1 分鐘</option>
+            <option value="120">2 分鐘</option><option value="300">5 分鐘</option><option value="600">10 分鐘</option>
           </select>
         </div>
-
-        <!-- 💡 這裡將 IP 提示改為設備名稱 -->
         <div class="form-group full-width">
           <label>🎯 指定接收單一【設備名稱】 (解決學校共用IP)：</label>
           <div class="ip-control-group">
@@ -90,25 +83,21 @@
       </div>
     </div>
 
-    <!-- 定時排程 -->
+    <!-- 3. 定時排程 -->
     <div class="card schedule-card">
       <div class="schedule-header">
         <h4 class="card-title">⏰ 定時廣播排程 (每日循環)</h4>
         <button @click="addSchedule" class="btn-add">➕ 新增一筆排程</button>
       </div>
-
       <div v-if="schedules.length === 0" class="empty-state">目前沒有任何定時排程。</div>
-
       <div v-else class="schedule-list">
         <div v-for="(sch, index) in schedules" :key="index" class="schedule-item" :class="{'is-disabled': !sch.isActive}">
-          
           <div class="sch-row top-row">
             <input type="checkbox" v-model="sch.isActive" class="toggle-chk" title="啟用/停用" />
             <input type="time" v-model="sch.time" class="time-input" required />
             <input type="text" v-model="sch.text" class="custom-input text-input" placeholder="排程廣播文字..." />
             <button @click="removeSchedule(index)" class="btn-del" title="刪除此排程">🗑️</button>
           </div>
-
           <div class="sch-row bottom-row">
             <div class="mini-group">
               <label>音效:</label>
@@ -118,19 +107,13 @@
             </div>
             <div class="mini-group">
               <label>音/語次:</label>
-              <select v-model.number="sch.playCount" class="custom-input mini-select-small">
-                <option value="1">1</option><option value="2">2</option><option value="3">3</option>
-              </select>
-              <select v-model.number="sch.textPlayCount" class="custom-input mini-select-small">
-                <option value="1">1</option><option value="2">2</option><option value="3">3</option>
-              </select>
+              <select v-model.number="sch.playCount" class="custom-input mini-select-small"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
+              <select v-model.number="sch.textPlayCount" class="custom-input mini-select-small"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
             </div>
             <div class="mini-group">
               <label>保留:</label>
               <select v-model.number="sch.displayDuration" class="custom-input mini-select-small">
-                <option value="10">10秒</option><option value="30">30秒</option>
-                <option value="60">1分</option><option value="120">2分</option>
-                <option value="300">5分</option>
+                <option value="10">10秒</option><option value="30">30秒</option><option value="60">1分</option><option value="120">2分</option><option value="300">5分</option>
               </select>
             </div>
             <div class="mini-group ip-group">
@@ -141,16 +124,56 @@
               </select>
             </div>
           </div>
-
         </div>
       </div>
-
       <div class="save-row">
         <button @click="saveSettingsToDB" class="btn-save-all" :disabled="isSavingSch">
           {{ isSavingSch ? '儲存中...' : '💾 儲存所有排程與罐頭設定' }}
         </button>
       </div>
     </div>
+
+    <!-- 💡 4. 新增：歷史紀錄與匯出匯入 (Audit Logs) -->
+    <div class="card logs-card">
+      <div class="card-header-row">
+        <h4 class="card-title">📝 廣播歷史與日誌追蹤</h4>
+        <div class="log-actions">
+          <button @click="exportJSON" class="btn-outline">📄 匯出 JSON</button>
+          <button @click="exportCSV" class="btn-outline">📊 匯出 CSV (Excel)</button>
+          <button @click="$refs.fileInput.click()" class="btn-outline-primary">📥 匯入還原紀錄</button>
+          <input type="file" ref="fileInput" accept=".json, .csv" @change="importLogs" style="display:none" />
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table class="logs-table">
+          <thead>
+            <tr>
+              <th>發生時間</th>
+              <th>觸發類型</th>
+              <th>廣播文字內容</th>
+              <th>音效</th>
+              <th>指定接收對象</th>
+              <th>指令發出 IP</th>
+              <th>操作設備 (瀏覽器)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="broadcastLogs.length === 0"><td colspan="7" class="empty-log">目前尚無任何廣播紀錄。</td></tr>
+            <tr v-for="log in broadcastLogs" :key="log.id">
+              <td class="col-time">{{ log.time }}</td>
+              <td><span class="type-tag" :class="log.type === '手動發送' ? 't-manual' : 't-auto'">{{ log.type }}</span></td>
+              <td class="col-text">{{ log.text }}</td>
+              <td>{{ getSoundLabel(log.sound) }}</td>
+              <td class="col-ip">{{ log.targetIP }}</td>
+              <td class="col-ip">{{ log.ip }}</td>
+              <td class="col-ua" :title="log.userAgent">{{ formatUA(log.userAgent) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -159,84 +182,53 @@ import { ref, onMounted } from 'vue'
 const supabase = useSupabaseClient()
 
 const soundOptions = [
-  { value: 'none', label: '🔇 無音效 (純文字)' },
-  { value: 'bell_ring', label: '🛎️ 服務鈴 (叮叮)' },
-  { value: 'door_bell', label: '🚪 門鈴 (叮咚)' },
-  { value: 'computer_error', label: '⚠️ 電腦警告音' },
-  { value: 'water_droplet', label: '💧 水滴聲' },
-  { value: 'glass', label: '🥂 敲擊玻璃杯' },
-  { value: 'tap', label: '👆 輕觸聲' },
-  { value: 'branch_break', label: '🪵 樹枝斷裂聲' },
-  { value: 'button_tiny', label: '🖱️ 短促按鍵音' },
-  { value: 'button_click', label: '🖱️ 滑鼠點擊' },
-  { value: 'button_push', label: '🔘 按下按鈕' },
-  { value: 'camera_flashing', label: '📸 相機快門' },
-  { value: 'cd_tray', label: '💿 光碟機退片' },
-  { value: 'door_bump', label: '🚪 撞門聲' },
-  { value: 'keyboard_desk', label: '⌨️ 鍵盤敲擊' },
-  { value: 'metal_plate', label: '🛡️ 金屬敲擊' },
-  { value: 'pop_cork', label: '🍾 開香檳' },
-  { value: 'snap', label: '🫰 彈指聲' },
-  { value: 'staple_gun', label: '🖇️ 釘書機' },
-  { value: 'chord_1', label: '🎹 電子和弦 1' },
-  { value: 'chord_2', label: '🎹 電子和弦 2' },
-  { value: 'chord_3', label: '🎹 電子和弦 3' },
-  { value: 'heater_1', label: '🥁 爵士鼓聲 1' },
-  { value: 'heater_2', label: '🥁 爵士鼓聲 2' },
-  { value: 'heater_3', label: '🥁 爵士鼓聲 3' },
-  { value: 'kick_n_hat', label: '🥁 踢鼓與鈸' },
-  { value: 'punchy_kick', label: '🥁 重踢鼓' },
-  { value: 'side_stick', label: '🥁 鼓邊敲擊' },
-  { value: 'brk_snr', label: '🥁 小鼓打擊' },
-  { value: 'dry_ohh', label: '🥁 銅鈸開啟' },
+  { value: 'none', label: '🔇 無音效 (純文字)' }, { value: 'bell_ring', label: '🛎️ 服務鈴 (叮叮)' },
+  { value: 'door_bell', label: '🚪 門鈴 (叮咚)' }, { value: 'computer_error', label: '⚠️ 電腦警告音' },
+  { value: 'water_droplet', label: '💧 水滴聲' }, { value: 'glass', label: '🥂 敲擊玻璃杯' },
+  { value: 'tap', label: '👆 輕觸聲' }, { value: 'branch_break', label: '🪵 樹枝斷裂聲' },
+  { value: 'button_tiny', label: '🖱️ 短促按鍵音' }, { value: 'button_click', label: '🖱️ 滑鼠點擊' },
+  { value: 'button_push', label: '🔘 按下按鈕' }, { value: 'camera_flashing', label: '📸 相機快門' },
+  { value: 'cd_tray', label: '💿 光碟機退片' }, { value: 'door_bump', label: '🚪 撞門聲' },
+  { value: 'keyboard_desk', label: '⌨️ 鍵盤敲擊' }, { value: 'metal_plate', label: '🛡️ 金屬敲擊' },
+  { value: 'pop_cork', label: '🍾 開香檳' }, { value: 'snap', label: '🫰 彈指聲' },
+  { value: 'staple_gun', label: '🖇️ 釘書機' }, { value: 'chord_1', label: '🎹 電子和弦 1' },
+  { value: 'chord_2', label: '🎹 電子和弦 2' }, { value: 'chord_3', label: '🎹 電子和弦 3' },
+  { value: 'heater_1', label: '🥁 爵士鼓聲 1' }, { value: 'heater_2', label: '🥁 爵士鼓聲 2' },
+  { value: 'heater_3', label: '🥁 爵士鼓聲 3' }, { value: 'kick_n_hat', label: '🥁 踢鼓與鈸' },
+  { value: 'punchy_kick', label: '🥁 重踢鼓' }, { value: 'side_stick', label: '🥁 鼓邊敲擊' },
+  { value: 'brk_snr', label: '🥁 小鼓打擊' }, { value: 'dry_ohh', label: '🥁 銅鈸開啟' },
   { value: 'dsc_oh', label: '🥁 銅鈸迴響' }
 ]
 
 const sounds = {
-  bell_ring: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/bell_ring.mp3',
-  door_bell: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/door_bell.mp3',
-  computer_error: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/computer_error.mp3',
-  water_droplet: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/water_droplet.mp3',
-  glass: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/glass.mp3',
-  tap: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/tap.mp3',
-  branch_break: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/branch_break.mp3',
-  button_tiny: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/button_tiny.mp3',
-  button_click: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/button_click.mp3',
-  button_push: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/button_push.mp3',
-  camera_flashing: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/camera_flashing.mp3',
-  cd_tray: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/cd_tray.mp3',
-  door_bump: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/door_bump.mp3',
-  keyboard_desk: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/keyboard_desk.mp3',
-  metal_plate: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/metal_plate.mp3',
-  pop_cork: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/pop_cork.mp3',
-  snap: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/snap.mp3',
-  staple_gun: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/staple_gun.mp3',
-  chord_1: 'https://s3.amazonaws.com/freecodecamp/drums/Chord_1.mp3',
-  chord_2: 'https://s3.amazonaws.com/freecodecamp/drums/Chord_2.mp3',
-  chord_3: 'https://s3.amazonaws.com/freecodecamp/drums/Chord_3.mp3',
-  heater_1: 'https://s3.amazonaws.com/freecodecamp/drums/Heater-1.mp3',
-  heater_2: 'https://s3.amazonaws.com/freecodecamp/drums/Heater-2.mp3',
-  heater_3: 'https://s3.amazonaws.com/freecodecamp/drums/Heater-3.mp3',
-  kick_n_hat: 'https://s3.amazonaws.com/freecodecamp/drums/Kick_n_Hat.mp3',
-  punchy_kick: 'https://s3.amazonaws.com/freecodecamp/drums/punchy_kick_1.mp3',
-  side_stick: 'https://s3.amazonaws.com/freecodecamp/drums/side_stick_1.mp3',
-  brk_snr: 'https://s3.amazonaws.com/freecodecamp/drums/Brk_Snr.mp3',
-  dry_ohh: 'https://s3.amazonaws.com/freecodecamp/drums/Dry_Ohh.mp3',
-  dsc_oh: 'https://s3.amazonaws.com/freecodecamp/drums/Dsc_Oh.mp3'
+  bell_ring: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/bell_ring.mp3', door_bell: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/door_bell.mp3',
+  computer_error: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/computer_error.mp3', water_droplet: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/water_droplet.mp3',
+  glass: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/glass.mp3', tap: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/tap.mp3',
+  branch_break: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/branch_break.mp3', button_tiny: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/button_tiny.mp3',
+  button_click: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/button_click.mp3', button_push: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/button_push.mp3',
+  camera_flashing: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/camera_flashing.mp3', cd_tray: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/cd_tray.mp3',
+  door_bump: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/door_bump.mp3', keyboard_desk: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/keyboard_desk.mp3',
+  metal_plate: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/metal_plate.mp3', pop_cork: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/pop_cork.mp3',
+  snap: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/snap.mp3', staple_gun: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/staple_gun.mp3',
+  chord_1: 'https://s3.amazonaws.com/freecodecamp/drums/Chord_1.mp3', chord_2: 'https://s3.amazonaws.com/freecodecamp/drums/Chord_2.mp3',
+  chord_3: 'https://s3.amazonaws.com/freecodecamp/drums/Chord_3.mp3', heater_1: 'https://s3.amazonaws.com/freecodecamp/drums/Heater-1.mp3',
+  heater_2: 'https://s3.amazonaws.com/freecodecamp/drums/Heater-2.mp3', heater_3: 'https://s3.amazonaws.com/freecodecamp/drums/Heater-3.mp3',
+  kick_n_hat: 'https://s3.amazonaws.com/freecodecamp/drums/Kick_n_Hat.mp3', punchy_kick: 'https://s3.amazonaws.com/freecodecamp/drums/punchy_kick_1.mp3',
+  side_stick: 'https://s3.amazonaws.com/freecodecamp/drums/side_stick_1.mp3', brk_snr: 'https://s3.amazonaws.com/freecodecamp/drums/Brk_Snr.mp3',
+  dry_ohh: 'https://s3.amazonaws.com/freecodecamp/drums/Dry_Ohh.mp3', dsc_oh: 'https://s3.amazonaws.com/freecodecamp/drums/Dsc_Oh.mp3'
 }
 
-const isSending = ref(false)
-const isSavingSch = ref(false)
-const isTesting = ref(false)
-
-const currentIP = ref('檢查中...')
-const isCurrentDeviceClassroom = ref(false)
+const isSending = ref(false); const isSavingSch = ref(false); const isTesting = ref(false)
+const currentIP = ref('檢查中...'); const isCurrentDeviceClassroom = ref(false)
 
 const manualConfig = ref({ text: '', sound: 'bell_ring', playCount: 1, textPlayCount: 1, displayDuration: 120, targetIP: '', triggerTimestamp: 0 })
-const schedules = ref([])
-const presets = ref([]) 
-const savedIPs = ref([]) 
-const newIPInput = ref('')
+const schedules = ref([]); const presets = ref([]); const savedIPs = ref([]); const newIPInput = ref('')
+const broadcastLogs = ref([]) // 💡 存放歷史紀錄
+
+const fileInput = ref(null)
+
+const getSoundLabel = (val) => { const f = soundOptions.find(s => s.value === val); return f ? f.label : val }
+const formatUA = (ua) => { if (!ua) return '未知'; if (ua.includes('Chrome')) return 'Chrome / Edge'; if (ua.includes('Safari')) return 'Safari'; return '其他瀏覽器' }
 
 const fetchSettingsAndCheckIP = async () => {
   const { data: bData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'broadcast_settings').maybeSingle()
@@ -245,6 +237,10 @@ const fetchSettingsAndCheckIP = async () => {
     if (bData.setting_value.presets) presets.value = bData.setting_value.presets
     if (bData.setting_value.savedIPs) savedIPs.value = bData.setting_value.savedIPs
   }
+
+  // 💡 載入日誌資料
+  const { data: logData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'broadcast_logs').maybeSingle()
+  if (logData && logData.setting_value) { broadcastLogs.value = logData.setting_value }
 
   try {
     const ipRes = await fetch('https://api.ipify.org?format=json')
@@ -257,84 +253,115 @@ const fetchSettingsAndCheckIP = async () => {
 
 onMounted(() => fetchSettingsAndCheckIP())
 
-const saveNewIP = async () => {
-  if (!newIPInput.value.trim()) return;
-  const newTarget = newIPInput.value.trim();
-  if (!savedIPs.value.includes(newTarget)) {
-    savedIPs.value.push(newTarget);
-    manualConfig.value.targetIP = newTarget;
-    newIPInput.value = '';
-    await saveSettingsToDB(false);
+// === 💡 日誌核心：寫入手動廣播日誌 ===
+const appendManualLog = async () => {
+  const newLog = {
+    id: Date.now(),
+    time: new Date().toLocaleString('zh-TW', { hour12: false }),
+    type: '手動發送',
+    text: manualConfig.value.text,
+    sound: manualConfig.value.sound,
+    targetIP: manualConfig.value.targetIP || '全發送',
+    ip: currentIP.value,
+    userAgent: navigator.userAgent
   }
+  broadcastLogs.value.unshift(newLog)
+  if (broadcastLogs.value.length > 500) broadcastLogs.value = broadcastLogs.value.slice(0, 500)
+  await supabase.from('system_settings').upsert({ setting_key: 'broadcast_logs', setting_value: broadcastLogs.value }, { onConflict: 'setting_key' })
+}
+
+// === 💡 匯出與匯入功能 ===
+const exportJSON = () => {
+  const dataStr = JSON.stringify(broadcastLogs.value, null, 2);
+  const blob = new Blob([dataStr], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `broadcast_logs_${Date.now()}.json`; a.click();
+}
+
+const exportCSV = () => {
+  const headers = ['時間', '類型', '廣播內容', '音效代碼', '發送目標', '指令發出設備IP', '瀏覽器資訊'];
+  const rows = broadcastLogs.value.map(l => [ l.time, l.type, `"${(l.text || '').replace(/"/g, '""')}"`, l.sound, `"${l.targetIP}"`, l.ip, `"${(l.userAgent || '').replace(/"/g, '""')}"` ]);
+  const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" }); // 加 BOM 讓 Excel 支援中文
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `broadcast_logs_${Date.now()}.csv`; a.click();
+}
+
+// 簡易自製 CSV Parser (用於支援匯入)
+const parseCSVRow = (str) => {
+  let result = []; let current = ''; let inQuotes = false;
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    if (char === '"') {
+      if (inQuotes && str[i+1] === '"') { current += '"'; i++; } else { inQuotes = !inQuotes; }
+    } else if (char === ',' && !inQuotes) { result.push(current); current = ''; } else { current += char; }
+  }
+  result.push(current); return result;
+}
+
+const importLogs = (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (event) => {
+    try {
+      const content = event.target.result; let importedLogs = [];
+      if (file.name.endsWith('.json')) { importedLogs = JSON.parse(content); } 
+      else if (file.name.endsWith('.csv')) {
+        const lines = content.split('\n').filter(l => l.trim());
+        for (let i = 1; i < lines.length; i++) {
+          const row = parseCSVRow(lines[i]);
+          importedLogs.push({ id: Date.now() + i, time: row[0], type: row[1], text: row[2], sound: row[3], targetIP: row[4], ip: row[5], userAgent: row[6] });
+        }
+      }
+      if (importedLogs.length > 0) {
+        broadcastLogs.value = [...importedLogs, ...broadcastLogs.value].slice(0, 500); // 合併並限制筆數
+        await supabase.from('system_settings').upsert({ setting_key: 'broadcast_logs', setting_value: broadcastLogs.value }, { onConflict: 'setting_key' })
+        alert('✅ 歷史紀錄匯入成功！');
+      }
+    } catch (error) { alert('❌ 檔案解析失敗，建議優先匯入 JSON 格式備份檔。'); }
+    e.target.value = ''; 
+  };
+  reader.readAsText(file);
+}
+
+// === 其餘手動廣播與設定邏輯 (不變) ===
+const saveNewIP = async () => {
+  if (!newIPInput.value.trim()) return; const newTarget = newIPInput.value.trim();
+  if (!savedIPs.value.includes(newTarget)) { savedIPs.value.push(newTarget); manualConfig.value.targetIP = newTarget; newIPInput.value = ''; await saveSettingsToDB(false); }
 }
 
 const removeSavedIP = async (targetToRemove) => {
-  if (confirm(`確定要將「${targetToRemove}」從名單中移除嗎？`)) {
-    savedIPs.value = savedIPs.value.filter(t => t !== targetToRemove);
-    manualConfig.value.targetIP = '';
-    await saveSettingsToDB(false);
-  }
+  if (confirm(`確定要將「${targetToRemove}」移除嗎？`)) { savedIPs.value = savedIPs.value.filter(t => t !== targetToRemove); manualConfig.value.targetIP = ''; await saveSettingsToDB(false); }
 }
 
 const saveAsPreset = async () => {
-  if (!manualConfig.value.text) return alert('⚠️ 請先輸入廣播文字再儲存罐頭！')
+  if (!manualConfig.value.text) return alert('⚠️ 請先輸入廣播文字再儲存！')
   const defaultName = manualConfig.value.text.substring(0, 8) + '...'
   const presetName = prompt('請為此罐頭訊息命名：', defaultName)
   if (!presetName) return
-
-  presets.value.push({
-    name: presetName,
-    text: manualConfig.value.text,
-    sound: manualConfig.value.sound,
-    playCount: manualConfig.value.playCount,
-    textPlayCount: manualConfig.value.textPlayCount,
-    displayDuration: manualConfig.value.displayDuration,
-    targetIP: manualConfig.value.targetIP
-  })
+  presets.value.push({ name: presetName, text: manualConfig.value.text, sound: manualConfig.value.sound, playCount: manualConfig.value.playCount, textPlayCount: manualConfig.value.textPlayCount, displayDuration: manualConfig.value.displayDuration, targetIP: manualConfig.value.targetIP })
   await saveSettingsToDB(false) 
 }
 
 const applyPreset = (preset) => {
-  manualConfig.value.text = preset.text
-  manualConfig.value.sound = preset.sound
-  manualConfig.value.playCount = preset.playCount || 1
-  manualConfig.value.textPlayCount = preset.textPlayCount || 1
-  manualConfig.value.displayDuration = preset.displayDuration || 120
-  manualConfig.value.targetIP = preset.targetIP || ''
+  manualConfig.value.text = preset.text; manualConfig.value.sound = preset.sound; manualConfig.value.playCount = preset.playCount || 1; manualConfig.value.textPlayCount = preset.textPlayCount || 1; manualConfig.value.displayDuration = preset.displayDuration || 120; manualConfig.value.targetIP = preset.targetIP || ''
 }
-
-const removePreset = async (index) => {
-  if (confirm('確定刪除此罐頭訊息嗎？')) {
-    presets.value.splice(index, 1)
-    await saveSettingsToDB(false)
-  }
-}
+const removePreset = async (index) => { if (confirm('確定刪除此罐頭訊息嗎？')) { presets.value.splice(index, 1); await saveSettingsToDB(false) } }
 
 const testSoundAndTTS = async () => {
-  if (isTesting.value) return
-  isTesting.value = true
-
+  if (isTesting.value) return; isTesting.value = true
   if (manualConfig.value.sound !== 'none' && sounds[manualConfig.value.sound]) {
     for (let i = 0; i < manualConfig.value.playCount; i++) {
-      await new Promise((resolve) => {
-        const audio = new Audio(sounds[manualConfig.value.sound])
-        audio.onended = resolve; audio.onerror = resolve
-        audio.play().catch(resolve)
-      })
+      await new Promise((resolve) => { const audio = new Audio(sounds[manualConfig.value.sound]); audio.onended = resolve; audio.onerror = resolve; audio.play().catch(resolve) })
       await new Promise(r => setTimeout(r, 500))
     }
   }
-
   if (manualConfig.value.text.trim()) {
     const ttsCount = manualConfig.value.textPlayCount || 1
     for (let i = 0; i < ttsCount; i++) {
-      await new Promise((resolve) => {
-        window.speechSynthesis.cancel()
-        const utterance = new SpeechSynthesisUtterance(manualConfig.value.text)
-        utterance.lang = 'zh-TW'
-        utterance.onend = resolve; utterance.onerror = resolve
-        window.speechSynthesis.speak(utterance)
-      })
+      await new Promise((resolve) => { window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(manualConfig.value.text); utterance.lang = 'zh-TW'; utterance.onend = resolve; utterance.onerror = resolve; window.speechSynthesis.speak(utterance) })
       if (i < ttsCount - 1) await new Promise(r => setTimeout(r, 800))
     }
   }
@@ -345,10 +372,7 @@ const saveSettingsToDB = async (showAlert = true) => {
   isSavingSch.value = true
   const newSettings = { manual: manualConfig.value, schedules: schedules.value, presets: presets.value, savedIPs: savedIPs.value }
   const { error } = await supabase.from('system_settings').upsert({ setting_key: 'broadcast_settings', setting_value: newSettings }, { onConflict: 'setting_key' })
-  if (showAlert) {
-    if (!error) alert('✅ 排程與罐頭設定已成功儲存！')
-    else alert('❌ 儲存失敗')
-  }
+  if (showAlert) { if (!error) alert('✅ 設定已成功儲存！'); else alert('❌ 儲存失敗') }
   isSavingSch.value = false
 }
 
@@ -357,7 +381,8 @@ const sendManualBroadcast = async () => {
   isSending.value = true
   manualConfig.value.triggerTimestamp = Date.now()
   await saveSettingsToDB(false) 
-  alert('✅ 廣播訊號已發送！符合權限的教室端將於 5 秒內響起！')
+  await appendManualLog() // 💡 發送後寫入日誌
+  alert('✅ 廣播訊號已發送！')
   isSending.value = false
 }
 
@@ -394,6 +419,7 @@ const removeSchedule = (index) => { if (confirm('確定要刪除這筆排程嗎�
 
 .manual-card { border-left: 5px solid #ef4444; }
 .schedule-card { border-left: 5px solid #3b82f6; }
+.logs-card { border-left: 5px solid #10b981; }
 
 .form-grid { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; }
 .form-group { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 150px; }
@@ -445,6 +471,29 @@ const removeSchedule = (index) => { if (confirm('確定要刪除這筆排程嗎�
 .save-row { display: flex; justify-content: flex-end; padding-top: 15px; border-top: 1px solid #e2e8f0; }
 .btn-save-all { background: #3b82f6; color: white; border: none; padding: 12px 30px; border-radius: 6px; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: 0.2s; }
 .btn-save-all:hover:not(:disabled) { background: #2563eb; }
+
+/* 日誌專屬樣式 */
+.log-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn-outline { background: white; color: #475569; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; transition: 0.2s; font-weight: bold; }
+.btn-outline:hover { background: #f1f5f9; }
+.btn-outline-primary { background: white; color: #3b82f6; border: 1px solid #93c5fd; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; transition: 0.2s; font-weight: bold; }
+.btn-outline-primary:hover { background: #eff6ff; }
+
+.table-container { width: 100%; overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+.logs-table { width: 100%; border-collapse: collapse; min-width: 800px; font-size: 0.95rem; }
+.logs-table th, .logs-table td { padding: 12px 15px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+.logs-table th { background: #f8fafc; font-weight: bold; color: #475569; position: sticky; top: 0; }
+.logs-table tr:hover { background: #f1f5f9; }
+.empty-log { text-align: center; color: #94a3b8; font-style: italic; padding: 30px !important; }
+
+.type-tag { padding: 3px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; }
+.t-manual { background: #fee2e2; color: #b91c1c; }
+.t-auto { background: #e0e7ff; color: #4338ca; }
+
+.col-time { white-space: nowrap; color: #64748b; font-size: 0.9rem; }
+.col-text { font-weight: bold; color: #334155; }
+.col-ip { font-family: monospace; color: #0369a1; }
+.col-ua { color: #94a3b8; font-size: 0.85rem; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 @media (max-width: 768px) {
   .sch-row { flex-direction: column; align-items: flex-start; }
