@@ -1,10 +1,10 @@
 <template>
   <div class="broadcast-wrapper">
-    <!-- 💡 狀態列：顯示解鎖狀態與設備名稱 -->
+    <!-- 狀態列：顯示解鎖狀態與設備名稱 -->
     <div v-if="isIpBrownlisted && !activeBroadcast" class="device-bar">
-      <!-- 音效解鎖按鈕 -->
-      <div class="audio-status" :class="isAudioUnlocked ? 'unlocked' : 'locked'" @click="unlockAudio" title="瀏覽器會阻擋自動播放，請務必點擊一次以解鎖！">
-        {{ isAudioUnlocked ? '🔊 廣播音效已連線解鎖' : '🔇 點此解鎖廣播音效 (必點)' }}
+      <!-- 💡 修改：音效解鎖按鈕的文字與樣式，降低焦慮感 -->
+      <div class="audio-status" :class="isAudioUnlocked ? 'unlocked' : 'locked'" @click="unlockAudio" title="點擊網頁任意處即可解鎖">
+        {{ isAudioUnlocked ? '🔊 廣播音效已連線解鎖' : '🔇 音效待解鎖 (點擊畫面任一處即可)' }}
       </div>
 
       <!-- 設備綁定按鈕 -->
@@ -23,6 +23,8 @@
         </div>
       </div>
     </div>
+
+    <audio ref="audioPlayerRef" style="display: none;" preload="auto"></audio>
   </div>
 </template>
 
@@ -42,9 +44,9 @@ const lastTriggeredScheduleTime = ref('')
 const myIp = ref('')
 const deviceName = ref('')
 
-// 💡 記憶體音效池與解鎖狀態
 const isAudioUnlocked = ref(false)
 const audioPool = {}
+const audioPlayerRef = ref(null)
 
 const sounds = {
   bell_ring: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/bell_ring.mp3',
@@ -79,16 +81,13 @@ const sounds = {
   dsc_oh: 'https://s3.amazonaws.com/freecodecamp/drums/Dsc_Oh.mp3'
 }
 
-// 💡 核心機制：點擊任意處解鎖瀏覽器授權，並將音效載入記憶體
 const unlockAudio = () => {
   if (isAudioUnlocked.value) return
   isAudioUnlocked.value = true
 
-  // 1. 播放極短靜音，取得全域自動播放授權
   const silentAudio = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA")
   silentAudio.play().catch(()=>{})
 
-  // 2. 背景預載所有音效，對抗網路休眠
   for (const [key, url] of Object.entries(sounds)) {
     const a = new Audio(url)
     a.preload = 'auto'
@@ -112,29 +111,37 @@ const setDeviceName = () => {
   if (input !== null) {
     deviceName.value = input.trim()
     localStorage.setItem('broadcast_device_name', deviceName.value)
+    alert(`✅ 已成功將此電腦綁定為「${deviceName.value}」！\n後台指定發送給這個名稱時，就只有這台電腦會響起。`)
   }
 }
 
-// 💡 從記憶體池播放，絕對穩定
-const playSoundSingle = (soundKey) => {
+const playSoundSingle = (soundUrl) => {
   return new Promise((resolve) => {
-    if (!sounds[soundKey]) return resolve()
-
-    // 優先從記憶體池拿取，如果還沒載好就直接新增
-    const audio = audioPool[soundKey] || new Audio(sounds[soundKey])
-    audio.currentTime = 0
+    if (!audioPlayerRef.value) return resolve() 
 
     let isResolved = false
-    const finish = () => { if (!isResolved) { isResolved = true; resolve() } }
+    const finish = () => { 
+      if (!isResolved) { 
+        isResolved = true
+        audioPlayerRef.value.onended = null
+        audioPlayerRef.value.onerror = null
+        resolve() 
+      } 
+    }
     
-    audio.onended = finish
-    audio.onerror = finish
+    audioPlayerRef.value.src = soundUrl
+    audioPlayerRef.value.load()
+    audioPlayerRef.value.onended = finish
+    audioPlayerRef.value.onerror = finish
+    
     setTimeout(finish, 8000) 
     
-    audio.play().catch((e) => {
-      console.warn("⚠️ 自動播放遭阻擋:", e)
+    const playPromise = audioPlayerRef.value.play()
+    if (playPromise !== undefined) {
+      playPromise.catch((e) => { finish() })
+    } else {
       finish()
-    }) 
+    }
   })
 }
 
@@ -162,24 +169,21 @@ const triggerBroadcast = async (broadcastData) => {
   
   if (hideTimeout) clearTimeout(hideTimeout)
   
-  // 1. 播放音效 (傳入 Key)
   const soundKey = broadcastData.sound || 'bell_ring'
   if (soundKey !== 'none' && sounds[soundKey]) {
     const count = broadcastData.playCount || 1
     for (let i = 0; i < count; i++) {
-      await playSoundSingle(soundKey)
+      await playSoundSingle(sounds[soundKey])
       await new Promise(r => setTimeout(r, 500)) 
     }
   }
 
-  // 2. 語音朗讀
   const ttsCount = broadcastData.textPlayCount || 1
   for (let i = 0; i < ttsCount; i++) {
     await speakText(broadcastData.text)
     if (i < ttsCount - 1) await new Promise(r => setTimeout(r, 800)) 
   }
 
-  // 3. 畫面保留時間
   const durationSec = broadcastData.displayDuration || 120 
   hideTimeout = setTimeout(() => { 
     activeBroadcast.value = null 
@@ -221,7 +225,6 @@ const checkSchedules = async () => {
   const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
   const currentSec = now.getSeconds()
 
-  // 放寬至 15 秒，對抗背景分頁休眠降速
   if (currentSec > 15 || lastTriggeredScheduleTime.value === currentHHMM) return
 
   try {
@@ -240,9 +243,14 @@ const checkSchedules = async () => {
 }
 
 onMounted(() => {
-  // 自動掛載解鎖監聽，點擊畫面任何一處都會解鎖音效
-  window.addEventListener('click', unlockAudio)
-  window.addEventListener('touchstart', unlockAudio)
+  // 💡 智慧偵測：如果瀏覽器判定使用者在此 Session 已經點擊過網頁，直接暴力解鎖
+  if (navigator.userActivation && navigator.userActivation.hasBeenActive) {
+    unlockAudio()
+  } else {
+    // 否則掛上全域監聽，只要滑鼠點擊任意處就解鎖
+    window.addEventListener('click', unlockAudio)
+    window.addEventListener('touchstart', unlockAudio)
+  }
   
   deviceName.value = localStorage.getItem('broadcast_device_name') || ''
   
@@ -265,7 +273,6 @@ onUnmounted(() => {
 <style scoped>
 .broadcast-wrapper { width: 100%; }
 
-/* 頂部狀態列：音效解鎖與設備名稱 */
 .device-bar {
   display: flex; justify-content: flex-end; align-items: center; gap: 15px;
   margin-bottom: 8px; flex-wrap: wrap;
@@ -275,17 +282,12 @@ onUnmounted(() => {
   font-size: 0.85rem; padding: 4px 10px; border-radius: 6px; font-weight: bold;
   cursor: pointer; transition: 0.3s;
 }
+/* 💡 將原本刺眼的紅色警示，調整為相對柔和的橘色提示 */
 .audio-status.locked {
-  background: #fee2e2; color: #ef4444; border: 1px solid #fca5a5;
-  animation: pulse-locked 1.5s infinite;
+  background: #fff7ed; color: #c2410c; border: 1px solid #fdba74;
 }
 .audio-status.unlocked {
   background: #dcfce7; color: #166534; border: 1px solid #bbf7d0;
-}
-@keyframes pulse-locked {
-  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-  70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 
 .device-badge {
@@ -302,7 +304,6 @@ onUnmounted(() => {
 }
 @keyframes pulse-dot-anim { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0.4; transform: scale(1.2); } }
 
-/* 廣播橫幅本體 */
 .broadcast-container {
   width: 100%; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); color: #78350f;
   padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
