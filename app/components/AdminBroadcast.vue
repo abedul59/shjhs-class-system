@@ -11,7 +11,7 @@
       </div>
     </div>
 
-    <!-- 💡 新增：罐頭訊息(預設清單)管理區塊 -->
+    <!-- 罐頭訊息(預設清單)管理區塊 -->
     <div v-if="presets.length > 0" class="presets-section">
       <div class="presets-header">📦 快速載入罐頭訊息：</div>
       <div class="presets-list">
@@ -56,9 +56,18 @@
           </select>
         </div>
 
+        <!-- 💡 強化：指定接收單一 IP (支援暫存清單) -->
         <div class="form-group full-width">
           <label>🎯 指定接收單一 IP (選填)：</label>
-          <input type="text" v-model="manualConfig.targetIP" class="custom-input" placeholder="若留空，則傳送給所有褐色名單內的電腦。例如輸入：120.116.34.13" />
+          <div class="ip-control-group">
+            <select v-model="manualConfig.targetIP" class="custom-input flex-2">
+              <option value="">🌐 全發送 (所有褐色名單內的教室電腦)</option>
+              <option v-for="ip in savedIPs" :key="ip" :value="ip">💻 {{ ip }}</option>
+            </select>
+            <input type="text" v-model="newIPInput" class="custom-input flex-1" placeholder="新增 IP..." />
+            <button @click="saveNewIP" class="btn-sub">💾 加入選單</button>
+            <button v-if="manualConfig.targetIP" @click="removeSavedIP(manualConfig.targetIP)" class="btn-sub-del">🗑️ 刪除選取 IP</button>
+          </div>
         </div>
       </div>
 
@@ -110,9 +119,13 @@
                 <option value="1">1</option><option value="2">2</option><option value="3">3</option>
               </select>
             </div>
+            <!-- 定時排程的 IP 選擇器 -->
             <div class="mini-group ip-group">
-              <label>指定IP (留空全傳):</label>
-              <input type="text" v-model="sch.targetIP" class="custom-input ip-input" placeholder="單一 IP..." />
+              <label>指定 IP:</label>
+              <select v-model="sch.targetIP" class="custom-input ip-select">
+                <option value="">🌐 全發送</option>
+                <option v-for="ip in savedIPs" :key="ip" :value="ip">{{ ip }}</option>
+              </select>
             </div>
           </div>
 
@@ -173,13 +186,16 @@ const isCurrentDeviceClassroom = ref(false)
 
 const manualConfig = ref({ text: '', sound: 'bell', playCount: 1, textPlayCount: 1, targetIP: '', triggerTimestamp: 0 })
 const schedules = ref([])
-const presets = ref([]) // 💡 存放罐頭訊息清單
+const presets = ref([]) 
+const savedIPs = ref([]) // 💡 存放自訂 IP 清單
+const newIPInput = ref('')
 
 const fetchSettingsAndCheckIP = async () => {
   const { data: bData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'broadcast_settings').maybeSingle()
   if (bData && bData.setting_value) {
     if (bData.setting_value.schedules) schedules.value = bData.setting_value.schedules
     if (bData.setting_value.presets) presets.value = bData.setting_value.presets
+    if (bData.setting_value.savedIPs) savedIPs.value = bData.setting_value.savedIPs
   }
 
   try {
@@ -192,6 +208,26 @@ const fetchSettingsAndCheckIP = async () => {
 }
 
 onMounted(() => fetchSettingsAndCheckIP())
+
+// === 💾 IP 管理 ===
+const saveNewIP = async () => {
+  if (!newIPInput.value.trim()) return;
+  const newIP = newIPInput.value.trim();
+  if (!savedIPs.value.includes(newIP)) {
+    savedIPs.value.push(newIP);
+    manualConfig.value.targetIP = newIP;
+    newIPInput.value = '';
+    await saveSettingsToDB(false);
+  }
+}
+
+const removeSavedIP = async (ipToRemove) => {
+  if (confirm(`確定要將 ${ipToRemove} 從 IP 清單中移除嗎？`)) {
+    savedIPs.value = savedIPs.value.filter(ip => ip !== ipToRemove);
+    manualConfig.value.targetIP = '';
+    await saveSettingsToDB(false);
+  }
+}
 
 // === 💾 罐頭訊息操作 ===
 const saveAsPreset = async () => {
@@ -208,7 +244,7 @@ const saveAsPreset = async () => {
     textPlayCount: manualConfig.value.textPlayCount,
     targetIP: manualConfig.value.targetIP
   })
-  await saveSettingsToDB(false) // 無聲儲存
+  await saveSettingsToDB(false) 
 }
 
 const applyPreset = (preset) => {
@@ -226,12 +262,11 @@ const removePreset = async (index) => {
   }
 }
 
-// === 本機模擬試聽 (音效 -> TTS) 支援多次朗讀 ===
+// === 本機模擬試聽 ===
 const testSoundAndTTS = async () => {
   if (isTesting.value) return
   isTesting.value = true
 
-  // 1. 播音效
   if (manualConfig.value.sound !== 'none' && sounds[manualConfig.value.sound]) {
     for (let i = 0; i < manualConfig.value.playCount; i++) {
       await new Promise((resolve) => {
@@ -243,7 +278,6 @@ const testSoundAndTTS = async () => {
     }
   }
 
-  // 2. 播語音 (重複)
   if (manualConfig.value.text.trim()) {
     const ttsCount = manualConfig.value.textPlayCount || 1
     for (let i = 0; i < ttsCount; i++) {
@@ -260,10 +294,9 @@ const testSoundAndTTS = async () => {
   isTesting.value = false
 }
 
-// === 共用資料庫儲存邏輯 ===
 const saveSettingsToDB = async (showAlert = true) => {
   isSavingSch.value = true
-  const newSettings = { manual: manualConfig.value, schedules: schedules.value, presets: presets.value }
+  const newSettings = { manual: manualConfig.value, schedules: schedules.value, presets: presets.value, savedIPs: savedIPs.value }
   const { error } = await supabase.from('system_settings').upsert({ setting_key: 'broadcast_settings', setting_value: newSettings }, { onConflict: 'setting_key' })
   if (showAlert) {
     if (!error) alert('✅ 排程與罐頭設定已成功儲存！')
@@ -272,17 +305,15 @@ const saveSettingsToDB = async (showAlert = true) => {
   isSavingSch.value = false
 }
 
-// === 🚀 發送即時廣播 ===
 const sendManualBroadcast = async () => {
   if (!manualConfig.value.text.trim()) return alert('⚠️ 廣播文字不可為空！')
   isSending.value = true
   manualConfig.value.triggerTimestamp = Date.now()
-  await saveSettingsToDB(false) // 無聲儲存並發送訊號
+  await saveSettingsToDB(false) 
   alert('✅ 廣播訊號已發送！符合權限的教室端將於 5 秒內響起！')
   isSending.value = false
 }
 
-// === ⏰ 排程管理 ===
 const addSchedule = () => { schedules.value.push({ isActive: true, time: '08:00', text: '早自修時間開始', sound: 'bell', playCount: 1, textPlayCount: 1, targetIP: '' }) }
 const removeSchedule = (index) => { if (confirm('確定要刪除這筆排程嗎？')) schedules.value.splice(index, 1) }
 
@@ -299,7 +330,6 @@ const removeSchedule = (index) => { if (confirm('確定要刪除這筆排程嗎�
 .is-warning { background-color: #fef9c3; color: #854d0e; border-color: #fde047; }
 .highlight-ip { font-family: monospace; font-weight: bold; background: rgba(255,255,255,0.5); padding: 2px 6px; border-radius: 4px; }
 
-/* 罐頭訊息區塊 */
 .presets-section { background: #eff6ff; padding: 15px; border-radius: 8px; border: 1px dashed #93c5fd; margin-bottom: 25px; }
 .presets-header { font-weight: bold; color: #1d4ed8; margin-bottom: 10px; }
 .presets-list { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -310,7 +340,7 @@ const removeSchedule = (index) => { if (confirm('確定要刪除這筆排程嗎�
 .preset-del:hover { background: #fecaca; color: #b91c1c; }
 
 .card { background: white; padding: 25px; border-radius: 8px; border: 1px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 25px; }
-.card-header-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #cbd5e1; padding-bottom: 10px; margin-bottom: 20px; }
+.card-header-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #cbd5e1; padding-bottom: 10px; margin-bottom: 20px; flex-wrap: wrap; gap:10px;}
 .card-title { margin: 0; font-size: 1.2rem; color: #0f172a; }
 .btn-save-preset { background: #f8fafc; color: #0284c7; border: 1px solid #bae6fd; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 0.9rem; }
 .btn-save-preset:hover { background: #e0f2fe; }
@@ -326,6 +356,14 @@ const removeSchedule = (index) => { if (confirm('確定要刪除這筆排程嗎�
 .custom-input { padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 1rem; outline: none; transition: 0.2s;}
 .custom-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
 .large-input { font-size: 1.1rem; padding: 12px; font-weight: bold; color: #b45309; background: #fffbeb; border-color: #fcd34d; }
+
+.ip-control-group { display: flex; gap: 10px; flex-wrap: wrap; align-items: center;}
+.flex-2 { flex: 2; min-width: 150px; }
+.flex-1 { flex: 1; min-width: 120px; }
+.btn-sub { background: #10b981; color: white; border: none; padding: 10px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+.btn-sub:hover { background: #059669; }
+.btn-sub-del { background: #fee2e2; color: #ef4444; border: 1px solid #fca5a5; padding: 9px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+.btn-sub-del:hover { background: #fecaca; }
 
 .action-row { display: flex; gap: 15px; justify-content: flex-end; align-items: center; border-top: 1px solid #e2e8f0; padding-top: 20px; flex-wrap: wrap;}
 .btn-test { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
@@ -355,7 +393,7 @@ const removeSchedule = (index) => { if (confirm('確定要刪除這筆排程嗎�
 .mini-select { width: 150px; }
 .mini-select-small { width: 60px; padding-left: 5px; padding-right: 5px;}
 .ip-group { flex: 1; justify-content: flex-end; }
-.ip-input { width: 180px; }
+.ip-select { width: 180px; }
 
 .save-row { display: flex; justify-content: flex-end; padding-top: 15px; border-top: 1px solid #e2e8f0; }
 .btn-save-all { background: #3b82f6; color: white; border: none; padding: 12px 30px; border-radius: 6px; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: 0.2s; }
@@ -365,6 +403,6 @@ const removeSchedule = (index) => { if (confirm('確定要刪除這筆排程嗎�
   .sch-row { flex-direction: column; align-items: flex-start; }
   .btn-del { margin-left: 0; align-self: flex-end; }
   .ip-group { justify-content: flex-start; width: 100%; }
-  .ip-input { width: 100%; }
+  .ip-select { width: 100%; }
 }
 </style>
