@@ -11,7 +11,7 @@
       </div>
     </div>
 
-    <!-- 罐頭訊息(預設清單)管理區塊 -->
+    <!-- 罐頭訊息 -->
     <div v-if="presets.length > 0" class="presets-section">
       <div class="presets-header">📦 快速載入罐頭訊息：</div>
       <div class="presets-list">
@@ -22,7 +22,7 @@
       </div>
     </div>
 
-    <!-- 上半部：🚨 即時遙控發送器 -->
+    <!-- 手動廣播 -->
     <div class="card manual-card">
       <div class="card-header-row">
         <h4 class="card-title">🚨 即時遙控發送 (手動廣播)</h4>
@@ -52,20 +52,16 @@
         <div class="form-group">
           <label>🗣️ 語音朗讀次數：</label>
           <select v-model.number="manualConfig.textPlayCount" class="custom-input">
-            <option value="1">1 次</option><option value="2">2 次</option><option value="3">3 次</option>
+            <option value="1">1 次</option><option value="2">2 次 (建議)</option><option value="3">3 次</option>
           </select>
         </div>
 
-        <!-- 💡 畫面停留時間 -->
         <div class="form-group">
           <label>⏳ 畫面保留時間：</label>
           <select v-model.number="manualConfig.displayDuration" class="custom-input">
-            <option value="10">10 秒</option>
-            <option value="30">30 秒</option>
-            <option value="60">1 分鐘</option>
-            <option value="120">2 分鐘</option>
-            <option value="300">5 分鐘</option>
-            <option value="600">10 分鐘</option>
+            <option value="10">10 秒</option><option value="30">30 秒</option>
+            <option value="60">1 分鐘</option><option value="120">2 分鐘</option>
+            <option value="300">5 分鐘</option><option value="600">10 分鐘</option>
           </select>
         </div>
 
@@ -93,7 +89,7 @@
       </div>
     </div>
 
-    <!-- 下半部：⏰ 定時排程管理 -->
+    <!-- 定時排程 -->
     <div class="card schedule-card">
       <div class="schedule-header">
         <h4 class="card-title">⏰ 定時廣播排程 (每日循環)</h4>
@@ -161,28 +157,72 @@
 import { ref, onMounted } from 'vue'
 const supabase = useSupabaseClient()
 
-// 💡 更新為 MP3 選單
+// 💡 擴充為 30 種選單
 const soundOptions = [
   { value: 'none', label: '🔇 無音效 (純文字)' },
   { value: 'bell_ring', label: '🛎️ 服務鈴 (叮叮)' },
   { value: 'door_bell', label: '🚪 門鈴 (叮咚)' },
-  { value: 'button_tiny', label: '🖱️ 短促按鍵音' },
   { value: 'computer_error', label: '⚠️ 電腦警告音' },
   { value: 'water_droplet', label: '💧 水滴聲' },
   { value: 'glass', label: '🥂 敲擊玻璃杯' },
   { value: 'tap', label: '👆 輕觸聲' },
-  { value: 'branch_break', label: '🪵 樹枝斷裂聲' }
+  { value: 'branch_break', label: '🪵 樹枝斷裂聲' },
+  { value: 'button_tiny', label: '🖱️ 短促按鍵音' },
+  { value: 'button_click', label: '🖱️ 滑鼠點擊' },
+  { value: 'button_push', label: '🔘 按下按鈕' },
+  { value: 'camera_flashing', label: '📸 相機快門' },
+  { value: 'cd_tray', label: '💿 光碟機退片' },
+  { value: 'door_bump', label: '🚪 撞門聲' },
+  { value: 'keyboard_desk', label: '⌨️ 鍵盤敲擊' },
+  { value: 'metal_plate', label: '🛡️ 金屬敲擊' },
+  { value: 'pop_cork', label: '🍾 開香檳' },
+  { value: 'snap', label: '🫰 彈指聲' },
+  { value: 'staple_gun', label: '🖇️ 釘書機' },
+  { value: 'chord_1', label: '🎹 電子和弦 1' },
+  { value: 'chord_2', label: '🎹 電子和弦 2' },
+  { value: 'chord_3', label: '🎹 電子和弦 3' },
+  { value: 'heater_1', label: '🥁 爵士鼓聲 1' },
+  { value: 'heater_2', label: '🥁 爵士鼓聲 2' },
+  { value: 'heater_3', label: '🥁 爵士鼓聲 3' },
+  { value: 'kick_n_hat', label: '🥁 踢鼓與鈸' },
+  { value: 'punchy_kick', label: '🥁 重踢鼓' },
+  { value: 'side_stick', label: '🥁 鼓邊敲擊' },
+  { value: 'brk_snr', label: '🥁 小鼓打擊' },
+  { value: 'dry_ohh', label: '🥁 銅鈸開啟' },
+  { value: 'dsc_oh', label: '🥁 銅鈸迴響' }
 ]
 
 const sounds = {
   bell_ring: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/bell_ring.mp3',
   door_bell: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/door_bell.mp3',
-  button_tiny: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/button_tiny.mp3',
   computer_error: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/computer_error.mp3',
   water_droplet: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/water_droplet.mp3',
   glass: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/glass.mp3',
   tap: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/tap.mp3',
-  branch_break: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/branch_break.mp3'
+  branch_break: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/branch_break.mp3',
+  button_tiny: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/button_tiny.mp3',
+  button_click: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/button_click.mp3',
+  button_push: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/button_push.mp3',
+  camera_flashing: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/camera_flashing.mp3',
+  cd_tray: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/cd_tray.mp3',
+  door_bump: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/door_bump.mp3',
+  keyboard_desk: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/keyboard_desk.mp3',
+  metal_plate: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/metal_plate.mp3',
+  pop_cork: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/pop_cork.mp3',
+  snap: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/snap.mp3',
+  staple_gun: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/staple_gun.mp3',
+  chord_1: 'https://s3.amazonaws.com/freecodecamp/drums/Chord_1.mp3',
+  chord_2: 'https://s3.amazonaws.com/freecodecamp/drums/Chord_2.mp3',
+  chord_3: 'https://s3.amazonaws.com/freecodecamp/drums/Chord_3.mp3',
+  heater_1: 'https://s3.amazonaws.com/freecodecamp/drums/Heater-1.mp3',
+  heater_2: 'https://s3.amazonaws.com/freecodecamp/drums/Heater-2.mp3',
+  heater_3: 'https://s3.amazonaws.com/freecodecamp/drums/Heater-3.mp3',
+  kick_n_hat: 'https://s3.amazonaws.com/freecodecamp/drums/Kick_n_Hat.mp3',
+  punchy_kick: 'https://s3.amazonaws.com/freecodecamp/drums/punchy_kick_1.mp3',
+  side_stick: 'https://s3.amazonaws.com/freecodecamp/drums/side_stick_1.mp3',
+  brk_snr: 'https://s3.amazonaws.com/freecodecamp/drums/Brk_Snr.mp3',
+  dry_ohh: 'https://s3.amazonaws.com/freecodecamp/drums/Dry_Ohh.mp3',
+  dsc_oh: 'https://s3.amazonaws.com/freecodecamp/drums/Dsc_Oh.mp3'
 }
 
 const isSending = ref(false)
