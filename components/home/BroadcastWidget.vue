@@ -1,9 +1,18 @@
 <template>
-  <div v-if="activeBroadcast" class="broadcast-container">
-    <div class="broadcast-content">
-      <span class="broadcast-icon">📢 系統廣播：</span>
-      <div class="broadcast-text">
-        <span>{{ activeBroadcast.text }}</span>
+  <div class="broadcast-wrapper">
+    <!-- 💡 新增：常駐的設備名稱設定鈕 (僅在教室網路下顯示) -->
+    <div v-if="isIpBrownlisted && !activeBroadcast" class="device-badge" @click="setDeviceName" title="點擊設定此台電腦的廣播專屬名稱">
+      <span v-if="!deviceName" class="pulse-dot"></span>
+      💻 廣播接收名稱：<span class="d-name">{{ deviceName || '尚未設定 (點擊綁定)' }}</span>
+    </div>
+
+    <!-- 原本的廣播橫幅 -->
+    <div v-if="activeBroadcast" class="broadcast-container">
+      <div class="broadcast-content">
+        <span class="broadcast-icon">📢 系統廣播：</span>
+        <div class="broadcast-text">
+          <span>{{ activeBroadcast.text }}</span>
+        </div>
       </div>
     </div>
   </div>
@@ -24,6 +33,9 @@ let hideTimeout = null
 const lastTriggeredScheduleTime = ref('')
 const myIp = ref('')
 
+// 💡 存放這台電腦專屬的名稱 (存在瀏覽器本地)
+const deviceName = ref('')
+
 const fetchMyIp = async () => {
   try {
     const res = await fetch('https://api.ipify.org?format=json')
@@ -32,7 +44,6 @@ const fetchMyIp = async () => {
   } catch (e) {}
 }
 
-// 💡 擴充為 30 種 100% 相容的 MP3 音效庫
 const sounds = {
   bell_ring: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/bell_ring.mp3',
   door_bell: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/door_bell.mp3',
@@ -66,6 +77,16 @@ const sounds = {
   dsc_oh: 'https://s3.amazonaws.com/freecodecamp/drums/Dsc_Oh.mp3'
 }
 
+// 💡 手動設定這台電腦的名稱
+const setDeviceName = () => {
+  const input = prompt('請為這台電腦設定專屬名稱（例如：701教室），以便後台進行單獨廣播：', deviceName.value)
+  if (input !== null) {
+    deviceName.value = input.trim()
+    localStorage.setItem('broadcast_device_name', deviceName.value)
+    alert(`✅ 已成功將此電腦綁定為「${deviceName.value}」！\n後台指定發送給這個名稱時，就只有這台電腦會響起。`)
+  }
+}
+
 const playSoundSingle = (soundUrl) => {
   return new Promise((resolve) => {
     const audio = new Audio(soundUrl)
@@ -76,10 +97,7 @@ const playSoundSingle = (soundUrl) => {
     audio.onerror = finish
     setTimeout(finish, 8000) 
     
-    audio.play().catch((e) => {
-      console.warn("⚠️ 瀏覽器阻擋自動播放", e)
-      finish()
-    }) 
+    audio.play().catch((e) => { finish() }) 
   })
 }
 
@@ -127,12 +145,15 @@ const triggerBroadcast = async (broadcastData) => {
   }, durationSec * 1000)
 }
 
-const shouldProcessBroadcast = (targetIP) => {
+// 💡 核心驗證：支援比對「公共 IP」與「自訂設備名稱」
+const shouldProcessBroadcast = (targetNameOrIP) => {
   if (!props.isIpBrownlisted) return false; 
-  if (targetIP && targetIP.trim() !== '') {
-    return myIp.value === targetIP.trim();
+  if (targetNameOrIP && targetNameOrIP.trim() !== '') {
+    const target = targetNameOrIP.trim()
+    // 若後台輸入的是本機的 IP 或是 本機自訂的名稱，就通過！
+    return myIp.value === target || deviceName.value === target;
   }
-  return true; 
+  return true; // 若留空，則所有褐色名單全播
 }
 
 const pollManualBroadcast = async () => {
@@ -179,6 +200,9 @@ const checkSchedules = async () => {
 }
 
 onMounted(() => {
+  // 載入儲存在本地的設備名稱
+  deviceName.value = localStorage.getItem('broadcast_device_name') || ''
+  
   fetchMyIp().then(() => {
     pollManualBroadcast()
     pollingInterval = setInterval(pollManualBroadcast, 5000) 
@@ -194,6 +218,35 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.broadcast-wrapper {
+  width: 100%;
+}
+
+/* 設備名稱小標籤 */
+.device-badge {
+  text-align: right;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  cursor: pointer;
+  margin-bottom: 8px;
+  padding-right: 5px;
+  transition: 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+.device-badge:hover { color: #3b82f6; }
+.d-name { font-weight: bold; color: #64748b; }
+.device-badge:hover .d-name { color: #2563eb; text-decoration: underline; }
+
+.pulse-dot {
+  width: 8px; height: 8px; background-color: #ef4444; border-radius: 50%;
+  animation: pulse-dot-anim 1s infinite alternate;
+}
+@keyframes pulse-dot-anim { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0.4; transform: scale(1.2); } }
+
+/* 廣播橫幅本體 */
 .broadcast-container {
   width: 100%; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); color: #78350f;
   padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
