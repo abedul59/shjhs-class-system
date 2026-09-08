@@ -1,20 +1,16 @@
 <template>
   <div class="broadcast-wrapper">
-    <!-- 狀態列：顯示解鎖狀態與設備名稱 -->
     <div v-if="isIpBrownlisted && !activeBroadcast" class="device-bar">
-      <!-- 💡 修改：音效解鎖按鈕的文字與樣式，降低焦慮感 -->
       <div class="audio-status" :class="isAudioUnlocked ? 'unlocked' : 'locked'" @click="unlockAudio" title="點擊網頁任意處即可解鎖">
         {{ isAudioUnlocked ? '🔊 廣播音效已連線解鎖' : '🔇 音效待解鎖 (點擊畫面任一處即可)' }}
       </div>
 
-      <!-- 設備綁定按鈕 -->
       <div class="device-badge" @click="setDeviceName" title="點擊設定此台電腦的廣播專屬名稱">
         <span v-if="!deviceName" class="pulse-dot"></span>
         💻 接收名稱：<span class="d-name">{{ deviceName || '尚未設定 (點擊綁定)' }}</span>
       </div>
     </div>
 
-    <!-- 廣播橫幅本體 -->
     <div v-if="activeBroadcast" class="broadcast-container">
       <div class="broadcast-content">
         <span class="broadcast-icon">📢 系統廣播：</span>
@@ -133,15 +129,12 @@ const playSoundSingle = (soundUrl) => {
     audioPlayerRef.value.load()
     audioPlayerRef.value.onended = finish
     audioPlayerRef.value.onerror = finish
-    
     setTimeout(finish, 8000) 
     
     const playPromise = audioPlayerRef.value.play()
     if (playPromise !== undefined) {
       playPromise.catch((e) => { finish() })
-    } else {
-      finish()
-    }
+    } else { finish() }
   })
 }
 
@@ -166,7 +159,6 @@ const speakText = (text) => {
 
 const triggerBroadcast = async (broadcastData) => {
   activeBroadcast.value = { text: broadcastData.text }
-  
   if (hideTimeout) clearTimeout(hideTimeout)
   
   const soundKey = broadcastData.sound || 'bell_ring'
@@ -185,9 +177,7 @@ const triggerBroadcast = async (broadcastData) => {
   }
 
   const durationSec = broadcastData.displayDuration || 120 
-  hideTimeout = setTimeout(() => { 
-    activeBroadcast.value = null 
-  }, durationSec * 1000)
+  hideTimeout = setTimeout(() => { activeBroadcast.value = null }, durationSec * 1000)
 }
 
 const shouldProcessBroadcast = (targetNameOrIP) => {
@@ -199,9 +189,34 @@ const shouldProcessBroadcast = (targetNameOrIP) => {
   return true; 
 }
 
+// 💡 分散式日誌記錄功能：由觸發排程的電腦負責寫入日誌 (加入隨機延遲防碰撞)
+const logScheduledBroadcast = async (scheduleText, scheduleSound, targetIP) => {
+  await new Promise(r => setTimeout(r, Math.random() * 2000)) // 隨機延遲 0~2秒
+  try {
+    const { data: logData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'broadcast_logs').maybeSingle()
+    let logs = logData?.setting_value || []
+    
+    // 檢查最近 1 分鐘內是否已有其他電腦寫入過這筆相同的定時廣播
+    const isAlreadyLogged = logs.some(l => l.type === '定時自動觸發' && l.text === scheduleText && (Date.now() - l.id < 60000))
+    if (!isAlreadyLogged) {
+      logs.unshift({
+        id: Date.now(),
+        time: new Date().toLocaleString('zh-TW', { hour12: false }),
+        type: '定時自動觸發',
+        text: scheduleText,
+        sound: scheduleSound,
+        targetIP: targetIP || '全發送',
+        ip: myIp.value || '未知IP',
+        userAgent: navigator.userAgent
+      })
+      if (logs.length > 500) logs = logs.slice(0, 500)
+      await supabase.from('system_settings').upsert({ setting_key: 'broadcast_logs', setting_value: logs }, { onConflict: 'setting_key' })
+    }
+  } catch (e) {}
+}
+
 const pollManualBroadcast = async () => {
   if (!props.isIpBrownlisted) return; 
-  
   try {
     const { data } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'broadcast_settings').maybeSingle()
     if (data && data.setting_value && data.setting_value.manual) {
@@ -209,9 +224,7 @@ const pollManualBroadcast = async () => {
       const lastPlayedStamp = Number(localStorage.getItem('last_played_broadcast')) || 0
       
       if (config.triggerTimestamp > lastPlayedStamp) {
-        if (shouldProcessBroadcast(config.targetIP)) { 
-          triggerBroadcast(config) 
-        }
+        if (shouldProcessBroadcast(config.targetIP)) { triggerBroadcast(config) }
         localStorage.setItem('last_played_broadcast', config.triggerTimestamp)
       }
     }
@@ -235,6 +248,7 @@ const checkSchedules = async () => {
         if (schedule.time === currentHHMM && shouldProcessBroadcast(schedule.targetIP)) {
           lastTriggeredScheduleTime.value = currentHHMM
           triggerBroadcast(schedule)
+          logScheduledBroadcast(schedule.text, schedule.sound, schedule.targetIP) // 💡 觸發時寫入日誌
           break
         }
       }
@@ -243,11 +257,8 @@ const checkSchedules = async () => {
 }
 
 onMounted(() => {
-  // 💡 智慧偵測：如果瀏覽器判定使用者在此 Session 已經點擊過網頁，直接暴力解鎖
-  if (navigator.userActivation && navigator.userActivation.hasBeenActive) {
-    unlockAudio()
-  } else {
-    // 否則掛上全域監聽，只要滑鼠點擊任意處就解鎖
+  if (navigator.userActivation && navigator.userActivation.hasBeenActive) { unlockAudio() } 
+  else {
     window.addEventListener('click', unlockAudio)
     window.addEventListener('touchstart', unlockAudio)
   }
@@ -273,43 +284,20 @@ onUnmounted(() => {
 <style scoped>
 .broadcast-wrapper { width: 100%; }
 
-.device-bar {
-  display: flex; justify-content: flex-end; align-items: center; gap: 15px;
-  margin-bottom: 8px; flex-wrap: wrap;
-}
+.device-bar { display: flex; justify-content: flex-end; align-items: center; gap: 15px; margin-bottom: 8px; flex-wrap: wrap; }
+.audio-status { font-size: 0.85rem; padding: 4px 10px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+.audio-status.locked { background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; }
+.audio-status.unlocked { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
 
-.audio-status {
-  font-size: 0.85rem; padding: 4px 10px; border-radius: 6px; font-weight: bold;
-  cursor: pointer; transition: 0.3s;
-}
-/* 💡 將原本刺眼的紅色警示，調整為相對柔和的橘色提示 */
-.audio-status.locked {
-  background: #fff7ed; color: #c2410c; border: 1px solid #fdba74;
-}
-.audio-status.unlocked {
-  background: #dcfce7; color: #166534; border: 1px solid #bbf7d0;
-}
-
-.device-badge {
-  font-size: 0.85rem; color: #94a3b8; cursor: pointer; transition: 0.2s;
-  display: flex; align-items: center; gap: 5px;
-}
+.device-badge { font-size: 0.85rem; color: #94a3b8; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 5px; }
 .device-badge:hover { color: #3b82f6; }
 .d-name { font-weight: bold; color: #64748b; }
 .device-badge:hover .d-name { color: #2563eb; text-decoration: underline; }
 
-.pulse-dot {
-  width: 8px; height: 8px; background-color: #ef4444; border-radius: 50%;
-  animation: pulse-dot-anim 1s infinite alternate;
-}
+.pulse-dot { width: 8px; height: 8px; background-color: #ef4444; border-radius: 50%; animation: pulse-dot-anim 1s infinite alternate; }
 @keyframes pulse-dot-anim { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0.4; transform: scale(1.2); } }
 
-.broadcast-container {
-  width: 100%; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); color: #78350f;
-  padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
-  border: 2px solid #b45309; position: relative; overflow: hidden;
-  animation: slide-down 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-sizing: border-box; z-index: 50;
-}
+.broadcast-container { width: 100%; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); color: #78350f; padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4); border: 2px solid #b45309; position: relative; overflow: hidden; animation: slide-down 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-sizing: border-box; z-index: 50; }
 .broadcast-container::after { content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%; background: linear-gradient(to right, transparent, rgba(255,255,255,0.6), transparent); animation: shine 3s infinite; }
 .broadcast-content { display: flex; align-items: center; font-size: 1.3rem; font-weight: 900; }
 .broadcast-icon { margin-right: 15px; animation: pulse-icon 1s infinite alternate; white-space: nowrap; }
