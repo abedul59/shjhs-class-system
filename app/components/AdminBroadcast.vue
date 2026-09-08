@@ -36,7 +36,7 @@
         </div>
 
         <div class="form-group">
-          <label>🔊 播放音效：</label>
+          <label>🔊 播放音效 (高相容 MP3)：</label>
           <select v-model="manualConfig.sound" class="custom-input">
             <option v-for="opt in soundOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
@@ -52,11 +52,23 @@
         <div class="form-group">
           <label>🗣️ 語音朗讀次數：</label>
           <select v-model.number="manualConfig.textPlayCount" class="custom-input">
-            <option value="1">1 次</option><option value="2">2 次 (建議)</option><option value="3">3 次</option>
+            <option value="1">1 次</option><option value="2">2 次</option><option value="3">3 次</option>
           </select>
         </div>
 
-        <!-- 💡 強化：指定接收單一 IP (支援暫存清單) -->
+        <!-- 💡 畫面停留時間 -->
+        <div class="form-group">
+          <label>⏳ 畫面保留時間：</label>
+          <select v-model.number="manualConfig.displayDuration" class="custom-input">
+            <option value="10">10 秒</option>
+            <option value="30">30 秒</option>
+            <option value="60">1 分鐘</option>
+            <option value="120">2 分鐘</option>
+            <option value="300">5 分鐘</option>
+            <option value="600">10 分鐘</option>
+          </select>
+        </div>
+
         <div class="form-group full-width">
           <label>🎯 指定接收單一 IP (選填)：</label>
           <div class="ip-control-group">
@@ -108,20 +120,24 @@
               </select>
             </div>
             <div class="mini-group">
-              <label>音次:</label>
+              <label>音/語次:</label>
               <select v-model.number="sch.playCount" class="custom-input mini-select-small">
                 <option value="1">1</option><option value="2">2</option><option value="3">3</option>
               </select>
-            </div>
-            <div class="mini-group">
-              <label>語次:</label>
               <select v-model.number="sch.textPlayCount" class="custom-input mini-select-small">
                 <option value="1">1</option><option value="2">2</option><option value="3">3</option>
               </select>
             </div>
-            <!-- 定時排程的 IP 選擇器 -->
+            <div class="mini-group">
+              <label>保留:</label>
+              <select v-model.number="sch.displayDuration" class="custom-input mini-select-small">
+                <option value="10">10秒</option><option value="30">30秒</option>
+                <option value="60">1分</option><option value="120">2分</option>
+                <option value="300">5分</option>
+              </select>
+            </div>
             <div class="mini-group ip-group">
-              <label>指定 IP:</label>
+              <label>IP:</label>
               <select v-model="sch.targetIP" class="custom-input ip-select">
                 <option value="">🌐 全發送</option>
                 <option v-for="ip in savedIPs" :key="ip" :value="ip">{{ ip }}</option>
@@ -145,36 +161,28 @@
 import { ref, onMounted } from 'vue'
 const supabase = useSupabaseClient()
 
+// 💡 更新為 MP3 選單
 const soundOptions = [
-  { value: 'none', label: '🔇 無音效 (純文字)' }, { value: 'bell', label: '🏫 傳統學校鐘聲' },
-  { value: 'alert', label: '⚠️ 短促警告聲' }, { value: 'digital_alarm', label: '⏰ 數位電子鬧鐘' },
-  { value: 'bugle', label: '🎺 晨會軍號聲' }, { value: 'clock_ring', label: '🕰️ 復古機械鐘' },
-  { value: 'boing', label: '🤪 卡通彈跳聲' }, { value: 'pop', label: '🫧 清脆啵啵聲' },
-  { value: 'slide_whistle', label: '🎢 滑笛上升聲' }, { value: 'text_msg', label: '💬 訊息通知音' },
-  { value: 'cash_register', label: '💰 收銀機叮噹' }, { value: 'clock_tick', label: '⏱️ 時鐘滴答聲' },
-  { value: 'clear_throat', label: '🗣️ 清喉嚨提示' }, { value: 'guitar', label: '🎸 吉他刷弦聲' },
-  { value: 'harp', label: '👼 豎琴滑音' }, { value: 'xylophone', label: '🎹 木琴敲擊聲' },
-  { value: 'sci_fi_beep', label: '🛸 科幻雷達音' }, { value: 'robot', label: '🤖 機器人代碼聲' },
-  { value: 'hammer', label: '🔨 木槌敲擊聲' }, { value: 'bike_bell', label: '🚲 腳踏車鈴聲' },
-  { value: 'car_horn', label: '🚗 汽車喇叭聲' }, { value: 'train', label: '🚂 火車汽笛聲' },
-  { value: 'thunder', label: '🌩️ 雷聲巨響' }, { value: 'rooster', label: '🐓 公雞啼叫聲' },
-  { value: 'dog', label: '🐕 狗吠聲' }, { value: 'cat', label: '🐈 貓叫聲' }
+  { value: 'none', label: '🔇 無音效 (純文字)' },
+  { value: 'bell_ring', label: '🛎️ 服務鈴 (叮叮)' },
+  { value: 'door_bell', label: '🚪 門鈴 (叮咚)' },
+  { value: 'button_tiny', label: '🖱️ 短促按鍵音' },
+  { value: 'computer_error', label: '⚠️ 電腦警告音' },
+  { value: 'water_droplet', label: '💧 水滴聲' },
+  { value: 'glass', label: '🥂 敲擊玻璃杯' },
+  { value: 'tap', label: '👆 輕觸聲' },
+  { value: 'branch_break', label: '🪵 樹枝斷裂聲' }
 ]
 
 const sounds = {
-  bell: 'https://actions.google.com/sounds/v1/alarms/school_bell.ogg', alert: 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg',
-  digital_alarm: 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg', bugle: 'https://actions.google.com/sounds/v1/alarms/bugle_tune.ogg',
-  clock_ring: 'https://actions.google.com/sounds/v1/alarms/mechanical_clock_ring.ogg', boing: 'https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg',
-  pop: 'https://actions.google.com/sounds/v1/cartoon/pop.ogg', slide_whistle: 'https://actions.google.com/sounds/v1/cartoon/slide_whistle_up.ogg',
-  text_msg: 'https://actions.google.com/sounds/v1/communication/getting_a_text.ogg', cash_register: 'https://actions.google.com/sounds/v1/foley/cash_register.ogg',
-  clock_tick: 'https://actions.google.com/sounds/v1/household/clock_ticking.ogg', clear_throat: 'https://actions.google.com/sounds/v1/human_voices/human_clearing_throat.ogg',
-  guitar: 'https://actions.google.com/sounds/v1/instruments/acoustic_guitar_strum.ogg', harp: 'https://actions.google.com/sounds/v1/instruments/orchestral_harp_glissando_up.ogg',
-  xylophone: 'https://actions.google.com/sounds/v1/instruments/xylophone_up.ogg', sci_fi_beep: 'https://actions.google.com/sounds/v1/science_fiction/sci_fi_beep.ogg',
-  robot: 'https://actions.google.com/sounds/v1/science_fiction/robot_code.ogg', hammer: 'https://actions.google.com/sounds/v1/tools/hammer_hitting_wood.ogg',
-  bike_bell: 'https://actions.google.com/sounds/v1/transportation/bicycle_bell.ogg', car_horn: 'https://actions.google.com/sounds/v1/transportation/car_horn.ogg',
-  train: 'https://actions.google.com/sounds/v1/transportation/train_whistle.ogg', thunder: 'https://actions.google.com/sounds/v1/weather/thunder_crack.ogg',
-  rooster: 'https://actions.google.com/sounds/v1/animals/rooster_crowing.ogg', dog: 'https://actions.google.com/sounds/v1/animals/dog_barking.ogg',
-  cat: 'https://actions.google.com/sounds/v1/animals/cat_meow.ogg'
+  bell_ring: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/bell_ring.mp3',
+  door_bell: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/door_bell.mp3',
+  button_tiny: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/button_tiny.mp3',
+  computer_error: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/computer_error.mp3',
+  water_droplet: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/water_droplet.mp3',
+  glass: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/glass.mp3',
+  tap: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/tap.mp3',
+  branch_break: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/branch_break.mp3'
 }
 
 const isSending = ref(false)
@@ -184,10 +192,10 @@ const isTesting = ref(false)
 const currentIP = ref('檢查中...')
 const isCurrentDeviceClassroom = ref(false)
 
-const manualConfig = ref({ text: '', sound: 'bell', playCount: 1, textPlayCount: 1, targetIP: '', triggerTimestamp: 0 })
+const manualConfig = ref({ text: '', sound: 'bell_ring', playCount: 1, textPlayCount: 1, displayDuration: 120, targetIP: '', triggerTimestamp: 0 })
 const schedules = ref([])
 const presets = ref([]) 
-const savedIPs = ref([]) // 💡 存放自訂 IP 清單
+const savedIPs = ref([]) 
 const newIPInput = ref('')
 
 const fetchSettingsAndCheckIP = async () => {
@@ -209,7 +217,6 @@ const fetchSettingsAndCheckIP = async () => {
 
 onMounted(() => fetchSettingsAndCheckIP())
 
-// === 💾 IP 管理 ===
 const saveNewIP = async () => {
   if (!newIPInput.value.trim()) return;
   const newIP = newIPInput.value.trim();
@@ -229,7 +236,6 @@ const removeSavedIP = async (ipToRemove) => {
   }
 }
 
-// === 💾 罐頭訊息操作 ===
 const saveAsPreset = async () => {
   if (!manualConfig.value.text) return alert('⚠️ 請先輸入廣播文字再儲存罐頭！')
   const defaultName = manualConfig.value.text.substring(0, 8) + '...'
@@ -242,6 +248,7 @@ const saveAsPreset = async () => {
     sound: manualConfig.value.sound,
     playCount: manualConfig.value.playCount,
     textPlayCount: manualConfig.value.textPlayCount,
+    displayDuration: manualConfig.value.displayDuration,
     targetIP: manualConfig.value.targetIP
   })
   await saveSettingsToDB(false) 
@@ -252,6 +259,7 @@ const applyPreset = (preset) => {
   manualConfig.value.sound = preset.sound
   manualConfig.value.playCount = preset.playCount || 1
   manualConfig.value.textPlayCount = preset.textPlayCount || 1
+  manualConfig.value.displayDuration = preset.displayDuration || 120
   manualConfig.value.targetIP = preset.targetIP || ''
 }
 
@@ -262,7 +270,6 @@ const removePreset = async (index) => {
   }
 }
 
-// === 本機模擬試聽 ===
 const testSoundAndTTS = async () => {
   if (isTesting.value) return
   isTesting.value = true
@@ -314,7 +321,7 @@ const sendManualBroadcast = async () => {
   isSending.value = false
 }
 
-const addSchedule = () => { schedules.value.push({ isActive: true, time: '08:00', text: '早自修時間開始', sound: 'bell', playCount: 1, textPlayCount: 1, targetIP: '' }) }
+const addSchedule = () => { schedules.value.push({ isActive: true, time: '08:00', text: '早自修時間開始', sound: 'bell_ring', playCount: 1, textPlayCount: 1, displayDuration: 120, targetIP: '' }) }
 const removeSchedule = (index) => { if (confirm('確定要刪除這筆排程嗎？')) schedules.value.splice(index, 1) }
 
 </script>
@@ -349,7 +356,7 @@ const removeSchedule = (index) => { if (confirm('確定要刪除這筆排程嗎�
 .schedule-card { border-left: 5px solid #3b82f6; }
 
 .form-grid { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; }
-.form-group { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 200px; }
+.form-group { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 150px; }
 .full-width { flex: 100%; }
 .form-group label { font-weight: bold; color: #475569; font-size: 0.95rem; }
 
@@ -390,10 +397,10 @@ const removeSchedule = (index) => { if (confirm('確定要刪除這筆排程嗎�
 .btn-del { background: #fee2e2; color: #ef4444; border: 1px solid #fca5a5; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 1.1rem; margin-left: auto;}
 
 .mini-group { display: flex; align-items: center; gap: 5px; font-size: 0.9rem; color: #475569; font-weight: bold; }
-.mini-select { width: 150px; }
+.mini-select { width: 130px; }
 .mini-select-small { width: 60px; padding-left: 5px; padding-right: 5px;}
 .ip-group { flex: 1; justify-content: flex-end; }
-.ip-select { width: 180px; }
+.ip-select { width: 140px; }
 
 .save-row { display: flex; justify-content: flex-end; padding-top: 15px; border-top: 1px solid #e2e8f0; }
 .btn-save-all { background: #3b82f6; color: white; border: none; padding: 12px 30px; border-radius: 6px; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: 0.2s; }
