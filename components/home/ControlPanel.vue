@@ -1,7 +1,10 @@
 <template>
   <div class="control-card">
     
-    <!-- 📢 獨立跑馬燈區塊 (放置在最上方) -->
+    <!-- 🔊 新增：獨立運作的廣播接收器 (放在最頂層) -->
+    <BroadcastWidget />
+
+    <!-- 📢 獨立跑馬燈區塊 -->
     <MarqueeWidget :marqueeData="marqueeSettings" />
 
     <!-- 🕒 時鐘與 ⛅ 天氣區塊 -->
@@ -39,13 +42,14 @@
 </template>
 
 <script setup>
+import BroadcastWidget from './BroadcastWidget.vue' // 💡 引入廣播元件
 import MarqueeWidget from './MarqueeWidget.vue'
 import ClockWidget from './ClockWidget.vue'
 import HomeActionButtons from './HomeActionButtons.vue'
 import WeatherWidget from './WeatherWidget.vue'
 
 const props = defineProps({
-  marqueeSettings: { type: Object, default: () => ({}) }, // 💡 新增接收跑馬燈設定
+  marqueeSettings: { type: Object, default: () => ({}) },
   clockConfig: { type: Object, default: () => ({}) },
   clockFontSize: Number,
   currentTime: String,
