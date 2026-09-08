@@ -1,9 +1,17 @@
 <template>
   <div class="broadcast-wrapper">
-    <!-- 設備名稱設定鈕 (僅在教室網路下顯示) -->
-    <div v-if="isIpBrownlisted && !activeBroadcast" class="device-badge" @click="setDeviceName" title="點擊設定此台電腦的廣播專屬名稱">
-      <span v-if="!deviceName" class="pulse-dot"></span>
-      💻 廣播接收名稱：<span class="d-name">{{ deviceName || '尚未設定 (點擊綁定)' }}</span>
+    <!-- 💡 狀態列：顯示解鎖狀態與設備名稱 -->
+    <div v-if="isIpBrownlisted && !activeBroadcast" class="device-bar">
+      <!-- 音效解鎖按鈕 -->
+      <div class="audio-status" :class="isAudioUnlocked ? 'unlocked' : 'locked'" @click="unlockAudio" title="瀏覽器會阻擋自動播放，請務必點擊一次以解鎖！">
+        {{ isAudioUnlocked ? '🔊 廣播音效已連線解鎖' : '🔇 點此解鎖廣播音效 (必點)' }}
+      </div>
+
+      <!-- 設備綁定按鈕 -->
+      <div class="device-badge" @click="setDeviceName" title="點擊設定此台電腦的廣播專屬名稱">
+        <span v-if="!deviceName" class="pulse-dot"></span>
+        💻 接收名稱：<span class="d-name">{{ deviceName || '尚未設定 (點擊綁定)' }}</span>
+      </div>
     </div>
 
     <!-- 廣播橫幅本體 -->
@@ -15,9 +23,6 @@
         </div>
       </div>
     </div>
-
-    <!-- 💡 核心修正：隱藏的實體音效播放器，大幅提高背景分頁的播放成功率 -->
-    <audio ref="audioPlayerRef" style="display: none;" preload="auto"></audio>
   </div>
 </template>
 
@@ -37,16 +42,9 @@ const lastTriggeredScheduleTime = ref('')
 const myIp = ref('')
 const deviceName = ref('')
 
-// 綁定實體播放器
-const audioPlayerRef = ref(null)
-
-const fetchMyIp = async () => {
-  try {
-    const res = await fetch('https://api.ipify.org?format=json')
-    const data = await res.json()
-    myIp.value = data.ip
-  } catch (e) {}
-}
+// 💡 記憶體音效池與解鎖狀態
+const isAudioUnlocked = ref(false)
+const audioPool = {}
 
 const sounds = {
   bell_ring: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/bell_ring.mp3',
@@ -81,47 +79,62 @@ const sounds = {
   dsc_oh: 'https://s3.amazonaws.com/freecodecamp/drums/Dsc_Oh.mp3'
 }
 
+// 💡 核心機制：點擊任意處解鎖瀏覽器授權，並將音效載入記憶體
+const unlockAudio = () => {
+  if (isAudioUnlocked.value) return
+  isAudioUnlocked.value = true
+
+  // 1. 播放極短靜音，取得全域自動播放授權
+  const silentAudio = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA")
+  silentAudio.play().catch(()=>{})
+
+  // 2. 背景預載所有音效，對抗網路休眠
+  for (const [key, url] of Object.entries(sounds)) {
+    const a = new Audio(url)
+    a.preload = 'auto'
+    audioPool[key] = a
+  }
+
+  window.removeEventListener('click', unlockAudio)
+  window.removeEventListener('touchstart', unlockAudio)
+}
+
+const fetchMyIp = async () => {
+  try {
+    const res = await fetch('https://api.ipify.org?format=json')
+    const data = await res.json()
+    myIp.value = data.ip
+  } catch (e) {}
+}
+
 const setDeviceName = () => {
   const input = prompt('請為這台電腦設定專屬名稱（例如：701教室），以便後台進行單獨廣播：', deviceName.value)
   if (input !== null) {
     deviceName.value = input.trim()
     localStorage.setItem('broadcast_device_name', deviceName.value)
-    alert(`✅ 已成功將此電腦綁定為「${deviceName.value}」！\n後台指定發送給這個名稱時，就只有這台電腦會響起。`)
   }
 }
 
-// 💡 核心修正：透過實體的 <audio> 標籤播放，抵抗背景分頁阻擋
-const playSoundSingle = (soundUrl) => {
+// 💡 從記憶體池播放，絕對穩定
+const playSoundSingle = (soundKey) => {
   return new Promise((resolve) => {
-    if (!audioPlayerRef.value) return resolve() // 防呆
+    if (!sounds[soundKey]) return resolve()
+
+    // 優先從記憶體池拿取，如果還沒載好就直接新增
+    const audio = audioPool[soundKey] || new Audio(sounds[soundKey])
+    audio.currentTime = 0
 
     let isResolved = false
-    const finish = () => { 
-      if (!isResolved) { 
-        isResolved = true
-        audioPlayerRef.value.onended = null
-        audioPlayerRef.value.onerror = null
-        resolve() 
-      } 
-    }
+    const finish = () => { if (!isResolved) { isResolved = true; resolve() } }
     
-    audioPlayerRef.value.src = soundUrl
-    audioPlayerRef.value.load()
-    audioPlayerRef.value.onended = finish
-    audioPlayerRef.value.onerror = finish
-    
-    // 強制 8 秒後必定往下走，避免任何卡死
+    audio.onended = finish
+    audio.onerror = finish
     setTimeout(finish, 8000) 
     
-    const playPromise = audioPlayerRef.value.play()
-    if (playPromise !== undefined) {
-      playPromise.catch((e) => {
-        console.warn("⚠️ 背景分頁自動播放可能被阻擋", e)
-        finish()
-      })
-    } else {
+    audio.play().catch((e) => {
+      console.warn("⚠️ 自動播放遭阻擋:", e)
       finish()
-    }
+    }) 
   })
 }
 
@@ -149,12 +162,12 @@ const triggerBroadcast = async (broadcastData) => {
   
   if (hideTimeout) clearTimeout(hideTimeout)
   
-  // 1. 播放音效 (加入防錯保護)
+  // 1. 播放音效 (傳入 Key)
   const soundKey = broadcastData.sound || 'bell_ring'
   if (soundKey !== 'none' && sounds[soundKey]) {
     const count = broadcastData.playCount || 1
     for (let i = 0; i < count; i++) {
-      await playSoundSingle(sounds[soundKey])
+      await playSoundSingle(soundKey)
       await new Promise(r => setTimeout(r, 500)) 
     }
   }
@@ -208,7 +221,7 @@ const checkSchedules = async () => {
   const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
   const currentSec = now.getSeconds()
 
-  // 💡 核心修正：將觸發寬容度拉長到 15 秒，避免背景分頁被瀏覽器降速而錯過廣播
+  // 放寬至 15 秒，對抗背景分頁休眠降速
   if (currentSec > 15 || lastTriggeredScheduleTime.value === currentHHMM) return
 
   try {
@@ -227,6 +240,10 @@ const checkSchedules = async () => {
 }
 
 onMounted(() => {
+  // 自動掛載解鎖監聽，點擊畫面任何一處都會解鎖音效
+  window.addEventListener('click', unlockAudio)
+  window.addEventListener('touchstart', unlockAudio)
+  
   deviceName.value = localStorage.getItem('broadcast_device_name') || ''
   
   fetchMyIp().then(() => {
@@ -240,16 +257,40 @@ onUnmounted(() => {
   if (pollingInterval) clearInterval(pollingInterval)
   if (scheduleInterval) clearInterval(scheduleInterval)
   if (hideTimeout) clearTimeout(hideTimeout)
+  window.removeEventListener('click', unlockAudio)
+  window.removeEventListener('touchstart', unlockAudio)
 })
 </script>
 
 <style scoped>
 .broadcast-wrapper { width: 100%; }
 
+/* 頂部狀態列：音效解鎖與設備名稱 */
+.device-bar {
+  display: flex; justify-content: flex-end; align-items: center; gap: 15px;
+  margin-bottom: 8px; flex-wrap: wrap;
+}
+
+.audio-status {
+  font-size: 0.85rem; padding: 4px 10px; border-radius: 6px; font-weight: bold;
+  cursor: pointer; transition: 0.3s;
+}
+.audio-status.locked {
+  background: #fee2e2; color: #ef4444; border: 1px solid #fca5a5;
+  animation: pulse-locked 1.5s infinite;
+}
+.audio-status.unlocked {
+  background: #dcfce7; color: #166534; border: 1px solid #bbf7d0;
+}
+@keyframes pulse-locked {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
 .device-badge {
-  text-align: right; font-size: 0.85rem; color: #94a3b8; cursor: pointer;
-  margin-bottom: 8px; padding-right: 5px; transition: 0.2s;
-  display: flex; align-items: center; justify-content: flex-end; gap: 5px;
+  font-size: 0.85rem; color: #94a3b8; cursor: pointer; transition: 0.2s;
+  display: flex; align-items: center; gap: 5px;
 }
 .device-badge:hover { color: #3b82f6; }
 .d-name { font-weight: bold; color: #64748b; }
@@ -261,6 +302,7 @@ onUnmounted(() => {
 }
 @keyframes pulse-dot-anim { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0.4; transform: scale(1.2); } }
 
+/* 廣播橫幅本體 */
 .broadcast-container {
   width: 100%; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); color: #78350f;
   padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
