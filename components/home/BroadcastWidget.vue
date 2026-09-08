@@ -20,10 +20,10 @@ const props = defineProps({
 const activeBroadcast = ref(null) 
 let pollingInterval = null
 let scheduleInterval = null
+let hideTimeout = null // 💡 用來控制畫面關閉的計時器
 const lastTriggeredScheduleTime = ref('')
-const myIp = ref('') // 存放本機 IP
+const myIp = ref('')
 
-// 抓取本機 IP
 const fetchMyIp = async () => {
   try {
     const res = await fetch('https://api.ipify.org?format=json')
@@ -32,35 +32,18 @@ const fetchMyIp = async () => {
   } catch (e) {}
 }
 
+// 💡 全面換成 100% 相容所有瀏覽器的 .mp3 格式 (開源 CDN)
 const sounds = {
-  bell: 'https://actions.google.com/sounds/v1/alarms/school_bell.ogg',
-  alert: 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg',
-  digital_alarm: 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg',
-  bugle: 'https://actions.google.com/sounds/v1/alarms/bugle_tune.ogg',
-  clock_ring: 'https://actions.google.com/sounds/v1/alarms/mechanical_clock_ring.ogg',
-  boing: 'https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg',
-  pop: 'https://actions.google.com/sounds/v1/cartoon/pop.ogg',
-  slide_whistle: 'https://actions.google.com/sounds/v1/cartoon/slide_whistle_up.ogg',
-  text_msg: 'https://actions.google.com/sounds/v1/communication/getting_a_text.ogg',
-  cash_register: 'https://actions.google.com/sounds/v1/foley/cash_register.ogg',
-  clock_tick: 'https://actions.google.com/sounds/v1/household/clock_ticking.ogg',
-  clear_throat: 'https://actions.google.com/sounds/v1/human_voices/human_clearing_throat.ogg',
-  guitar: 'https://actions.google.com/sounds/v1/instruments/acoustic_guitar_strum.ogg',
-  harp: 'https://actions.google.com/sounds/v1/instruments/orchestral_harp_glissando_up.ogg',
-  xylophone: 'https://actions.google.com/sounds/v1/instruments/xylophone_up.ogg',
-  sci_fi_beep: 'https://actions.google.com/sounds/v1/science_fiction/sci_fi_beep.ogg',
-  robot: 'https://actions.google.com/sounds/v1/science_fiction/robot_code.ogg',
-  hammer: 'https://actions.google.com/sounds/v1/tools/hammer_hitting_wood.ogg',
-  bike_bell: 'https://actions.google.com/sounds/v1/transportation/bicycle_bell.ogg',
-  car_horn: 'https://actions.google.com/sounds/v1/transportation/car_horn.ogg',
-  train: 'https://actions.google.com/sounds/v1/transportation/train_whistle.ogg',
-  thunder: 'https://actions.google.com/sounds/v1/weather/thunder_crack.ogg',
-  rooster: 'https://actions.google.com/sounds/v1/animals/rooster_crowing.ogg',
-  dog: 'https://actions.google.com/sounds/v1/animals/dog_barking.ogg',
-  cat: 'https://actions.google.com/sounds/v1/animals/cat_meow.ogg'
+  bell_ring: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/bell_ring.mp3',
+  door_bell: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/door_bell.mp3',
+  button_tiny: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/button_tiny.mp3',
+  computer_error: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/computer_error.mp3',
+  water_droplet: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/water_droplet.mp3',
+  glass: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/glass.mp3',
+  tap: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/tap.mp3',
+  branch_break: 'https://cdn.jsdelivr.net/gh/ionden/ion.sound@3.0.7/sounds/branch_break.mp3'
 }
 
-// 播放音效 (防卡死機制)
 const playSoundSingle = (soundUrl) => {
   return new Promise((resolve) => {
     const audio = new Audio(soundUrl)
@@ -69,16 +52,15 @@ const playSoundSingle = (soundUrl) => {
     
     audio.onended = finish
     audio.onerror = finish
-    setTimeout(finish, 8000) // 強制 8 秒後無論如何往下走
+    setTimeout(finish, 8000) 
     
     audio.play().catch((e) => {
-      console.warn("⚠️ 瀏覽器阻擋自動播放，請確認已點擊過網頁！", e)
+      console.warn("⚠️ 瀏覽器阻擋自動播放", e)
       finish()
     }) 
   })
 }
 
-// 語音朗讀 (防卡死機制)
 const speakText = (text) => {
   return new Promise((resolve) => {
     if (!text || !window.speechSynthesis) return resolve()
@@ -93,7 +75,7 @@ const speakText = (text) => {
     utterance.onend = finish
     utterance.onerror = finish
     
-    setTimeout(finish, 15000) // 強制 15 秒後往下走
+    setTimeout(finish, 15000) 
     window.speechSynthesis.speak(utterance)
   })
 }
@@ -101,7 +83,10 @@ const speakText = (text) => {
 const triggerBroadcast = async (broadcastData) => {
   activeBroadcast.value = { text: broadcastData.text }
   
-  // 1. 播放音效
+  // 每次觸發新廣播時，清除舊的關閉計時器
+  if (hideTimeout) clearTimeout(hideTimeout)
+  
+  // 1. 播放 .mp3 音效
   if (broadcastData.sound && broadcastData.sound !== 'none' && sounds[broadcastData.sound]) {
     const count = broadcastData.playCount || 1
     for (let i = 0; i < count; i++) {
@@ -117,11 +102,13 @@ const triggerBroadcast = async (broadcastData) => {
     if (i < ttsCount - 1) await new Promise(r => setTimeout(r, 800)) 
   }
 
-  // 3. 關閉畫面
-  setTimeout(() => { activeBroadcast.value = null }, 5000)
+  // 3. 💡 語音結束後，依照設定的時間保留在畫面上 (預設 120 秒 = 2 分鐘)
+  const durationSec = broadcastData.displayDuration || 120 
+  hideTimeout = setTimeout(() => { 
+    activeBroadcast.value = null 
+  }, durationSec * 1000)
 }
 
-// 驗證 IP
 const shouldProcessBroadcast = (targetIP) => {
   if (!props.isIpBrownlisted) return false; 
   if (targetIP && targetIP.trim() !== '') {
@@ -130,7 +117,6 @@ const shouldProcessBroadcast = (targetIP) => {
   return true; 
 }
 
-// 💡 監聽手動廣播 (改用 localStorage 紀錄，絕不漏接！)
 const pollManualBroadcast = async () => {
   if (!props.isIpBrownlisted) return; 
   
@@ -140,7 +126,6 @@ const pollManualBroadcast = async () => {
       const config = data.setting_value.manual
       const lastPlayedStamp = Number(localStorage.getItem('last_played_broadcast')) || 0
       
-      // 如果資料庫的發送時間戳記 > 本機播過的時間戳記 = 有新廣播！
       if (config.triggerTimestamp > lastPlayedStamp) {
         if (shouldProcessBroadcast(config.targetIP)) { 
           triggerBroadcast(config) 
@@ -186,6 +171,7 @@ onMounted(() => {
 onUnmounted(() => {
   if (pollingInterval) clearInterval(pollingInterval)
   if (scheduleInterval) clearInterval(scheduleInterval)
+  if (hideTimeout) clearTimeout(hideTimeout)
 })
 </script>
 
