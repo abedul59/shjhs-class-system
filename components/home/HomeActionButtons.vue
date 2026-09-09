@@ -37,6 +37,10 @@
       <NuxtLink v-if="indexButtonSettings.hygiene" to="/hygiene" class="btn btn-cyan">🧹 衛生管理</NuxtLink>            
       <NuxtLink v-if="indexButtonSettings.seats" to="/seats" class="btn btn-seat">🪑 座位管理</NuxtLink>
       <NuxtLink v-if="indexButtonSettings.schedule" to="/schedule" class="btn btn-amber">⚙️ 課表管理</NuxtLink>
+
+      <!-- 💡 新增：教師廣播站按鈕 (紫色，受 broadcast 權限控制) -->
+      <button v-if="indexButtonSettings.broadcast !== false" @click="$emit('openBroadcast')" class="btn btn-violet">📢 教師廣播站</button>
+
       <NuxtLink v-if="indexButtonSettings.exams" to="/exams" class="btn btn-rose">📝 大考管理</NuxtLink>
       <button v-if="indexButtonSettings.emergency" @click="$emit('openPwd', 'emergency')" class="btn btn-red">🚨 緊急通知</button>
       <NuxtLink v-if="indexButtonSettings.admin" to="/admin" class="btn btn-dark">⚙️ 後台</NuxtLink>
@@ -62,7 +66,7 @@ const props = defineProps({
   scheduleButtonConfig: Object,
   isIpBrownlisted: Boolean,
   examData: Object,
-  indexButtonSettings: Object,
+  indexButtonSettings: { type: Object, default: () => ({}) },
   isScheduleButtonVisible: Boolean,
   seatingChart: Object,
   showSeatingChartLocal: Boolean,
@@ -71,7 +75,8 @@ const props = defineProps({
   isHistoryVisibleOnIndex: Boolean
 })
 
-defineEmits(['enterExam', 'openLargeSchedule', 'openPwd', 'update:showSeatingChartLocal', 'update:showHygieneLocal'])
+// 💡 確保 emit 裡有 openBroadcast 事件
+defineEmits(['enterExam', 'openLargeSchedule', 'openPwd', 'update:showSeatingChartLocal', 'update:showHygieneLocal', 'openBroadcast'])
 </script>
 
 <style scoped>
@@ -93,6 +98,7 @@ defineEmits(['enterExam', 'openLargeSchedule', 'openPwd', 'update:showSeatingCha
 .btn-lime { background: #84cc16; color: #14532d; border: 1px solid #65a30d;}
 .btn-dark { background: #64748b; }
 .btn-purple { background: #8b5cf6; }
+.btn-violet { background: #8b5cf6; } /* 💡 教師廣播站按鈕顏色 */
 .btn-red { background: #ef4444; }
 .btn-dark-blue { background: #1e3a8a; } 
 .btn-seat { background: #0f766e; } 
