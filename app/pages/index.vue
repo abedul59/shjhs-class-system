@@ -248,19 +248,17 @@ const officerPasswords = ref({ academic: '', counseling: '', discipline: '', tea
 const currentEditorRole = ref('') 
 
 const globalButtonSettings = ref({})
-
-// 💡 核心修正：在所有身分中加入 broadcast 屬性，預設導師與科任老師為 true，其餘為 false
 const defaultRoleSettings = {
-  anonymous: { parentBind: true, parentMsg: true, studentMsg: true, parentLeave: true, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false, broadcast: false },
-  classroom: { parentBind: false, parentMsg: false, studentMsg: false, parentLeave: false, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false, broadcast: false },
-  parent: { parentBind: false, parentMsg: true, studentMsg: false, parentLeave: true, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false, broadcast: false },
-  student: { parentBind: false, parentMsg: false, studentMsg: true, parentLeave: false, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false, broadcast: false },
-  subject_teacher: { parentBind: false, parentMsg: false, studentMsg: false, parentLeave: false, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false, broadcast: true },
-  teacher: { parentBind: true, parentMsg: true, studentMsg: true, parentLeave: true, assignments: true, discipline: true, hygiene: true, seats: true, schedule: true, exams: true, emergency: true, admin: true, broadcast: true }
+  anonymous: { parentBind: true, parentMsg: true, studentMsg: true, parentLeave: true, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false },
+  classroom: { parentBind: false, parentMsg: false, studentMsg: false, parentLeave: false, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false },
+  parent: { parentBind: false, parentMsg: true, studentMsg: false, parentLeave: true, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false },
+  student: { parentBind: false, parentMsg: false, studentMsg: true, parentLeave: false, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false },
+  subject_teacher: { parentBind: false, parentMsg: false, studentMsg: false, parentLeave: false, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false },
+  teacher: { parentBind: true, parentMsg: true, studentMsg: true, parentLeave: true, assignments: true, discipline: true, hygiene: true, seats: true, schedule: true, exams: true, emergency: true, admin: true }
 }
 const roleButtonSettings = ref(JSON.parse(JSON.stringify(defaultRoleSettings)))
 
-// 1. 點名大腦 (從 composables 抽離載入)
+// 1. 點名大腦
 const { 
   allStudents, allStudentsForLogin, todayAttendances,
   expectedCount, presentCount, leaveCount, lateLeaveCount, earlyLeaveCount, lateCount, absentCount,
@@ -269,7 +267,7 @@ const {
 
 const toggleAttendance = (student) => toggleAttendanceLogic(student, isWeekday, expectedTeacherPwd.value)
 
-// 2. 大考大腦 (從 composables 抽離載入)
+// 2. 大考大腦
 const { currentThemeStyles, examStatus, countdownMinutes, countdownText } = useExamMode(examData, nowTick)
 
 
@@ -466,7 +464,18 @@ const fetchData = async () => {
           case 'schedule_button_settings': scheduleButtonConfig.value = { teacherOnlyInBrownlist: true, ...v }; break;
           case 'index_auto_refresh_seconds': autoRefreshSeconds.value = Number(v) || 60; break;
           case 'exam_schedule_data': examData.value = { ...examData.value, ...v }; break;
-          case 'parent_notices_data': if (Array.isArray(v)) { parentNotices.value = v.filter(n => (!n.startDate || n.startDate <= todayISO) && (!n.endDate || n.endDate >= todayISO)).map(n => n.content); } break;
+          
+          // 💡 核心修正區：前台首頁在抓取時，強制過濾掉被標記為 isHidden 的須知！
+          case 'parent_notices_data': 
+            if (Array.isArray(v)) { 
+              parentNotices.value = v.filter(n => 
+                !n.isHidden && 
+                (!n.startDate || n.startDate <= todayISO) && 
+                (!n.endDate || n.endDate >= todayISO)
+              ).map(n => n.content); 
+            } 
+            break;
+            
           case 'class_notes_data': if (typeof v === 'object') classNoteItems.value = v[todayISO] || []; break;
           case 'seating_chart_data': if (typeof v === 'object') { seatingChart.value = { isVisible: v.isVisible || false, isRotated: v.isRotated || false, seats: (Array.isArray(v.seats) ? v.seats : []).map(seat => seat.content !== undefined ? { id: seat.id, isHidden: seat.isHidden, seatNum: String(seat.content).split('\n')[0] || '', name: String(seat.content).split('\n')[1] || '', other: String(seat.content).split('\n').slice(2).join(' ') || '' } : seat), settings: v.settings || {} }; } break;
           case 'hygiene_management_data': if (typeof v === 'object') hygieneData.value = { ...hygieneData.value, ...v }; break;
@@ -563,7 +572,24 @@ const saveClassNoteItems = async () => {
 </script>
 
 <style scoped>
-.page-container { min-height: 100vh; background-color: #f3f4f6; padding: 20px; font-family: sans-serif; display: flex; flex-direction: column; gap: 20px; transition: 0.3s; max-width: 100vw; overflow-x: hidden; box-sizing: border-box; }
+/* =========================================================
+   💡 手機版響應式 (RWD) 核心防護機制 
+   確保最外層嚴格限制在 100vw，防止內部表格撐破版面
+   ========================================================= */
+.page-container { 
+  min-height: 100vh; 
+  background-color: #f3f4f6; 
+  padding: 20px; 
+  font-family: sans-serif; 
+  display: flex; 
+  flex-direction: column; 
+  gap: 20px; 
+  transition: 0.3s; 
+  max-width: 100vw; 
+  overflow-x: hidden; 
+  box-sizing: border-box; 
+}
+
 .is-exam-mode { padding: 0; background: var(--ex-bg); overflow: hidden; }
 
 .normal-home-content { width: 100%; max-width: 100%; box-sizing: border-box; }
@@ -610,12 +636,22 @@ const saveClassNoteItems = async () => {
 :deep(.squad-table tbody tr td[rowspan] + td + td) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
 
 @media (max-width: 850px) {
-  :deep(.custom-table) { display: block; overflow-x: auto; white-space: nowrap; min-width: 100%; border: none; }
-  :deep(.custom-table th), :deep(.custom-table td) { white-space: nowrap; }
+  :deep(.custom-table) { 
+    display: block; 
+    overflow-x: auto; 
+    white-space: nowrap; 
+    min-width: 100%; 
+    border: none; 
+  }
+  :deep(.custom-table th), :deep(.custom-table td) {
+    white-space: nowrap;
+  }
   :deep(.morning-table tbody tr td:nth-child(2)), 
   :deep(.morning-table tbody tr td[rowspan] + td + td), 
   :deep(.lunch-table tbody tr:nth-child(even) td), 
   :deep(.squad-table tbody tr td:nth-child(2)), 
-  :deep(.squad-table tbody tr td[rowspan] + td + td) { font-size: 1.2rem !important; }
+  :deep(.squad-table tbody tr td[rowspan] + td + td) { 
+    font-size: 1.2rem !important; 
+  }
 }
 </style>
