@@ -26,7 +26,7 @@
           </h4>
           <p class="help-text">您可以直接複製網頁內容並貼上，系統會保留排版。若設定日期，首頁將於區間內自動顯示。</p>
           
-          <div class="edit-item rich-text-item" style="margin-bottom: 20px;">
+          <div class="edit-item rich-text-item" style="margin-bottom: 10px;">
             <span class="bullet">📌</span>
             <div 
               class="edit-input notice-input rich-text-editor" 
@@ -36,6 +36,17 @@
               ref="newNoticeEditorRef"
               placeholder="在此貼上或輸入須知內容..."
             ></div>
+          </div>
+          
+          <!-- 💡 新增：附加網址連結區塊 -->
+          <div class="links-container">
+            <label class="links-title">🔗 附加網址連結 (選填)：</label>
+            <div v-for="(link, idx) in newNotice.links" :key="idx" class="link-row">
+              <input type="text" v-model="link.title" placeholder="連結標題 (如: 報名表單)" class="custom-input flex-1" />
+              <input type="url" v-model="link.url" placeholder="https://..." class="custom-input flex-2" />
+              <button @click="removeLink(idx)" class="del-row-btn" title="移除此連結">✖</button>
+            </div>
+            <button @click="addLink" class="btn-outline-primary" style="margin-top: 10px;">➕ 新增一筆網址連結</button>
           </div>
           
           <div class="date-row">
@@ -49,7 +60,6 @@
               <span class="hint">留空代表永久顯示，直到手動刪除</span>
             </div>
             
-            <!-- 💡 新增：暫存/隱藏 開關 -->
             <div class="date-group" style="justify-content: flex-end; padding-bottom: 10px;">
               <label class="toggle-label" style="font-size: 1rem; color: #475569;">
                 <input type="checkbox" v-model="newNotice.isHidden" />
@@ -81,10 +91,17 @@
           <div v-if="isLoading" class="empty-state">⏳ 載入中...</div>
           <div v-else-if="notices.length === 0" class="empty-state">目前尚無任何須知事項。</div>
           
-          <!-- 💡 列表加上隱藏狀態的視覺提示 -->
           <div v-for="notice in notices" :key="notice.id" class="notice-item" :class="{ 'is-editing-highlight': editingNoticeId === notice.id, 'is-hidden-item': notice.isHidden }">
             <div class="notice-content">
               <div class="notice-text" v-html="notice.content"></div>
+              
+              <!-- 💡 列表顯示：附加的網址連結 -->
+              <div v-if="notice.links && notice.links.length > 0" class="notice-links-display">
+                <a v-for="(link, idx) in notice.links" :key="idx" :href="link.url" target="_blank" class="notice-link-item">
+                  🔗 {{ link.title || '參考連結' }}
+                </a>
+              </div>
+
               <div class="notice-dates">
                 🗓️ 刊登期間：
                 <span class="highlight">{{ notice.startDate || '未設定' }}</span> 至 <span class="highlight">{{ notice.endDate || '永久' }}</span>
@@ -94,7 +111,6 @@
               </div>
             </div>
             <div class="item-actions">
-              <!-- 💡 快速切換隱藏狀態的按鈕 -->
               <button @click="toggleNoticeHidden(notice)" class="btn-outline-primary" style="padding: 10px 15px; font-size:0.95rem;">
                 {{ notice.isHidden ? '👁️ 設為顯示' : '🙈 設為隱藏' }}
               </button>
@@ -115,7 +131,7 @@
           </button>
         </div>
         <p class="help-text">
-          為降低被判定為垃圾郵件的機率，系統會強制以「純文字」格式發送。<br>
+          為降低被判定為垃圾郵件的機率，系統會強制以「純文字」格式發送。信件中的網址會被多數信箱自動轉換為可點擊的超連結。<br>
           <span style="color:#b91c1c;">建議：若信件仍進入垃圾桶，請在家長群組提醒將導師信箱加入通訊錄。</span>
         </p>
         
@@ -291,8 +307,9 @@ const todayDisplay = d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'lo
 const notices = ref([])
 const editingNoticeId = ref(null)
 const newNoticeEditorRef = ref(null)
-// 💡 newNotice 增加 isHidden 屬性
-const newNotice = ref({ content: '', startDate: todayISO, endDate: '', isHidden: false })
+
+// 💡 newNotice 增加 links 陣列
+const newNotice = ref({ content: '', startDate: todayISO, endDate: '', isHidden: false, links: [] })
 
 const isSendingEmail = ref(false)
 const isSavingNoticeTemplate = ref(false)
@@ -316,6 +333,15 @@ const formatNL = (txt) => String(txt || '').replace(/\n/g, '<br>')
 
 const updateNewNoticeRichText = (event) => { newNotice.value.content = event.target.innerHTML }
 const updateEditHistoryRichText = (event, index) => { editHistoryNotices.value[index] = event.target.innerHTML }
+
+// 💡 連結操作方法
+const addLink = () => {
+  if (!newNotice.value.links) newNotice.value.links = []
+  newNotice.value.links.push({ title: '', url: '' })
+}
+const removeLink = (idx) => {
+  newNotice.value.links.splice(idx, 1)
+}
 
 const fetchData = async () => {
   isLoading.value = true
@@ -431,10 +457,21 @@ const stripHtmlToPlainText = (html) => {
 }
 
 const activeNoticesPlainText = computed(() => {
-  // 💡 過濾掉 isHidden 為 true 的項目
   const active = notices.value.filter(n => !n.isHidden && isActiveToday(n.startDate, n.endDate))
   if (active.length === 0) return '(今日尚無生效的須知事項)'
-  return active.map((n, i) => `${i + 1}. ${stripHtmlToPlainText(n.content)}`).join('\n\n')
+  
+  // 💡 自動在 Email 純文字中附加連結，多數信箱會自動轉為可點擊連結
+  return active.map((n, i) => {
+    let plainText = `${i + 1}. ${stripHtmlToPlainText(n.content)}`;
+    if (n.links && n.links.length > 0) {
+      const formattedLinks = n.links
+        .filter(l => l.url.trim() !== '')
+        .map(l => `   🔗 ${l.title || '參考連結'}: ${l.url}`)
+        .join('\n');
+      plainText += `\n${formattedLinks}`;
+    }
+    return plainText;
+  }).join('\n\n')
 })
 
 const noticePreviewSubject = computed(() => noticeEmailSubjectTemplate.value.replace(/{{今日日期}}/g, todayDisplay))
@@ -449,18 +486,19 @@ const printPreviewContent = computed(() => {
 const editNotice = (notice) => {
   editingNoticeId.value = notice.id
   newNotice.value = { ...notice }
-  if (newNotice.value.isHidden === undefined) newNotice.value.isHidden = false // 防呆
+  if (newNotice.value.isHidden === undefined) newNotice.value.isHidden = false 
+  // 💡 深拷貝 links，避免編輯時直接改到原資料
+  newNotice.value.links = notice.links ? JSON.parse(JSON.stringify(notice.links)) : []
   if (newNoticeEditorRef.value) newNoticeEditorRef.value.innerHTML = notice.content
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 const cancelEditNotice = () => {
   editingNoticeId.value = null
-  newNotice.value = { content: '', startDate: todayISO, endDate: '', isHidden: false }
+  newNotice.value = { content: '', startDate: todayISO, endDate: '', isHidden: false, links: [] }
   if (newNoticeEditorRef.value) newNoticeEditorRef.value.innerHTML = ''
 }
 
-// 💡 快速切換隱藏狀態
 const toggleNoticeHidden = async (notice) => {
   isSaving.value = true
   try {
@@ -482,13 +520,27 @@ const addNotice = async () => {
   if (!newNotice.value.content) return
   isSaving.value = true
   
+  // 💡 過濾掉空網址的連結
+  const validLinks = (newNotice.value.links || []).filter(l => l.url.trim() !== '')
+
   let updatedNotices = [...notices.value]
   
   if (editingNoticeId.value) {
     const idx = updatedNotices.findIndex(n => n.id === editingNoticeId.value)
-    if (idx !== -1) updatedNotices[idx] = { ...newNotice.value, id: editingNoticeId.value }
+    if (idx !== -1) updatedNotices[idx] = { 
+      ...newNotice.value, 
+      id: editingNoticeId.value, 
+      links: validLinks 
+    }
   } else {
-    updatedNotices.push({ id: Date.now().toString(), content: newNotice.value.content, startDate: newNotice.value.startDate, endDate: newNotice.value.endDate, isHidden: newNotice.value.isHidden || false })
+    updatedNotices.push({ 
+      id: Date.now().toString(), 
+      content: newNotice.value.content, 
+      startDate: newNotice.value.startDate, 
+      endDate: newNotice.value.endDate, 
+      isHidden: newNotice.value.isHidden || false,
+      links: validLinks
+    })
   }
   
   updatedNotices.sort((a, b) => Number(a.id) - Number(b.id))
@@ -602,11 +654,16 @@ const fetchHistory = async () => {
     }
 
     notices.value.forEach(n => {
-      // 💡 歷史紀錄只抓取「沒有被隱藏」的
       const startOk = !n.startDate || n.startDate <= targetDate
       const endOk = !n.endDate || n.endDate >= targetDate
       if (!n.isHidden && startOk && endOk && !foundNotices.includes(n.content)) {
-        foundNotices.push(n.content)
+        // 💡 歷史紀錄附加連結
+        let histContent = n.content;
+        if (n.links && n.links.length > 0) {
+          const linksHtml = n.links.map(l => `<a href="${l.url}" target="_blank" style="color:#2563eb;font-weight:bold;">🔗 ${l.title || '參考連結'}</a>`).join('<br>');
+          histContent += `<br><br>${linksHtml}`;
+        }
+        foundNotices.push(histContent)
       }
     })
     historicalNotices.value = foundNotices
@@ -695,6 +752,16 @@ const importJSON = (event) => {
 .rich-text-editor:focus { background: white; border-color: #3b82f6; outline: none; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1); }
 .bullet { display: inline-block; margin-top: 10px; font-size: 1.2rem;}
 
+/* 💡 新增：網址連結專屬樣式 */
+.links-container { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px dashed #cbd5e1; }
+.links-title { display: block; font-weight: bold; color: #475569; margin-bottom: 10px; font-size: 1rem; }
+.link-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
+.flex-1 { flex: 1; min-width: 150px; }
+.flex-2 { flex: 2; min-width: 250px; }
+.notice-links-display { display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px; padding-left: 10px; border-left: 3px solid #bfdbfe; }
+.notice-link-item { display: inline-flex; align-items: center; color: #2563eb; text-decoration: none; font-weight: bold; font-size: 1rem; padding: 4px 8px; background: #eff6ff; border-radius: 6px; width: fit-content; transition: 0.2s;}
+.notice-link-item:hover { background: #dbeafe; text-decoration: underline; }
+
 .date-row { display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap; margin-top: 20px; background: #f1f5f9; padding: 15px; border-radius: 8px; border: 1px dashed #cbd5e1;}
 .date-group { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 200px; }
 .date-group label { font-weight: bold; color: #475569; font-size: 1rem; }
@@ -732,7 +799,7 @@ const importJSON = (event) => {
 .hidden-tag { color: #8b5cf6; font-weight: bold; }
 
 .item-actions { display: flex; gap: 10px; flex-shrink: 0; align-items: flex-start;}
-.btn-outline-primary { background: white; color: #3b82f6; border: 1px solid #93c5fd; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+.btn-outline-primary { background: white; color: #3b82f6; border: 1px solid #93c5fd; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; padding: 8px 12px;}
 .btn-outline-primary:hover { background: #eff6ff; }
 .btn-edit { background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; padding: 10px 18px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 1rem;}
 .btn-edit:hover { background: #dbeafe; }
@@ -813,6 +880,10 @@ const importJSON = (event) => {
   .editor-panel, .notices-list-section, .email-editor-section, .history-calendar-container { padding: 15px; }
   .date-row { flex-direction: column; align-items: stretch; gap: 12px; padding: 12px; }
   .date-group { min-width: 100%; }
+  
+  .link-row { flex-direction: column; align-items: stretch; }
+  .del-row-btn { width: 100%; text-align: center; }
+
   .form-actions { display: flex; flex-direction: column; width: 100%; margin-top: 10px; gap: 10px;}
   .auto-width-btn { width: 100%; text-align: center; margin-top: 0; padding: 12px;}
   .cancel-btn { padding: 12px; }
