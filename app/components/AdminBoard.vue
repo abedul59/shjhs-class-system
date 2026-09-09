@@ -49,6 +49,14 @@
               <span class="hint">留空代表永久顯示，直到手動刪除</span>
             </div>
             
+            <!-- 💡 新增：暫存/隱藏 開關 -->
+            <div class="date-group" style="justify-content: flex-end; padding-bottom: 10px;">
+              <label class="toggle-label" style="font-size: 1rem; color: #475569;">
+                <input type="checkbox" v-model="newNotice.isHidden" />
+                👀 暫存/隱藏 (不在首頁與信件顯示)
+              </label>
+            </div>
+
             <div class="form-actions">
               <button v-if="editingNoticeId" @click="cancelEditNotice" class="cancel-btn auto-width-btn">取消編輯</button>
               <button @click="addNotice" class="add-btn auto-width-btn" :disabled="!newNotice.content || isSaving">
@@ -73,17 +81,23 @@
           <div v-if="isLoading" class="empty-state">⏳ 載入中...</div>
           <div v-else-if="notices.length === 0" class="empty-state">目前尚無任何須知事項。</div>
           
-          <div v-for="notice in notices" :key="notice.id" class="notice-item" :class="{ 'is-editing-highlight': editingNoticeId === notice.id }">
+          <!-- 💡 列表加上隱藏狀態的視覺提示 -->
+          <div v-for="notice in notices" :key="notice.id" class="notice-item" :class="{ 'is-editing-highlight': editingNoticeId === notice.id, 'is-hidden-item': notice.isHidden }">
             <div class="notice-content">
               <div class="notice-text" v-html="notice.content"></div>
               <div class="notice-dates">
                 🗓️ 刊登期間：
                 <span class="highlight">{{ notice.startDate || '未設定' }}</span> 至 <span class="highlight">{{ notice.endDate || '永久' }}</span>
-                <span v-if="!isActiveToday(notice.startDate, notice.endDate)" class="expired-tag"> (今日未生效)</span>
+                <span v-if="notice.isHidden" class="hidden-tag"> (已隱藏/暫存)</span>
+                <span v-else-if="!isActiveToday(notice.startDate, notice.endDate)" class="expired-tag"> (今日未生效)</span>
                 <span v-else class="active-tag"> (今日生效中)</span>
               </div>
             </div>
             <div class="item-actions">
+              <!-- 💡 快速切換隱藏狀態的按鈕 -->
+              <button @click="toggleNoticeHidden(notice)" class="btn-outline-primary" style="padding: 10px 15px; font-size:0.95rem;">
+                {{ notice.isHidden ? '👁️ 設為顯示' : '🙈 設為隱藏' }}
+              </button>
               <button @click="editNotice(notice)" class="btn-edit" :disabled="isSaving">✏️ 編輯</button>
               <button @click="deleteNotice(notice.id)" class="del-row-btn" :disabled="isSaving">🗑️ 刪除</button>
             </div>
@@ -249,7 +263,7 @@
 
     </div>
 
-    <!-- 💡 列印專屬區塊 (僅在列印時顯示，並自動重複 26 份) -->
+    <!-- 列印專屬區塊 (僅在列印時顯示，並自動重複 26 份) -->
     <div class="print-only-container">
       <div v-for="n in 26" :key="'print-'+n" class="print-slip">
         <div class="slip-content" v-html="formatNL(printPreviewContent)"></div>
@@ -277,7 +291,8 @@ const todayDisplay = d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'lo
 const notices = ref([])
 const editingNoticeId = ref(null)
 const newNoticeEditorRef = ref(null)
-const newNotice = ref({ content: '', startDate: todayISO, endDate: '' })
+// 💡 newNotice 增加 isHidden 屬性
+const newNotice = ref({ content: '', startDate: todayISO, endDate: '', isHidden: false })
 
 const isSendingEmail = ref(false)
 const isSavingNoticeTemplate = ref(false)
@@ -416,7 +431,8 @@ const stripHtmlToPlainText = (html) => {
 }
 
 const activeNoticesPlainText = computed(() => {
-  const active = notices.value.filter(n => isActiveToday(n.startDate, n.endDate))
+  // 💡 過濾掉 isHidden 為 true 的項目
+  const active = notices.value.filter(n => !n.isHidden && isActiveToday(n.startDate, n.endDate))
   if (active.length === 0) return '(今日尚無生效的須知事項)'
   return active.map((n, i) => `${i + 1}. ${stripHtmlToPlainText(n.content)}`).join('\n\n')
 })
@@ -433,14 +449,33 @@ const printPreviewContent = computed(() => {
 const editNotice = (notice) => {
   editingNoticeId.value = notice.id
   newNotice.value = { ...notice }
+  if (newNotice.value.isHidden === undefined) newNotice.value.isHidden = false // 防呆
   if (newNoticeEditorRef.value) newNoticeEditorRef.value.innerHTML = notice.content
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 const cancelEditNotice = () => {
   editingNoticeId.value = null
-  newNotice.value = { content: '', startDate: todayISO, endDate: '' }
+  newNotice.value = { content: '', startDate: todayISO, endDate: '', isHidden: false }
   if (newNoticeEditorRef.value) newNoticeEditorRef.value.innerHTML = ''
+}
+
+// 💡 快速切換隱藏狀態
+const toggleNoticeHidden = async (notice) => {
+  isSaving.value = true
+  try {
+    const updatedNotices = notices.value.map(n => {
+      if (n.id === notice.id) return { ...n, isHidden: !n.isHidden }
+      return n
+    })
+    const { error } = await supabase.from('system_settings').upsert({ setting_key: 'parent_notices_data', setting_value: updatedNotices }, { onConflict: 'setting_key' })
+    if (error) throw error
+    notices.value = updatedNotices
+  } catch (err) {
+    alert('❌ 狀態切換失敗：' + err.message)
+  } finally {
+    isSaving.value = false
+  }
 }
 
 const addNotice = async () => {
@@ -453,7 +488,7 @@ const addNotice = async () => {
     const idx = updatedNotices.findIndex(n => n.id === editingNoticeId.value)
     if (idx !== -1) updatedNotices[idx] = { ...newNotice.value, id: editingNoticeId.value }
   } else {
-    updatedNotices.push({ id: Date.now().toString(), content: newNotice.value.content, startDate: newNotice.value.startDate, endDate: newNotice.value.endDate })
+    updatedNotices.push({ id: Date.now().toString(), content: newNotice.value.content, startDate: newNotice.value.startDate, endDate: newNotice.value.endDate, isHidden: newNotice.value.isHidden || false })
   }
   
   updatedNotices.sort((a, b) => Number(a.id) - Number(b.id))
@@ -567,9 +602,10 @@ const fetchHistory = async () => {
     }
 
     notices.value.forEach(n => {
+      // 💡 歷史紀錄只抓取「沒有被隱藏」的
       const startOk = !n.startDate || n.startDate <= targetDate
       const endOk = !n.endDate || n.endDate >= targetDate
-      if (startOk && endOk && !foundNotices.includes(n.content)) {
+      if (!n.isHidden && startOk && endOk && !foundNotices.includes(n.content)) {
         foundNotices.push(n.content)
       }
     })
@@ -686,14 +722,18 @@ const importJSON = (event) => {
 .notice-item { display: flex; justify-content: space-between; align-items: stretch; padding: 20px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 15px; transition: 0.2s; gap: 20px; flex-wrap: wrap;}
 .notice-item:hover { border-color: #cbd5e1; box-shadow: 0 4px 8px rgba(0,0,0,0.05); }
 .is-editing-highlight { border: 2px solid #3b82f6; background: #eff6ff; }
+.is-hidden-item { opacity: 0.65; background-color: #f8fafc; border-style: dashed; }
 .notice-content { flex: 1; min-width: 250px;}
 .notice-text { color: #1e293b; font-size: 1.1rem; line-height: 1.6; margin-bottom: 15px; overflow-wrap: break-word;}
 .notice-dates { font-size: 0.95rem; color: #64748b; background: #f1f5f9; padding: 8px 15px; border-radius: 6px; display: inline-block; font-weight: bold;}
 .highlight { color: #3b82f6; }
 .active-tag { color: #10b981; font-weight: bold;}
 .expired-tag { color: #ef4444; font-weight: bold;}
+.hidden-tag { color: #8b5cf6; font-weight: bold; }
 
 .item-actions { display: flex; gap: 10px; flex-shrink: 0; align-items: flex-start;}
+.btn-outline-primary { background: white; color: #3b82f6; border: 1px solid #93c5fd; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+.btn-outline-primary:hover { background: #eff6ff; }
 .btn-edit { background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; padding: 10px 18px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 1rem;}
 .btn-edit:hover { background: #dbeafe; }
 .del-row-btn { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; font-size: 1rem;}
@@ -734,7 +774,6 @@ const importJSON = (event) => {
 .email-btn:hover:not(:disabled) { background: #d97706; }
 .email-btn:disabled { background: #cbd5e1; cursor: not-allowed; }
 
-/* 💡 新增的藍色列印按鈕 */
 .print-btn { background: #3b82f6; max-width: 500px; }
 .print-btn:hover:not(:disabled) { background: #2563eb; }
 
@@ -753,91 +792,48 @@ const importJSON = (event) => {
 .edit-actions-row { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px dashed #cbd5e1;}
 .save-btn { background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 
-/* =========================================
-   💡 列印排版樣式 (隱藏後台介面，自動展開 26 份)
-   ========================================= */
 .print-only-container { display: none; }
 
 @media print {
-  @page { 
-    size: A4 portrait; 
-    margin: 0; /* 💡 將邊界設為 0，可強制隱藏瀏覽器預設的網址、日期與頁碼 */
-  }
-  
+  @page { size: A4 portrait; margin: 0; }
   .print-hide { display: none !important; }
-  
-  .print-only-container {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    width: 100%;
-    padding: 15mm; /* 💡 把原本的邊界加到容器內，避免文字太靠邊被切掉 */
-    box-sizing: border-box;
-  }
-
-  /* 調整每張小紙條的大小，讓它自動適應 A4 (一頁大約可印 2 或 4 張) */
-  .print-slip {
-    width: 48%; 
-    border: 1px dashed #94a3b8;
-    padding: 20px;
-    margin-bottom: 15px;
-    box-sizing: border-box;
-    page-break-inside: avoid; /* 防止單據被跨頁切斷 */
-  }
-
-  .slip-content {
-    font-family: "微軟正黑體", "Microsoft JhengHei", sans-serif;
-    font-size: 12pt;
-    line-height: 1.6;
-    color: #000;
-  }
+  .print-only-container { display: flex; flex-wrap: wrap; justify-content: space-between; width: 100%; padding: 15mm; box-sizing: border-box; }
+  .print-slip { width: 48%; border: 1px dashed #94a3b8; padding: 20px; margin-bottom: 15px; box-sizing: border-box; page-break-inside: avoid; }
+  .slip-content { font-family: "微軟正黑體", "Microsoft JhengHei", sans-serif; font-size: 12pt; line-height: 1.6; color: #000; }
 }
 
 @media (max-width: 768px) {
   .admin-board-container { padding-bottom: 20px; }
   .table-header h3 { font-size: 1.25rem; }
-  
   .visibility-control-box { padding: 15px; flex-direction: column; align-items: flex-start; gap: 10px; }
-
   .view-tabs { flex-direction: column; gap: 8px; border-bottom: none; }
   .tab-btn { width: 100%; border-radius: 8px; padding: 12px; font-size: 1.05rem; border: 1px solid #cbd5e1; background: white; }
   .tab-btn.active { border: 2px solid #3b82f6; background: #eff6ff; }
-
   .board-editor-container { padding: 10px; border: none; background: transparent; }
-  .editor-panel, .notices-list-section, .email-editor-section, .history-calendar-container { 
-    padding: 15px; 
-  }
-
+  .editor-panel, .notices-list-section, .email-editor-section, .history-calendar-container { padding: 15px; }
   .date-row { flex-direction: column; align-items: stretch; gap: 12px; padding: 12px; }
   .date-group { min-width: 100%; }
-  
   .form-actions { display: flex; flex-direction: column; width: 100%; margin-top: 10px; gap: 10px;}
   .auto-width-btn { width: 100%; text-align: center; margin-top: 0; padding: 12px;}
   .cancel-btn { padding: 12px; }
-
   .list-header-flex { flex-direction: column; align-items: stretch; gap: 12px; }
   .io-actions { display: flex; width: 100%; gap: 10px; }
   .io-btn { flex: 1; text-align: center; padding: 10px; }
-
   .notice-item { flex-direction: column; padding: 15px; gap: 15px; }
   .notice-content { min-width: 100%; }
   .notice-dates { display: block; font-size: 0.9rem; line-height: 1.8; padding: 12px; border-radius: 8px;}
-  .item-actions { width: 100%; flex-direction: row; gap: 10px; }
-  .item-actions button { flex: 1; padding: 12px; font-size: 1rem; }
-
+  .item-actions { width: 100%; flex-direction: column; gap: 10px; }
+  .item-actions button { width: 100%; padding: 12px; font-size: 1rem; }
   .editor-header { flex-direction: column; align-items: stretch; gap: 12px;}
   .save-template-btn.small-btn { width: 100%; padding: 12px; font-size: 1.05rem; }
   .email-btn { max-width: 100%; padding: 15px; font-size: 1.1rem; }
   .plain-text-preview { padding: 15px; }
   .preview-subject, .preview-body { font-size: 1rem; }
-
   .query-header { flex-direction: column; align-items: stretch; gap: 10px; }
   .date-picker { width: 100%; }
-
   .detail-header-flex { flex-direction: column; align-items: stretch; gap: 12px; }
   .btn-edit { width: 100%; text-align: center; padding: 12px;}
   .history-item { padding: 15px; font-size: 1.05rem; }
-  
   .edit-actions-row { flex-direction: column; align-items: stretch; gap: 10px; }
   .save-btn { width: 100%; padding: 15px; font-size: 1.1rem; }
 }
