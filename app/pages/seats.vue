@@ -62,7 +62,7 @@
 
       </header>
 
-      <!-- 💡 新增：多模式切換區塊 -->
+      <!-- 多模式切換區塊 -->
       <div class="modes-container">
         <div class="mode-tabs">
           <button 
@@ -75,6 +75,11 @@
           </button>
         </div>
         <div class="mode-actions">
+          <!-- 💡 新增：複製平常模式按鈕 (僅在非平常模式時顯示) -->
+          <button v-if="currentEditMode !== 'normal'" @click="copyFromNormalMode" class="btn-copy-normal">
+            📋 從「平常模式」複製配置
+          </button>
+
           <button v-if="activePublishedMode !== currentEditMode" @click="setAsPublished" class="btn-set-publish">
             🚩 將「{{ currentModeLabel }}」設為首頁顯示
           </button>
@@ -280,7 +285,6 @@ const isLoggingIn = ref(false)
 const passwordInput = ref('')
 const isSaving = ref(false)
 
-// === 💡 多重模式核心定義 ===
 const modeDefs = [
   { key: 'normal', label: '平常模式' },
   { key: 'backup', label: '備用模式' },
@@ -385,6 +389,22 @@ const setAsPublished = () => {
   activePublishedMode.value = currentEditMode.value
 }
 
+// 💡 新增：複製平常模式按鈕邏輯
+const copyFromNormalMode = () => {
+  if (!confirm(`確定要從「平常模式」複製所有座位、姓名與設定嗎？\n這將會覆蓋您目前在【${currentModeLabel.value}】的排版！`)) return;
+  
+  // 1. 深度複製平常模式的資料
+  const normalData = JSON.parse(JSON.stringify(modesData.value['normal']));
+  
+  // 2. 替換掉當前模式在記憶體中的資料
+  modesData.value[currentEditMode.value] = normalData;
+  
+  // 3. 重新把記憶體的資料渲染到畫面上
+  loadMemoryToEditor(currentEditMode.value);
+  
+  alert('✅ 已成功複製「平常模式」的配置！\n請您繼續微調，完成後記得點擊「儲存所有模式」。');
+}
+
 // === API 與同步 ===
 const syncFromStudents = async (showPrompt = false) => {
   if (showPrompt && !confirm(`確定從資料庫載入最新學生名單並套用至【${currentModeLabel.value}】嗎？\n(這不會改變您目前的排版位置)`)) return;
@@ -411,11 +431,9 @@ const fetchLayout = async () => {
   if (data?.setting_value) {
     const val = data.setting_value
     if (val.modes) {
-      // 💡 讀取新版的多模式結構
       modesData.value = val.modes
       activePublishedMode.value = val.activeMode || 'normal'
     } else {
-      // 💡 舊版資料過渡遷移：將原有資料塞進「平常模式」
       const legacySeats = (val.seats || initSeats()).map(seat => {
         if (seat.content !== undefined) {
           const lines = seat.content.split('\n')
@@ -432,7 +450,6 @@ const fetchLayout = async () => {
     }
   }
 
-  // 將選定的模式載入畫面
   loadMemoryToEditor(activePublishedMode.value)
   await syncFromStudents(false)
 }
@@ -440,18 +457,17 @@ const fetchLayout = async () => {
 const saveLayout = async () => {
   isSaving.value = true
   try {
-    syncEditorToMemory() // 確保編輯中的畫面被收入記憶體
+    syncEditorToMemory()
     const activeData = modesData.value[activePublishedMode.value]
     
-    // 💡 組合出 Index 首頁看得懂的結構 (將 ActiveMode 的資料提取到根目錄)
     const payload = { 
       seats: activeData.seats, 
       isRotated: activeData.isRotated, 
       isVisible: activeData.isVisible, 
       settings: activeData.settings, 
       printData: activeData.printData,
-      activeMode: activePublishedMode.value, // 新增屬性
-      modes: modesData.value                 // 新增屬性：存放所有模式
+      activeMode: activePublishedMode.value,
+      modes: modesData.value                 
     }
     
     await supabase.from('system_settings').upsert({ setting_key: 'seating_chart_data', setting_value: payload }, { onConflict: 'setting_key' })
@@ -562,13 +578,16 @@ const exportHistory = async (type) => {
 .btn-save { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 .btn-logout { background: #ef4444; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 
-/* 💡 新增：多模式標籤切換區塊樣式 */
 .modes-container { display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px 25px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 15px;}
 .mode-tabs { display: flex; gap: 10px; flex-wrap: wrap; }
 .mode-tab { position: relative; padding: 10px 20px; border: 2px solid #e2e8f0; border-radius: 8px; background: #f8fafc; font-weight: bold; color: #475569; cursor: pointer; transition: 0.2s; font-size: 1rem;}
 .mode-tab:hover { background: #f1f5f9; }
 .mode-tab.is-active { border-color: #0f766e; background: #f0fdfa; color: #0f766e; box-shadow: 0 2px 4px rgba(15, 118, 110, 0.2); }
 .published-badge { position: absolute; top: -10px; right: -10px; background: #ef4444; color: white; font-size: 0.75rem; padding: 3px 8px; border-radius: 12px; font-weight: bold; box-shadow: 0 2px 4px rgba(239, 68, 68, 0.4); border: 2px solid white;}
+
+.mode-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.btn-copy-normal { background: #6366f1; color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1rem; transition: 0.2s;}
+.btn-copy-normal:hover { background: #4f46e5; }
 .btn-set-publish { background: #f59e0b; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1rem; transition: 0.2s; }
 .btn-set-publish:hover { background: #d97706; }
 .status-text-success { font-weight: bold; color: #10b981; font-size: 1.05rem; display: flex; align-items: center; gap: 5px;}
@@ -666,7 +685,7 @@ textarea.form-control { resize: vertical; line-height: 1.5; font-family: inherit
   .style-group { border-right: none; padding-right: 0; justify-content: center; }
   .header-actions { justify-content: center; }
   .modes-container { flex-direction: column; align-items: stretch; }
-  .mode-actions { align-self: center; margin-top: 10px;}
+  .mode-actions { align-self: center; margin-top: 10px; width: 100%; justify-content: center; }
   .calendar-layout { flex-direction: column; }
   .export-btn-group { width: 100%; justify-content: space-between;}
   .btn-export-json, .btn-export-csv { flex: 1;}
