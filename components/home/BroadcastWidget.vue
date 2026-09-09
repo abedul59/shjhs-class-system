@@ -189,14 +189,12 @@ const shouldProcessBroadcast = (targetNameOrIP) => {
   return true; 
 }
 
-// 💡 分散式日誌記錄功能：由觸發排程的電腦負責寫入日誌 (加入隨機延遲防碰撞)
 const logScheduledBroadcast = async (scheduleText, scheduleSound, targetIP) => {
-  await new Promise(r => setTimeout(r, Math.random() * 2000)) // 隨機延遲 0~2秒
+  await new Promise(r => setTimeout(r, Math.random() * 2000)) 
   try {
     const { data: logData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'broadcast_logs').maybeSingle()
     let logs = logData?.setting_value || []
     
-    // 檢查最近 1 分鐘內是否已有其他電腦寫入過這筆相同的定時廣播
     const isAlreadyLogged = logs.some(l => l.type === '定時自動觸發' && l.text === scheduleText && (Date.now() - l.id < 60000))
     if (!isAlreadyLogged) {
       logs.unshift({
@@ -215,22 +213,33 @@ const logScheduledBroadcast = async (scheduleText, scheduleSound, targetIP) => {
   } catch (e) {}
 }
 
+// 💡 雙軌監聽：同時監聽「導師後台廣播」與「科任老師前台廣播」
 const pollManualBroadcast = async () => {
   if (!props.isIpBrownlisted) return; 
   try {
-    const { data } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'broadcast_settings').maybeSingle()
-    if (data && data.setting_value && data.setting_value.manual) {
-      const config = data.setting_value.manual
-      const lastPlayedStamp = Number(localStorage.getItem('last_played_broadcast')) || 0
-      
-      if (config.triggerTimestamp > lastPlayedStamp) {
-        if (shouldProcessBroadcast(config.targetIP)) { triggerBroadcast(config) }
-        localStorage.setItem('last_played_broadcast', config.triggerTimestamp)
-      }
+    const keys = ['broadcast_settings', 'teacher_broadcast_settings']
+    const { data } = await supabase.from('system_settings').select('setting_key, setting_value').in('setting_key', keys)
+    
+    if (data && data.length > 0) {
+      data.forEach(row => {
+        if (row.setting_value && row.setting_value.manual) {
+          const config = row.setting_value.manual
+          const storageKey = `last_played_${row.setting_key}`
+          const lastPlayedStamp = Number(localStorage.getItem(storageKey)) || 0
+          
+          if (config.triggerTimestamp > lastPlayedStamp) {
+            if (shouldProcessBroadcast(config.targetIP)) { 
+              triggerBroadcast(config) 
+            }
+            localStorage.setItem(storageKey, config.triggerTimestamp)
+          }
+        }
+      })
     }
   } catch (e) {}
 }
 
+// 💡 雙軌監聽定時排程：合併「導師後台」與「科任老師前台」的排程
 const checkSchedules = async () => {
   if (!props.isIpBrownlisted) return; 
 
@@ -241,15 +250,26 @@ const checkSchedules = async () => {
   if (currentSec > 15 || lastTriggeredScheduleTime.value === currentHHMM) return
 
   try {
-    const { data } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'broadcast_settings').maybeSingle()
-    if (data && data.setting_value && data.setting_value.schedules) {
-      const activeSchedules = data.setting_value.schedules.filter(s => s.isActive)
+    const keys = ['broadcast_settings', 'teacher_broadcast_settings']
+    const { data } = await supabase.from('system_settings').select('setting_value').in('setting_key', keys)
+    
+    let combinedSchedules = []
+    if (data) {
+      data.forEach(row => {
+        if (row.setting_value && row.setting_value.schedules) {
+          combinedSchedules = [...combinedSchedules, ...row.setting_value.schedules]
+        }
+      })
+    }
+
+    if (combinedSchedules.length > 0) {
+      const activeSchedules = combinedSchedules.filter(s => s.isActive)
       for (const schedule of activeSchedules) {
         if (schedule.time === currentHHMM && shouldProcessBroadcast(schedule.targetIP)) {
           lastTriggeredScheduleTime.value = currentHHMM
           triggerBroadcast(schedule)
-          logScheduledBroadcast(schedule.text, schedule.sound, schedule.targetIP) // 💡 觸發時寫入日誌
-          break
+          logScheduledBroadcast(schedule.text, schedule.sound, schedule.targetIP)
+          break 
         }
       }
     }
