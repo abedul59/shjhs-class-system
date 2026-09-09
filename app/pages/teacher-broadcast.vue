@@ -7,7 +7,7 @@
     <div class="content-wrapper">
       <div class="header-box">
         <h3>📢 教師專屬廣播控制中心</h3>
-        <p class="help-text">💡 此為科任老師與導師專用的獨立廣播站，發送的廣播與排程與後台總管完全獨立。</p>
+        <p class="help-text">💡 此為科任老師與導師專用的獨立廣播站，發送的廣播與歷史紀錄皆與後台總管完全獨立。</p>
       </div>
 
       <!-- 🔒 密碼解鎖畫面 -->
@@ -81,7 +81,7 @@
                   <option v-for="target in savedIPs" :key="target" :value="target">🎯 {{ target }}</option>
                 </select>
                 <input type="text" v-model="newIPInput" class="custom-input flex-1" placeholder="輸入名稱 (如: 701教室)..." />
-                <button @click="saveNewIP" class="btn-sub">💾 加入</button>
+                <button @click="saveNewIP" class="btn-sub">💾 加入選單</button>
                 <button v-if="manualConfig.targetIP" @click="removeSavedIP(manualConfig.targetIP)" class="btn-sub-del">🗑️ 刪除</button>
               </div>
             </div>
@@ -97,40 +97,45 @@
           </div>
         </div>
 
-        <!-- 定時排程區塊 -->
-        <div class="card schedule-card">
-          <div class="schedule-header">
-            <h4 class="card-title">⏰ 定時廣播排程 (每日循環)</h4>
-            <button @click="addSchedule" class="btn-add">➕ 新增排程</button>
-          </div>
-          <div v-if="schedules.length === 0" class="empty-state">目前沒有任何定時排程。</div>
-          <div v-else class="schedule-list">
-            <div v-for="(sch, index) in schedules" :key="index" class="schedule-item" :class="{'is-disabled': !sch.isActive}">
-              <div class="sch-row top-row">
-                <input type="checkbox" v-model="sch.isActive" class="toggle-chk" />
-                <input type="time" v-model="sch.time" class="time-input" required />
-                <input type="text" v-model="sch.text" class="custom-input text-input" placeholder="排程廣播文字..." />
-                <button @click="removeSchedule(index)" class="btn-del">🗑️</button>
-              </div>
-              <div class="sch-row bottom-row">
-                <div class="mini-group"><select v-model="sch.sound" class="custom-input mini-select"><option v-for="opt in soundOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option></select></div>
-                <div class="mini-group"><select v-model.number="sch.playCount" class="custom-input mini-select-small"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>
-                <div class="mini-group"><select v-model.number="sch.textPlayCount" class="custom-input mini-select-small"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>
-                <div class="mini-group"><select v-model.number="sch.displayDuration" class="custom-input mini-select-small"><option value="10">10秒</option><option value="30">30秒</option><option value="60">1分</option><option value="120">2分</option></select></div>
-                <div class="mini-group ip-group">
-                  <select v-model="sch.targetIP" class="custom-input ip-select">
-                    <option value="">🌐 全發送</option><option v-for="target in savedIPs" :key="target" :value="target">{{ target }}</option>
-                  </select>
-                </div>
-              </div>
+        <!-- 💡 獨立教師日誌追蹤區塊 -->
+        <div class="card logs-card">
+          <div class="card-header-row">
+            <h4 class="card-title">📝 教師廣播紀錄 (獨立儲存)</h4>
+            <div class="log-actions">
+              <button @click="exportJSON" class="btn-outline">📄 匯出 JSON</button>
+              <button @click="exportCSV" class="btn-outline">📊 匯出 CSV</button>
+              <button @click="$refs.fileInput.click()" class="btn-outline-primary">📥 匯入還原</button>
+              <input type="file" ref="fileInput" accept=".json, .csv" @change="importLogs" style="display:none" />
             </div>
           </div>
-          <div class="save-row">
-            <button @click="saveSettingsToDB" class="btn-save-all" :disabled="isSavingSch">
-              {{ isSavingSch ? '儲存中...' : '💾 儲存所有排程與設定' }}
-            </button>
+
+          <div class="table-container">
+            <table class="logs-table">
+              <thead>
+                <tr>
+                  <th>發生時間</th>
+                  <th>發送身分</th>
+                  <th>廣播文字內容</th>
+                  <th>音效</th>
+                  <th>接收對象</th>
+                  <th>發出 IP</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="broadcastLogs.length === 0"><td colspan="6" class="empty-log">目前尚無任何發送紀錄。</td></tr>
+                <tr v-for="log in broadcastLogs" :key="log.id">
+                  <td class="col-time">{{ log.time }}</td>
+                  <td><span class="type-tag">{{ log.role || '未知' }}</span></td>
+                  <td class="col-text">{{ log.text }}</td>
+                  <td>{{ getSoundLabel(log.sound) }}</td>
+                  <td class="col-ip">{{ log.targetIP }}</td>
+                  <td class="col-ip">{{ log.ip }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
+
       </div>
     </div>
   </div>
@@ -146,7 +151,7 @@ const isVerifying = ref(false)
 const currentTeacherRole = ref('')
 const currentIP = ref('檢查中...')
 
-const isSending = ref(false); const isSavingSch = ref(false); const isTesting = ref(false)
+const isSending = ref(false); const isTesting = ref(false)
 
 const soundOptions = [
   { value: 'none', label: '🔇 無音效 (純文字)' }, { value: 'bell_ring', label: '🛎️ 服務鈴 (叮叮)' },
@@ -186,7 +191,11 @@ const sounds = {
 }
 
 const manualConfig = ref({ text: '', sound: 'bell_ring', playCount: 1, textPlayCount: 1, displayDuration: 120, targetIP: '', triggerTimestamp: 0 })
-const schedules = ref([]); const presets = ref([]); const savedIPs = ref([]); const newIPInput = ref('')
+const presets = ref([]); const savedIPs = ref([]); const newIPInput = ref('')
+const broadcastLogs = ref([]) // 💡 存放教師專屬歷史紀錄
+
+const fileInput = ref(null)
+const getSoundLabel = (val) => { const f = soundOptions.find(s => s.value === val); return f ? f.label : val }
 
 // === 🔒 密碼驗證 ===
 const verifyPassword = async () => {
@@ -212,7 +221,7 @@ const verifyPassword = async () => {
     const { data: tData } = await supabase.from('subject_teachers').select('*')
     if (tData) {
       const matchTeacher = tData.find(t => t.password === pwdInput.value)
-      if (matchTeacher) verifiedRole = `科任老師 (${matchTeacher.subject_name})`
+      if (matchTeacher) verifiedRole = `${matchTeacher.subject_name}老師`
     }
   }
 
@@ -220,21 +229,26 @@ const verifyPassword = async () => {
     currentTeacherRole.value = verifiedRole
     isUnlocked.value = true
     pwdInput.value = ''
-    fetchSettingsAndCheckIP()
+    fetchSettingsAndLogs()
   } else {
     alert('❌ 密碼錯誤！')
   }
   isVerifying.value = false
 }
 
-// === 資料庫互動邏輯 (獨立 Key: teacher_broadcast_settings) ===
-const fetchSettingsAndCheckIP = async () => {
+// === 💡 資料庫互動邏輯 (獨立 Key: teacher_broadcast_settings & teacher_broadcast_logs) ===
+const fetchSettingsAndLogs = async () => {
+  // 1. 抓設定
   const { data: bData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'teacher_broadcast_settings').maybeSingle()
   if (bData && bData.setting_value) {
-    if (bData.setting_value.schedules) schedules.value = bData.setting_value.schedules
     if (bData.setting_value.presets) presets.value = bData.setting_value.presets
     if (bData.setting_value.savedIPs) savedIPs.value = bData.setting_value.savedIPs
   }
+  
+  // 2. 抓專屬紀錄
+  const { data: logData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'teacher_broadcast_logs').maybeSingle()
+  if (logData && logData.setting_value) { broadcastLogs.value = logData.setting_value }
+
   try {
     const ipRes = await fetch('https://api.ipify.org?format=json')
     const { ip } = await ipRes.json()
@@ -243,13 +257,83 @@ const fetchSettingsAndCheckIP = async () => {
 }
 
 const saveSettingsToDB = async (showAlert = true) => {
-  isSavingSch.value = true
-  const newSettings = { manual: manualConfig.value, schedules: schedules.value, presets: presets.value, savedIPs: savedIPs.value }
-  const { error } = await supabase.from('system_settings').upsert({ setting_key: 'teacher_broadcast_settings', setting_value: newSettings }, { onConflict: 'setting_key' })
-  if (showAlert) { if (!error) alert('✅ 設定已成功儲存！'); else alert('❌ 儲存失敗') }
-  isSavingSch.value = false
+  const newSettings = { manual: manualConfig.value, presets: presets.value, savedIPs: savedIPs.value }
+  await supabase.from('system_settings').upsert({ setting_key: 'teacher_broadcast_settings', setting_value: newSettings }, { onConflict: 'setting_key' })
+  if (showAlert) alert('✅ 廣播設定已儲存！')
 }
 
+// === 💡 日誌核心：寫入手動廣播日誌 ===
+const appendManualLog = async () => {
+  const newLog = {
+    id: Date.now(),
+    time: new Date().toLocaleString('zh-TW', { hour12: false }),
+    role: currentTeacherRole.value,
+    text: manualConfig.value.text,
+    sound: manualConfig.value.sound,
+    targetIP: manualConfig.value.targetIP || '全班發送',
+    ip: currentIP.value,
+    userAgent: navigator.userAgent
+  }
+  broadcastLogs.value.unshift(newLog)
+  if (broadcastLogs.value.length > 500) broadcastLogs.value = broadcastLogs.value.slice(0, 500)
+  await supabase.from('system_settings').upsert({ setting_key: 'teacher_broadcast_logs', setting_value: broadcastLogs.value }, { onConflict: 'setting_key' })
+}
+
+// === 💡 匯出與匯入功能 ===
+const exportJSON = () => {
+  const dataStr = JSON.stringify(broadcastLogs.value, null, 2);
+  const blob = new Blob([dataStr], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `teacher_logs_${Date.now()}.json`; a.click();
+}
+
+const exportCSV = () => {
+  const headers = ['時間', '發送身分', '廣播內容', '音效代碼', '發送目標', '指令發出設備IP'];
+  const rows = broadcastLogs.value.map(l => [ l.time, l.role, `"${(l.text || '').replace(/"/g, '""')}"`, l.sound, `"${l.targetIP}"`, l.ip ]);
+  const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" }); 
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `teacher_logs_${Date.now()}.csv`; a.click();
+}
+
+const parseCSVRow = (str) => {
+  let result = []; let current = ''; let inQuotes = false;
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    if (char === '"') { if (inQuotes && str[i+1] === '"') { current += '"'; i++; } else { inQuotes = !inQuotes; } } 
+    else if (char === ',' && !inQuotes) { result.push(current); current = ''; } else { current += char; }
+  }
+  result.push(current); return result;
+}
+
+const importLogs = (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (event) => {
+    try {
+      const content = event.target.result; let importedLogs = [];
+      if (file.name.endsWith('.json')) { importedLogs = JSON.parse(content); } 
+      else if (file.name.endsWith('.csv')) {
+        const lines = content.split('\n').filter(l => l.trim());
+        for (let i = 1; i < lines.length; i++) {
+          const row = parseCSVRow(lines[i]);
+          importedLogs.push({ id: Date.now() + i, time: row[0], role: row[1], text: row[2], sound: row[3], targetIP: row[4], ip: row[5] });
+        }
+      }
+      if (importedLogs.length > 0) {
+        broadcastLogs.value = [...importedLogs, ...broadcastLogs.value].slice(0, 500);
+        await supabase.from('system_settings').upsert({ setting_key: 'teacher_broadcast_logs', setting_value: broadcastLogs.value }, { onConflict: 'setting_key' })
+        alert('✅ 歷史紀錄匯入成功！');
+      }
+    } catch (error) { alert('❌ 檔案解析失敗，建議優先匯入 JSON 格式備份檔。'); }
+    e.target.value = ''; 
+  };
+  reader.readAsText(file);
+}
+
+// 其他互動邏輯
 const saveNewIP = async () => { if (!newIPInput.value.trim()) return; const newTarget = newIPInput.value.trim(); if (!savedIPs.value.includes(newTarget)) { savedIPs.value.push(newTarget); manualConfig.value.targetIP = newTarget; newIPInput.value = ''; await saveSettingsToDB(false); } }
 const removeSavedIP = async (targetToRemove) => { if (confirm(`確定要將「${targetToRemove}」移除嗎？`)) { savedIPs.value = savedIPs.value.filter(t => t !== targetToRemove); manualConfig.value.targetIP = ''; await saveSettingsToDB(false); } }
 const saveAsPreset = async () => { if (!manualConfig.value.text) return alert('⚠️ 請先輸入廣播文字再儲存！'); const presetName = prompt('請命名：', manualConfig.value.text.substring(0, 8) + '...'); if (!presetName) return; presets.value.push({ name: presetName, text: manualConfig.value.text, sound: manualConfig.value.sound, playCount: manualConfig.value.playCount, textPlayCount: manualConfig.value.textPlayCount, displayDuration: manualConfig.value.displayDuration, targetIP: manualConfig.value.targetIP }); await saveSettingsToDB(false) }
@@ -274,18 +358,16 @@ const testSoundAndTTS = async () => {
   isTesting.value = false
 }
 
+// 💡 發送廣播時，同時更新設定並寫入獨立日誌
 const sendManualBroadcast = async () => {
   if (!manualConfig.value.text.trim()) return alert('⚠️ 廣播文字不可為空！')
   isSending.value = true
   manualConfig.value.triggerTimestamp = Date.now()
   await saveSettingsToDB(false) 
+  await appendManualLog() 
   alert('✅ 廣播訊號已發送！')
   isSending.value = false
 }
-
-const addSchedule = () => { schedules.value.push({ isActive: true, time: '08:00', text: '上課時間開始', sound: 'bell_ring', playCount: 1, textPlayCount: 1, displayDuration: 120, targetIP: '' }) }
-const removeSchedule = (index) => { if (confirm('確定要刪除這筆排程嗎？')) schedules.value.splice(index, 1) }
-
 </script>
 
 <style scoped>
@@ -325,7 +407,7 @@ const removeSchedule = (index) => { if (confirm('確定要刪除這筆排程嗎�
 .btn-save-preset { background: #f8fafc; color: #0284c7; border: 1px solid #bae6fd; padding: 6px 10px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.85rem; }
 
 .manual-card { border-left: 4px solid #ef4444; }
-.schedule-card { border-left: 4px solid #3b82f6; }
+.logs-card { border-left: 4px solid #8b5cf6; }
 
 .form-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 15px; }
 .form-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 150px; }
@@ -346,33 +428,23 @@ const removeSchedule = (index) => { if (confirm('確定要刪除這筆排程嗎�
 .btn-test { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 10px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
 .btn-send { background: #ef4444; color: white; border: none; padding: 10px 25px; border-radius: 6px; font-size: 1.1rem; font-weight: bold; cursor: pointer; box-shadow: 0 4px 6px rgba(239,68,68,0.3); }
 
-.schedule-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px dashed #cbd5e1; padding-bottom: 10px; }
-.btn-add { background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.9rem;}
+/* 日誌專屬樣式 */
+.log-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn-outline { background: white; color: #475569; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; transition: 0.2s; font-weight: bold; }
+.btn-outline:hover { background: #f1f5f9; }
+.btn-outline-primary { background: white; color: #8b5cf6; border: 1px solid #c4b5fd; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; transition: 0.2s; font-weight: bold; }
+.btn-outline-primary:hover { background: #f5f3ff; }
 
-.empty-state { text-align: center; padding: 20px; color: #94a3b8; font-style: italic; background: #f8fafc; border-radius: 8px; }
-.schedule-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; }
-.schedule-item { display: flex; flex-direction: column; gap: 8px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; }
-.schedule-item.is-disabled { opacity: 0.6; filter: grayscale(100%); }
+.table-container { width: 100%; overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+.logs-table { width: 100%; border-collapse: collapse; min-width: 600px; font-size: 0.95rem; }
+.logs-table th, .logs-table td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+.logs-table th { background: #f8fafc; font-weight: bold; color: #475569; position: sticky; top: 0; }
+.logs-table tr:hover { background: #f1f5f9; }
+.empty-log { text-align: center; color: #94a3b8; font-style: italic; padding: 30px !important; }
 
-.sch-row { display: flex; align-items: center; gap: 10px; width: 100%; flex-wrap: wrap; }
-.toggle-chk { transform: scale(1.3); cursor: pointer; }
-.time-input { padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-family: monospace; font-weight: bold; }
-.text-input { flex: 1; min-width: 150px; }
-.btn-del { background: #fee2e2; color: #ef4444; border: 1px solid #fca5a5; padding: 6px; border-radius: 4px; cursor: pointer; margin-left: auto;}
+.type-tag { padding: 3px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; background: #f3e8ff; color: #7e22ce; }
 
-.mini-group { display: flex; align-items: center; gap: 5px; font-size: 0.85rem; color: #475569; }
-.mini-select { width: 120px; padding: 4px; font-size: 0.85rem; }
-.mini-select-small { width: 50px; padding: 4px; font-size: 0.85rem; }
-.ip-group { flex: 1; justify-content: flex-end; }
-.ip-select { width: 120px; padding: 4px; font-size: 0.85rem; }
-
-.save-row { display: flex; justify-content: flex-end; padding-top: 15px; border-top: 1px solid #e2e8f0; }
-.btn-save-all { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; }
-
-@media (max-width: 768px) {
-  .sch-row { flex-direction: column; align-items: flex-start; }
-  .btn-del { margin-left: 0; align-self: flex-end; }
-  .ip-group { justify-content: flex-start; width: 100%; }
-  .ip-select { width: 100%; }
-}
+.col-time { white-space: nowrap; color: #64748b; font-size: 0.85rem; }
+.col-text { font-weight: bold; color: #334155; }
+.col-ip { font-family: monospace; color: #0369a1; font-size: 0.9rem; }
 </style>
