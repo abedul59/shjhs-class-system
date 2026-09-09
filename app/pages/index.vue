@@ -248,13 +248,15 @@ const officerPasswords = ref({ academic: '', counseling: '', discipline: '', tea
 const currentEditorRole = ref('') 
 
 const globalButtonSettings = ref({})
+
+// 💡 核心修正：在所有身分中加入 broadcast 屬性，預設導師與科任老師為 true，其餘為 false
 const defaultRoleSettings = {
-  anonymous: { parentBind: true, parentMsg: true, studentMsg: true, parentLeave: true, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false },
-  classroom: { parentBind: false, parentMsg: false, studentMsg: false, parentLeave: false, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false },
-  parent: { parentBind: false, parentMsg: true, studentMsg: false, parentLeave: true, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false },
-  student: { parentBind: false, parentMsg: false, studentMsg: true, parentLeave: false, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false },
-  subject_teacher: { parentBind: false, parentMsg: false, studentMsg: false, parentLeave: false, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false },
-  teacher: { parentBind: true, parentMsg: true, studentMsg: true, parentLeave: true, assignments: true, discipline: true, hygiene: true, seats: true, schedule: true, exams: true, emergency: true, admin: true }
+  anonymous: { parentBind: true, parentMsg: true, studentMsg: true, parentLeave: true, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false, broadcast: false },
+  classroom: { parentBind: false, parentMsg: false, studentMsg: false, parentLeave: false, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false, broadcast: false },
+  parent: { parentBind: false, parentMsg: true, studentMsg: false, parentLeave: true, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false, broadcast: false },
+  student: { parentBind: false, parentMsg: false, studentMsg: true, parentLeave: false, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false, broadcast: false },
+  subject_teacher: { parentBind: false, parentMsg: false, studentMsg: false, parentLeave: false, assignments: true, discipline: true, hygiene: true, seats: true, schedule: false, exams: false, emergency: true, admin: false, broadcast: true },
+  teacher: { parentBind: true, parentMsg: true, studentMsg: true, parentLeave: true, assignments: true, discipline: true, hygiene: true, seats: true, schedule: true, exams: true, emergency: true, admin: true, broadcast: true }
 }
 const roleButtonSettings = ref(JSON.parse(JSON.stringify(defaultRoleSettings)))
 
@@ -561,24 +563,7 @@ const saveClassNoteItems = async () => {
 </script>
 
 <style scoped>
-/* =========================================================
-   💡 手機版響應式 (RWD) 核心防護機制 
-   確保最外層嚴格限制在 100vw，防止內部表格撐破版面
-   ========================================================= */
-.page-container { 
-  min-height: 100vh; 
-  background-color: #f3f4f6; 
-  padding: 20px; 
-  font-family: sans-serif; 
-  display: flex; 
-  flex-direction: column; 
-  gap: 20px; 
-  transition: 0.3s; 
-  max-width: 100vw; 
-  overflow-x: hidden; /* 防止整個網頁被過寬的子元素撐破 */
-  box-sizing: border-box; 
-}
-
+.page-container { min-height: 100vh; background-color: #f3f4f6; padding: 20px; font-family: sans-serif; display: flex; flex-direction: column; gap: 20px; transition: 0.3s; max-width: 100vw; overflow-x: hidden; box-sizing: border-box; }
 .is-exam-mode { padding: 0; background: var(--ex-bg); overflow: hidden; }
 
 .normal-home-content { width: 100%; max-width: 100%; box-sizing: border-box; }
@@ -607,9 +592,6 @@ const saveClassNoteItems = async () => {
 :deep(.mt-10) { margin-top: 10px; }
 :deep(.mt-15) { margin-top: 15px; }
 
-/* =========================================================
-   🧹 恢復：衛生工作與座位表的專屬深度樣式 (Deep CSS) 
-   ========================================================= */
 :deep(.custom-table) { width: 100%; border-collapse: collapse; min-width: 800px; text-align: center; font-size: 0.95rem; }
 :deep(.custom-table th), :deep(.custom-table td) { border: 1px solid #000; padding: 8px; vertical-align: middle; }
 :deep(.custom-table th) { background-color: #f1f5f9; font-weight: bold; }
@@ -627,25 +609,13 @@ const saveClassNoteItems = async () => {
 :deep(.squad-table tbody tr td[rowspan] + td) { font-size: inherit !important; font-weight: normal !important; }
 :deep(.squad-table tbody tr td[rowspan] + td + td) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
 
-/* 💡 新增：手機版專屬表格 RWD 深度優化，防止表格撐破首頁版面 */
 @media (max-width: 850px) {
-  :deep(.custom-table) { 
-    display: block; 
-    overflow-x: auto; 
-    white-space: nowrap; 
-    min-width: 100%; /* 取消 800px 限制 */
-    border: none; /* 隱藏最外框避免滑動時視覺奇怪 */
-  }
-  :deep(.custom-table th), :deep(.custom-table td) {
-    white-space: nowrap;
-  }
-  /* 手機版不要讓座號無限放大撐破格子 */
+  :deep(.custom-table) { display: block; overflow-x: auto; white-space: nowrap; min-width: 100%; border: none; }
+  :deep(.custom-table th), :deep(.custom-table td) { white-space: nowrap; }
   :deep(.morning-table tbody tr td:nth-child(2)), 
   :deep(.morning-table tbody tr td[rowspan] + td + td), 
   :deep(.lunch-table tbody tr:nth-child(even) td), 
   :deep(.squad-table tbody tr td:nth-child(2)), 
-  :deep(.squad-table tbody tr td[rowspan] + td + td) { 
-    font-size: 1.2rem !important; 
-  }
+  :deep(.squad-table tbody tr td[rowspan] + td + td) { font-size: 1.2rem !important; }
 }
 </style>
