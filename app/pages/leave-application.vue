@@ -248,7 +248,6 @@ const previewBodyNL = computed(() => previewBody.value.replace(/\n/g, '<br>'))
 onMounted(async () => {
   leaveDate.value = todayDate.value
   
-  // 💡 修正點：改回最安全的 select('*')，保證資料表欄位不管怎麼變都不會報錯崩潰！
   const { data: sData, error: sError } = await supabase.from('students').select('*').order('seat_number')
   if (sError) {
     console.error('抓取學生資料發生錯誤：', sError)
@@ -256,7 +255,6 @@ onMounted(async () => {
     students.value = sData
   }
 
-  // 抓取系統設定 (包含信箱、信件主旨與內文)
   const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', [
     'admin_password', 'leave_application_notice', 'teacher_msg_notify_email', 
     'leave_email_subject_template', 'leave_email_body_template'
@@ -317,14 +315,12 @@ const saveEmailSettings = async () => {
   alert('✅ Email 通知與推播設定已成功儲存！')
 }
 
-// ===== Email 字母萃取工具 (拔除所有標點符號) =====
 const extractAlphanumericPrefix = (email) => {
   if (!email || typeof email !== 'string') return ''
   const beforeAt = email.split('@')[0]
   return beforeAt.replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toLowerCase()
 }
 
-// ===== 雙重認證核心邏輯 =====
 const verifyAuth = async () => {
   if (!selectedStudentId.value) {
     authError.value = '❌ 請先選擇學生！'
@@ -394,7 +390,6 @@ const verifyAuth = async () => {
   }
 }
 
-// ===== 請假操作與寄信功能 =====
 const selectAllPeriods = () => selectedPeriods.value = [...periodList]
 const clearPeriods = () => selectedPeriods.value = []
 
@@ -424,7 +419,8 @@ const submitLeave = async () => {
       try { 
         await $fetch('/api/send-email', { 
           method: 'POST', 
-          body: { to: teacherEmail.value, subject: actualSubject, text: actualBody } 
+          // 💡 重點修正：將 text 改為 content
+          body: { to: teacherEmail.value, subject: actualSubject, content: actualBody } 
         }) 
       } catch (e) {
         console.error('Email 發送發生錯誤', e)
