@@ -1,25 +1,20 @@
 <template>
   <div class="control-card">
     
-    <!-- 🔊 新增：獨立運作的廣播接收器 (放在最頂層) -->
-    <!-- 🔊 獨立運作的廣播接收器 (加入 IP 限制防護) -->
     <BroadcastWidget :isIpBrownlisted="isIpBrownlisted" />
-
-    <!-- 📢 獨立跑馬燈區塊 -->
     <MarqueeWidget :marqueeData="marqueeSettings" />
 
-    <!-- 🕒 時鐘與 ⛅ 天氣區塊 -->
     <div class="top-status-bar">
-      <ClockWidget 
-        :clockConfig="clockConfig"
-        :clockFontSize="clockFontSize"
-        :currentTime="currentTime"
-        :unreadMsgCount="unreadMsgCount"
-      />
+      <!-- 💡 新增：科任老師廣播入口按鈕 (使用 NuxtLink 直接跳轉) -->
+      <NuxtLink to="/teacher-broadcast" class="teacher-broadcast-btn">
+        👨‍🏫 教師廣播站
+      </NuxtLink>
+
+      <ClockWidget :clockConfig="clockConfig" :clockFontSize="clockFontSize" :currentTime="currentTime" :unreadMsgCount="unreadMsgCount" />
       <WeatherWidget />
     </div>
 
-    <!-- 🎯 以下為動作按鈕與課表元件 -->
+    <!-- ...其餘下方按鈕與課表保持原樣... -->
     <HomeActionButtons 
       :scheduleDisplay="scheduleDisplay"
       :scheduleButtonConfig="scheduleButtonConfig"
@@ -38,12 +33,11 @@
       @update:showSeatingChartLocal="(val) => $emit('update:showSeatingChartLocal', val)"
       @update:showHygieneLocal="(val) => $emit('update:showHygieneLocal', val)"
     />
-
   </div>
 </template>
 
 <script setup>
-import BroadcastWidget from './BroadcastWidget.vue' // 💡 引入廣播元件
+import BroadcastWidget from './BroadcastWidget.vue'
 import MarqueeWidget from './MarqueeWidget.vue'
 import ClockWidget from './ClockWidget.vue'
 import HomeActionButtons from './HomeActionButtons.vue'
@@ -72,14 +66,16 @@ const emit = defineEmits(['enterExam', 'openLargeSchedule', 'openPwd', 'update:s
 </script>
 
 <style scoped>
-.control-card { 
-  background: white; 
-  border-radius: 8px; 
-  padding: 20px; 
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
-  border: 1px solid #e2e8f0; 
-  text-align: center; 
-}
+.control-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; text-align: center; }
 .top-status-bar { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px; margin-bottom: 25px; }
 @media (min-width: 768px) { .top-status-bar { flex-direction: row; flex-wrap: wrap; } }
+
+/* 💡 科任按鈕專屬樣式 */
+.teacher-broadcast-btn {
+  background: #8b5cf6; color: white; text-decoration: none; padding: 10px 20px;
+  border-radius: 50px; font-weight: bold; font-size: 1.1rem;
+  box-shadow: 0 4px 6px rgba(139,92,246,0.3); transition: 0.2s;
+  display: inline-flex; align-items: center;
+}
+.teacher-broadcast-btn:hover { background: #7c3aed; transform: translateY(-2px); box-shadow: 0 6px 12px rgba(139,92,246,0.4); }
 </style>
