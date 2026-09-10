@@ -476,11 +476,12 @@ const fetchData = async () => {
           
           case 'parent_notices_data': 
             if (Array.isArray(v)) { 
+              // 💡 修正：不再使用 .map(n => n.content) 刪去其他屬性，而是傳遞完整物件！
               parentNotices.value = v.filter(n => 
                 !n.isHidden && 
                 (!n.startDate || n.startDate <= todayISO) && 
                 (!n.endDate || n.endDate >= todayISO)
-              ).map(n => n.content); 
+              ); 
             } 
             break;
             
