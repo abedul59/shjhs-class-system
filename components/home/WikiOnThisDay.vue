@@ -1,7 +1,7 @@
 <template>
   <div class="wiki-otd-card">
     <div class="card-header">
-      <h3>🏛️ 歷史上的今天</h3>
+      <h3>🏛️ 維基百科歷史上的今天</h3>
     </div>
     
     <div class="card-content" v-if="isLoading">
