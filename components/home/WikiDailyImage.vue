@@ -16,6 +16,7 @@
     
     <div class="card-content" v-else>
       <a :href="imageInfo.filePage" target="_blank" title="點擊前往維基百科查看原圖" class="img-link">
+        <!-- 💡 移除強制修改大小的邏輯，使用原生安全的網址 -->
         <img :src="imageInfo.url" alt="維基百科每日圖片" class="wiki-image" loading="lazy" />
       </a>
       
@@ -36,31 +37,27 @@ const imageInfo = ref({ url: '', description: '', filePage: '' })
 
 const fetchWikiImage = async () => {
   try {
-    // 💡 終極解法：直接向 API 請求「中文維基百科首頁 (Wikipedia:首页)」的完整解析 HTML
     const res = await fetch(`https://zh.wikipedia.org/w/api.php?action=parse&format=json&origin=*&page=Wikipedia:首页&prop=text`)
     if (!res.ok) throw new Error('Wiki API 請求失敗')
     
     const data = await res.json()
     if (!data.parse || !data.parse.text) throw new Error('無法取得首頁 HTML')
 
-    // 建立一個虛擬 DOM 來解析首頁 HTML
     const tmp = document.createElement('div')
     tmp.innerHTML = data.parse.text['*']
 
-    // 根據您提供的截圖，精準定位「每日圖片」區塊
     const featurePicBlock = tmp.querySelector('#mp-2012-column-featurepic-block')
     if (!featurePicBlock) throw new Error('找不到首頁中的每日圖片區塊')
 
-    // 1. 抓取圖片真實網址 (從 <img> 標籤)
+    // 1. 抓取圖片真實網址 (💡 直接使用原始 src，保證不破圖)
     const imgEl = featurePicBlock.querySelector('img')
     if (!imgEl) throw new Error('找不到圖片標籤')
     
-    // 將縮圖網址 (例如 400px) 替換為更清晰的 800px 版本
     let imgUrl = imgEl.getAttribute('src') || ''
     if (imgUrl.startsWith('//')) imgUrl = 'https:' + imgUrl
-    imgUrl = imgUrl.replace(/\/\d+px-/, '/800px-')
+    // 💡 刪除了危險的 .replace(/\/\d+px-/, '/800px-') 
 
-    // 2. 抓取圖片說明的原始頁面連結 (點擊圖片可以去維基看大圖)
+    // 2. 抓取圖片說明的原始頁面連結
     const linkEl = featurePicBlock.querySelector('a.image, .gallerybox a')
     let filePageUrl = 'https://zh.wikipedia.org/'
     if (linkEl) {
@@ -68,12 +65,11 @@ const fetchWikiImage = async () => {
       if (href) filePageUrl = `https://zh.wikipedia.org${href}`
     }
 
-    // 3. 抓取中文敘述 (精準定位 gallerytext)
+    // 3. 抓取中文敘述
     const descBox = featurePicBlock.querySelector('.gallerytext')
     let finalDesc = '今日精選圖片 (暫無說明)'
     
     if (descBox) {
-      // 保留維基百科原本的藍色超連結，讓學生可以點開學習
       descBox.querySelectorAll('a').forEach(a => {
         const href = a.getAttribute('href')
         if (href && href.startsWith('/wiki/')) {
@@ -139,7 +135,7 @@ onMounted(() => {
   border-radius: 6px;
   margin: 0 auto 15px auto; 
   background-color: #f8fafc;
-  width: 50%; /* 💡 維持圖片為一半大小 */
+  width: 50%;
   box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 }
 
@@ -183,7 +179,6 @@ onMounted(() => {
   text-align: justify;
 }
 
-/* 確保說明文字內的段落標籤不會破壞排版 */
 .wiki-desc :deep(p) {
   margin: 0;
 }
