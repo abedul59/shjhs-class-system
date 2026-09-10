@@ -110,6 +110,9 @@
               @remove-item="removeContactItem"
               @update-item="updateEditingContactItem"
             />
+            
+            <!-- 💡 新增：維基百科每日圖片元件 -->
+            <WikiDailyImage />
           </div>
         </div>
         
@@ -180,6 +183,9 @@ import ControlPanel from '~~/components/home/ControlPanel.vue'
 import LargeScheduleModal from '~~/components/home/LargeScheduleModal.vue'
 import PasswordModal from '~~/components/home/PasswordModal.vue'
 import IdentityModal from '~~/components/home/IdentityModal.vue'
+
+// 💡 引入維基百科每日圖片元件
+import WikiDailyImage from '~~/components/home/WikiDailyImage.vue'
 
 const supabase = useSupabaseClient()
 
@@ -465,7 +471,6 @@ const fetchData = async () => {
           case 'index_auto_refresh_seconds': autoRefreshSeconds.value = Number(v) || 60; break;
           case 'exam_schedule_data': examData.value = { ...examData.value, ...v }; break;
           
-          // 💡 核心修正區：前台首頁在抓取時，強制過濾掉被標記為 isHidden 的須知！
           case 'parent_notices_data': 
             if (Array.isArray(v)) { 
               parentNotices.value = v.filter(n => 
