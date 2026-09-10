@@ -12,10 +12,10 @@
             <li v-for="(notice, index) in parentNotices" :key="'n-'+index" class="rich-notice-item">
               <span class="bullet">📌</span>
               <div class="rich-notice-wrapper">
-                <!-- 💡 注意：因為 index.vue 傳入的是完整物件，所以這裡改用 notice.content -->
+                <!-- 💡 渲染內容 -->
                 <div class="rich-notice-content" v-html="privacyFilter(notice.content)"></div>
                 
-                <!-- 💡 這裡加上了渲染連結按鈕的區塊 -->
+                <!-- 💡 渲染網址按鈕 (已修正手機版撐破問題) -->
                 <div v-if="notice.links && notice.links.length > 0" class="notice-links-box">
                   <a v-for="(link, i) in notice.links" :key="'nlink-'+i" :href="link.url" target="_blank" class="notice-link-btn">
                     🔗 {{ privacyFilter(link.title) || '參考連結' }}
@@ -122,7 +122,9 @@ const isClassAnnExpanded = ref(false)
 .cork-card-date { color: #b45309; font-size: 0.85rem; font-weight: bold; }
 .cork-card-content { color: #451a03; line-height: 1.5; font-size: 1rem; margin-bottom: 15px; word-wrap: break-word;}
 .cork-card-links { display: flex; flex-direction: column; gap: 8px; }
-.cork-link { display: inline-block; background: #fbbf24; color: #92400e; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 0.95rem; border: 1px dashed #d97706; transition: 0.2s; text-align: center;}
+
+/* 💡 公佈欄的按鈕防爆版設定 */
+.cork-link { display: inline-flex; align-items: center; justify-content: center; background: #fbbf24; color: #92400e; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 0.95rem; border: 1px dashed #d97706; transition: 0.2s; text-align: left; word-break: break-word; white-space: normal; line-height: 1.4;}
 .cork-link:hover { background: #f59e0b; color: white; }
 
 .blackboard { background-color: #315243; border: 10px solid #754d29; border-radius: 8px; padding: 20px 25px; box-shadow: 0 6px 12px rgba(0,0,0,0.15), inset 0 0 10px rgba(0,0,0,0.3); }
@@ -139,19 +141,19 @@ const isClassAnnExpanded = ref(false)
 .desktop-only { display: block; }
 .empty-text-italic { color: #94a3b8; font-style: italic; font-size: 1.1rem; }
 .item-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
-
-/* 💡 須知項目的外層群組 */
 .rich-notice-item { display: flex; align-items: flex-start; gap: 8px; width: 100%; font-size: 1.15rem; letter-spacing: 0.5px; margin-bottom: 10px;}
-.rich-notice-wrapper { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+
+/* 💡 限制內容容器寬度，強制換行 */
+.rich-notice-wrapper { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; /* 防止 flex 子元素撐破父容器 */ }
 
 .rich-notice-content { word-wrap: break-word; overflow-wrap: break-word; line-height: 1.5; }
 .rich-notice-content :deep(p) { margin: 0 0 5px 0; }
-.rich-notice-content :deep(a) { color: #fbbf24; text-decoration: underline; }
+.rich-notice-content :deep(a) { color: #fbbf24; text-decoration: underline; word-break: break-all; }
 .rich-notice-content :deep(ol), .rich-notice-content :deep(ul) { margin: 5px 0; padding-left: 20px; }
 
-/* 💡 新增的連結按鈕樣式 (配合黑板風格的藍色系) */
-.notice-links-box { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px; }
-.notice-link-btn { display: inline-flex; align-items: center; background: #e0f2fe; color: #0369a1; padding: 6px 15px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 0.95rem; transition: 0.2s; border: 1px solid #bae6fd;}
+/* 💡 須知連結按鈕的防爆版排版 */
+.notice-links-box { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px; width: 100%;}
+.notice-link-btn { display: inline-flex; align-items: flex-start; background: #e0f2fe; color: #0369a1; padding: 8px 15px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 0.95rem; transition: 0.2s; border: 1px solid #bae6fd; word-break: break-word; white-space: normal; line-height: 1.4; max-width: 100%;}
 .notice-link-btn:hover { background: #bae6fd; color: #0284c7; box-shadow: 0 2px 4px rgba(0,0,0,0.1);}
 
 @media (max-width: 768px) {
@@ -161,7 +163,9 @@ const isClassAnnExpanded = ref(false)
   .is-collapsed { max-height: none; overflow: visible; }
   .fade-mask { display: none; }
   .desktop-only { display: none; }
+  
+  /* 手機版連結填滿整列，且保證多行文字對齊 */
   .notice-links-box { flex-direction: column; }
-  .notice-link-btn { width: 100%; justify-content: center; }
+  .notice-link-btn { width: 100%; box-sizing: border-box; }
 }
 </style>
