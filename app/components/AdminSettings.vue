@@ -83,8 +83,14 @@
         </div>
 
         <div class="form-group">
-          <label>📏 字體大小 (px)：</label>
-          <input type="number" v-model="clockConfig.size" class="edit-input size-input" min="10" max="150" />
+          <label>📏 時間大小 (px)：</label>
+          <input type="number" v-model="clockConfig.size" class="edit-input size-input" min="10" max="150" title="控制下方數字時間的大小" />
+        </div>
+
+        <!-- 💡 新增：獨立的日期大小控制欄位 -->
+        <div class="form-group">
+          <label>📅 日期大小 (px)：</label>
+          <input type="number" v-model="clockConfig.dateSize" class="edit-input size-input" min="10" max="80" placeholder="預設 18" title="控制上方日期星期的文字大小" />
         </div>
 
         <div class="form-group">
@@ -133,8 +139,8 @@ const supabase = useSupabaseClient()
 const pwdConfig = ref({ type: 'dynamic', custom_pwd: '' })
 const isSaving = ref(false)
 
-// 2. 🕒 時鐘樣式總管設定
-const clockConfig = ref({ theme: 'classic', color: '#1e293b', size: 35, showIcon: true })
+// 2. 🕒 時鐘樣式總管設定 (💡 加入 dateSize 的預設值 18px)
+const clockConfig = ref({ theme: 'classic', color: '#1e293b', size: 35, dateSize: 18, showIcon: true })
 const isSavingClock = ref(false)
 
 // 3. 自動更新頻率設定
@@ -160,6 +166,8 @@ const fetchConfig = async () => {
   const { data: clkData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'index_clock_config').maybeSingle()
   if (clkData && clkData.setting_value) {
     clockConfig.value = { ...clockConfig.value, ...clkData.setting_value }
+    // 防呆：如果舊資料沒有 dateSize，給一個安全的預設值
+    if (!clockConfig.value.dateSize) clockConfig.value.dateSize = 18 
   } else {
     // 向下兼容舊版單純字體大小的設定
     const { data: oldSize } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'index_clock_size').maybeSingle()
