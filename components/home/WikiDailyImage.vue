@@ -15,8 +15,9 @@
     </div>
     
     <div class="card-content" v-else>
+      <!-- 💡 圖片區塊：大小維持 50% 並置中 -->
       <a :href="imageInfo.filePage" target="_blank" title="點擊前往維基百科查看原圖" class="img-link">
-        <img :src="imageInfo.url" :alt="imageInfo.description" class="wiki-image" loading="lazy" />
+        <img :src="imageInfo.url" alt="維基百科每日圖片" class="wiki-image" loading="lazy" />
       </a>
       
       <div class="wiki-desc-box">
@@ -34,82 +35,95 @@ const isLoading = ref(true)
 const hasData = ref(false)
 const imageInfo = ref({ url: '', description: '', filePage: '' })
 
-const fetchWikiImage = async () => {
+// 備用方案：使用維基官方 REST API
+const fetchFallbackWikiImage = async () => {
   try {
     const d = new Date()
     const yyyy = d.getFullYear()
-    const m = d.getMonth() + 1 // 中文模板習慣用單數不補零
-    const dd = d.getDate()     // 中文模板習慣用單數不補零
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
     
-    // 💡 鎖定中文維基百科專屬的每日圖片模板 (例如：Template:每日圖片/2026年9月10日)
-    const templateName = `Template:每日圖片/${yyyy}年${m}月${dd}日`
+    const res = await fetch(`https://zh.wikipedia.org/api/rest_v1/feed/featured/${yyyy}/${mm}/${dd}`)
+    const data = await res.json()
+    
+    if (data && data.image) {
+      let highResUrl = data.image.thumbnail?.source || ''
+      if (highResUrl) highResUrl = highResUrl.replace(/\/\d+px-/, '/800px-')
+      else highResUrl = data.image.image?.source
 
-    // 直接向「中文維基百科」要這個模板的解析結果
-    const res = await fetch(`https://zh.wikipedia.org/w/api.php?action=parse&format=json&origin=*&page=${encodeURIComponent(templateName)}&prop=text|images`)
+      imageInfo.value = {
+        url: highResUrl,
+        description: data.image.description?.text || '今日精選圖片 (暫無說明)',
+        filePage: data.image.file_page || 'https://zh.wikipedia.org/'
+      }
+      hasData.value = true
+    }
+  } catch (e) {
+    hasData.value = false
+  }
+}
+
+// 主方案：解析中文維基百科通用模板
+const fetchWikiImage = async () => {
+  try {
+    // 💡 直接請求 "Template:每日图片"，維基伺服器會自動幫我們轉換成當天日期
+    const res = await fetch(`https://zh.wikipedia.org/w/api.php?action=parse&format=json&origin=*&page=Template:每日图片&prop=text|images`)
     
     if (!res.ok) throw new Error('Wiki API 請求失敗')
     const data = await res.json()
     
     if (data && data.parse) {
-      // 1. 取得圖片檔名
+      // 1. 取得圖片真實檔名 (過濾掉常見的放大鏡圖示)
       const images = data.parse.images || []
-      const filename = images.length > 0 ? images[0] : null
+      const filename = images.find(img => !img.includes('magnify') && !img.includes('Info') && !img.endsWith('.svg')) || images[0]
       
-      // 2. 取得中文維基志工辛苦翻譯的敘述
-      let rawHtml = data.parse.text['*'] || ''
-      
-      // 透過一個虛擬 DOM 來過濾掉我們不需要的表格結構，只留下純文字敘述
+      if (!filename) throw new Error('找不到圖片檔名')
+
+      // 2. 萃取並淨化中文敘述
       const tmp = document.createElement('div')
-      tmp.innerHTML = rawHtml
+      tmp.innerHTML = data.parse.text['*']
       
-      // 中文模板通常會包含一個查看圖片的放大鏡圖示，我們把它移除，只留文字
-      const links = tmp.querySelectorAll('a')
-      links.forEach(link => {
-        if (link.textContent.includes('檢視') || link.innerHTML.includes('magnify-clip')) {
-          link.remove()
-        } else {
-          // 保留維基百科原本的藍色超連結，讓學生可以點擊學習
-          const href = link.getAttribute('href')
-          if (href && href.startsWith('/wiki/')) {
-            link.setAttribute('href', `https://zh.wikipedia.org${href}`)
-            link.setAttribute('target', '_blank')
-            link.style.color = '#2563eb'
-            link.style.textDecoration = 'none'
-            link.style.fontWeight = 'bold'
-          }
+      // 移除原有的放大鏡、不需要的圖片節點
+      tmp.querySelectorAll('.magnify, a.image').forEach(el => el.remove())
+      
+      // 保留維基藍色超連結，讓點擊可以直接開新分頁閱讀
+      tmp.querySelectorAll('a').forEach(a => {
+        const href = a.getAttribute('href')
+        if (href && href.startsWith('/wiki/')) {
+          a.setAttribute('href', `https://zh.wikipedia.org${href}`)
+          a.setAttribute('target', '_blank')
+          a.style.color = '#2563eb'
+          a.style.textDecoration = 'none'
+          a.style.fontWeight = 'bold'
         }
       })
 
-      let finalDesc = tmp.innerHTML.trim() || '今日精選圖片 (暫無說明)'
+      const finalDesc = tmp.innerHTML.trim() || '今日精選圖片 (暫無說明)'
 
-      // 3. 取得圖片的真實網址
-      let imgUrl = ''
-      let filePageUrl = 'https://zh.wikipedia.org/'
+      // 3. 向維基共享資源取得圖片真實 URL (限制 800px 寬度，加快載入)
+      const imgRes = await fetch(`https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&titles=File:${encodeURIComponent(filename)}&prop=imageinfo&iiprop=url&iiurlwidth=800`)
+      const imgData = await imgRes.json()
       
-      if (filename) {
-        const imgRes = await fetch(`https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&titles=File:${encodeURIComponent(filename)}&prop=imageinfo&iiprop=url&iiurlwidth=800`)
-        const imgData = await imgRes.json()
-        const pages = imgData.query.pages
-        const pageId = Object.keys(pages)[0]
-        const info = pages[pageId].imageinfo[0]
-        if (info) {
-          imgUrl = info.thumburl || info.url
-          filePageUrl = info.descriptionurl
-        }
-      }
+      const pages = imgData.query.pages
+      const pageId = Object.keys(pages)[0]
+      const info = pages[pageId].imageinfo[0]
 
-      imageInfo.value = {
-        url: imgUrl,
-        description: finalDesc,
-        filePage: filePageUrl
+      if (info) {
+        imageInfo.value = {
+          url: info.thumburl || info.url,
+          description: finalDesc,
+          filePage: info.descriptionurl || 'https://zh.wikipedia.org/'
+        }
+        hasData.value = true
+      } else {
+        throw new Error('無法取得真實圖片 URL')
       }
-      hasData.value = true
     } else {
-      throw new Error('今日尚無中文模板資料')
+      throw new Error('解析模板失敗')
     }
   } catch (err) {
-    console.error('取得維基百科每日圖片發生錯誤:', err)
-    hasData.value = false
+    console.warn('主線路抓取失敗，啟動備用線路...', err)
+    await fetchFallbackWikiImage()
   } finally {
     isLoading.value = false
   }
@@ -146,13 +160,14 @@ onMounted(() => {
   gap: 8px;
 }
 
+/* 💡 圖片外框樣式：縮小一半 (50%) 並水平置中 */
 .img-link {
   display: block;
   overflow: hidden;
   border-radius: 6px;
   margin: 0 auto 15px auto; 
   background-color: #f8fafc;
-  width: 50%; /* 💡 維持圖片為一半大小 */
+  width: 50%; 
   box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 }
 
@@ -164,7 +179,7 @@ onMounted(() => {
   transition: transform 0.3s ease;
 }
 .img-link:hover .wiki-image {
-  transform: scale(1.05); 
+  transform: scale(1.05);
 }
 
 .wiki-desc-box {
@@ -216,6 +231,7 @@ onMounted(() => {
 }
 @keyframes spin { 100% { transform: rotate(360deg); } }
 
+/* 手機版時，若 50% 太小，自動放大回 80% 以保持閱讀體驗 */
 @media (max-width: 768px) {
   .img-link {
     width: 80%;
