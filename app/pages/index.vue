@@ -113,6 +113,9 @@
             
             <!-- 💡 新增：維基百科每日圖片元件 -->
             <WikiDailyImage />
+
+            <!-- 💡 新增：歷史上的今天 -->
+            <WikiOnThisDay />
           </div>
         </div>
         
@@ -172,7 +175,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-
+import WikiOnThisDay from '~~/components/home/WikiOnThisDay.vue'
 import ExamDashboard from '~~/components/home/ExamDashboard.vue'
 import AttendanceGrid from '~~/components/home/AttendanceGrid.vue'
 import ContactBook from '~~/components/home/ContactBook.vue'
