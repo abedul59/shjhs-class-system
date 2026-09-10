@@ -1,7 +1,7 @@
 <template>
   <div class="wiki-potd-card">
     <div class="card-header">
-      <h3>🌍 維基百科每日圖片</h3>
+      <h3>🌍 維基百科 每日圖片</h3>
     </div>
     
     <div class="card-content" v-if="isLoading">
