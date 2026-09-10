@@ -11,7 +11,17 @@
           <ul v-else class="item-list">
             <li v-for="(notice, index) in parentNotices" :key="'n-'+index" class="rich-notice-item">
               <span class="bullet">📌</span>
-              <div class="rich-notice-content" v-html="privacyFilter(notice)"></div>
+              <div class="rich-notice-wrapper">
+                <!-- 💡 注意：因為 index.vue 傳入的是完整物件，所以這裡改用 notice.content -->
+                <div class="rich-notice-content" v-html="privacyFilter(notice.content)"></div>
+                
+                <!-- 💡 這裡加上了渲染連結按鈕的區塊 -->
+                <div v-if="notice.links && notice.links.length > 0" class="notice-links-box">
+                  <a v-for="(link, i) in notice.links" :key="'nlink-'+i" :href="link.url" target="_blank" class="notice-link-btn">
+                    🔗 {{ privacyFilter(link.title) || '參考連結' }}
+                  </a>
+                </div>
+              </div>
             </li>
           </ul>
         </div>
@@ -129,11 +139,20 @@ const isClassAnnExpanded = ref(false)
 .desktop-only { display: block; }
 .empty-text-italic { color: #94a3b8; font-style: italic; font-size: 1.1rem; }
 .item-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
-.rich-notice-item { display: flex; align-items: flex-start; gap: 8px; width: 100%; font-size: 1.15rem; letter-spacing: 0.5px; }
-.rich-notice-content { flex: 1; word-wrap: break-word; overflow-wrap: break-word; line-height: 1.5; }
+
+/* 💡 須知項目的外層群組 */
+.rich-notice-item { display: flex; align-items: flex-start; gap: 8px; width: 100%; font-size: 1.15rem; letter-spacing: 0.5px; margin-bottom: 10px;}
+.rich-notice-wrapper { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+
+.rich-notice-content { word-wrap: break-word; overflow-wrap: break-word; line-height: 1.5; }
 .rich-notice-content :deep(p) { margin: 0 0 5px 0; }
 .rich-notice-content :deep(a) { color: #fbbf24; text-decoration: underline; }
 .rich-notice-content :deep(ol), .rich-notice-content :deep(ul) { margin: 5px 0; padding-left: 20px; }
+
+/* 💡 新增的連結按鈕樣式 (配合黑板風格的藍色系) */
+.notice-links-box { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px; }
+.notice-link-btn { display: inline-flex; align-items: center; background: #e0f2fe; color: #0369a1; padding: 6px 15px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 0.95rem; transition: 0.2s; border: 1px solid #bae6fd;}
+.notice-link-btn:hover { background: #bae6fd; color: #0284c7; box-shadow: 0 2px 4px rgba(0,0,0,0.1);}
 
 @media (max-width: 768px) {
   .corkboard, .blackboard { padding: 15px 10px; border-width: 8px; }
@@ -142,5 +161,7 @@ const isClassAnnExpanded = ref(false)
   .is-collapsed { max-height: none; overflow: visible; }
   .fade-mask { display: none; }
   .desktop-only { display: none; }
+  .notice-links-box { flex-direction: column; }
+  .notice-link-btn { width: 100%; justify-content: center; }
 }
 </style>
