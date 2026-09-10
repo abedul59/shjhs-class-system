@@ -37,37 +37,47 @@ const imageInfo = ref({ url: '', description: '', filePage: '' })
 
 const fetchWikiImage = async () => {
   try {
-    // 取得今日日期 (格式：YYYY/MM/DD)
+    // 取得今日日期 (格式：YYYY-MM-DD)
     const d = new Date()
     const yyyy = d.getFullYear()
     const mm = String(d.getMonth() + 1).padStart(2, '0')
     const dd = String(d.getDate()).padStart(2, '0')
+    const dateStr = `${yyyy}-${mm}-${dd}`
 
-    // 呼叫繁體中文維基百科的官方精選內容 API
-    const res = await fetch(`https://zh.wikipedia.org/api/rest_v1/feed/featured/${yyyy}/${mm}/${dd}`)
+    // 💡 修正：改呼叫維基共享資源最底層的 Action API
+    // 透過 generator 抓取今日模板的圖片，並要求回傳繁體中文 (zh-tw) 的 metadata，與 800px 寬度的縮圖 (加快網頁載入速度)
+    const apiUrl = `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=images&titles=Template:Potd/${dateStr}&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=800&iiextmetadatalanguage=zh-tw`
+    
+    const res = await fetch(apiUrl)
     if (!res.ok) throw new Error('Wiki API 請求失敗')
     
     const data = await res.json()
     
-    // 如果當天有精選圖片 (image)
-    if (data && data.image) {
-      // 預設縮圖解析度較低，我們透過替換 URL 字串來取得更清晰的 600px 版本
-      let highResUrl = data.image.thumbnail?.source || ''
-      if (highResUrl) {
-        highResUrl = highResUrl.replace(/\/\d+px-/, '/600px-')
-      } else {
-        highResUrl = data.image.image?.source // 備用：直接抓原圖
-      }
+    if (data && data.query && data.query.pages) {
+      const pages = data.query.pages
+      const pageId = Object.keys(pages)[0]
+      const info = pages[pageId].imageinfo[0]
+      
+      if (info) {
+        // 抓取說明文字並過濾掉 HTML 標籤 (維基 API 傳回的通常帶有 <a> 等標籤)
+        let rawDesc = info.extmetadata?.ImageDescription?.value || '今日精選圖片 (無提供中文說明)'
+        const tmp = document.createElement('div')
+        tmp.innerHTML = rawDesc
+        const cleanDesc = tmp.textContent || tmp.innerText || ''
 
-      imageInfo.value = {
-        url: highResUrl,
-        description: data.image.description?.text || '（今日精選圖片無提供中文說明）',
-        filePage: data.image.file_page || 'https://zh.wikipedia.org/'
+        imageInfo.value = {
+          url: info.thumburl || info.url, // 優先使用 API 產生的縮圖，避免原圖好幾 MB 拖慢網頁
+          description: cleanDesc.trim(),
+          filePage: info.descriptionurl
+        }
+        hasData.value = true
       }
-      hasData.value = true
+    } else {
+      hasData.value = false
     }
   } catch (err) {
     console.error('取得維基百科每日圖片發生錯誤:', err)
+    hasData.value = false
   } finally {
     isLoading.value = false
   }
@@ -85,7 +95,7 @@ onMounted(() => {
   padding: 20px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   border: 1px solid #e2e8f0;
-  margin-top: 20px; /* 與上方聯絡簿保留間距 */
+  margin-top: 20px;
   transition: 0.3s;
 }
 .wiki-potd-card:hover {
@@ -117,17 +127,17 @@ onMounted(() => {
   height: auto;
   display: block;
   object-fit: cover;
-  max-height: 400px;
+  max-height: 350px;
   transition: transform 0.3s ease;
 }
 .img-link:hover .wiki-image {
-  transform: scale(1.02); /* 滑鼠游標移過去時微放大 */
+  transform: scale(1.03); /* 滑鼠游標移過去時微放大 */
 }
 
 .wiki-desc-box {
   background: #f8fafc;
   padding: 12px 15px;
-  border-left: 4px solid #3b82f6;
+  border-left: 4px solid #10b981; /* 維基主題搭配翠綠色邊框 */
   border-radius: 0 6px 6px 0;
   position: relative;
 }
@@ -137,7 +147,7 @@ onMounted(() => {
   top: -5px;
   left: 5px;
   font-size: 2.5rem;
-  color: #bfdbfe;
+  color: #d1fae5;
   font-family: serif;
   line-height: 1;
   user-select: none;
