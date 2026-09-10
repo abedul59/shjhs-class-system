@@ -38,7 +38,6 @@
             ></div>
           </div>
           
-          <!-- 💡 新增：附加網址連結區塊 -->
           <div class="links-container">
             <label class="links-title">🔗 附加網址連結 (選填)：</label>
             <div v-for="(link, idx) in newNotice.links" :key="idx" class="link-row">
@@ -95,7 +94,6 @@
             <div class="notice-content">
               <div class="notice-text" v-html="notice.content"></div>
               
-              <!-- 💡 列表顯示：附加的網址連結 -->
               <div v-if="notice.links && notice.links.length > 0" class="notice-links-display">
                 <a v-for="(link, idx) in notice.links" :key="idx" :href="link.url" target="_blank" class="notice-link-item">
                   🔗 {{ link.title || '參考連結' }}
@@ -189,7 +187,7 @@
 
       </div>
 
-      <!-- ==================== 🖨️ 紙本列印設定 ==================== -->
+      <!-- ==================== 🖨️ 紙本列印設定 (加入 QR Code 功能) ==================== -->
       <div v-show="activeTab === 'print'" class="email-editor-section">
         <div class="editor-header">
           <h4>🖨️ 編輯紙本列印範本</h4>
@@ -205,11 +203,19 @@
           <label>紙本須知單內容：(變數: <span v-pre>{{須知清單}}</span>、<span v-pre>{{今日日期}}</span>)</label>
           <textarea v-model="printContentTemplate" rows="8" class="edit-input textarea-input"></textarea>
         </div>
+
+        <!-- 💡 核心新增：QR Code 網址設定區塊 -->
+        <div class="form-group">
+          <label style="color:#0284c7;">🔗 附加 QR Code 網址 (選填)：</label>
+          <input type="url" v-model="printQrUrl" class="custom-input" placeholder="例如：https://forms.gle/..." />
+          <span class="hint">若填寫網址，系統會在每張列印單的右下角，自動產生一個 QR Code 供家長手機掃描。</span>
+        </div>
         
         <div class="email-preview-section">
-          <h5>👀 單張須知單預覽</h5>
+          <h5>👀 單張須知單預覽 (包含自動生成的 QR Code)</h5>
           <div class="preview-box plain-text-preview">
-            <div class="preview-body" v-html="formatNL(printPreviewContent)"></div>
+            <!-- 💡 將渲染變為我們計算過的完整 HTML (包含圖片) -->
+            <div class="preview-body" v-html="printPreviewHtml"></div>
           </div>
         </div>
 
@@ -279,10 +285,10 @@
 
     </div>
 
-    <!-- 列印專屬區塊 (僅在列印時顯示，並自動重複 26 份) -->
+    <!-- 💡 列印專屬區塊：使用帶有 QR Code 的完整 HTML -->
     <div class="print-only-container">
       <div v-for="n in 26" :key="'print-'+n" class="print-slip">
-        <div class="slip-content" v-html="formatNL(printPreviewContent)"></div>
+        <div class="slip-content" v-html="printPreviewHtml"></div>
       </div>
     </div>
 
@@ -308,7 +314,6 @@ const notices = ref([])
 const editingNoticeId = ref(null)
 const newNoticeEditorRef = ref(null)
 
-// 💡 newNotice 增加 links 陣列
 const newNotice = ref({ content: '', startDate: todayISO, endDate: '', isHidden: false, links: [] })
 
 const isSendingEmail = ref(false)
@@ -316,8 +321,10 @@ const isSavingNoticeTemplate = ref(false)
 const noticeEmailSubjectTemplate = ref('📢 班級須知推播 ({{今日日期}})')
 const noticeEmailContentTemplate = ref(`各位家長您好，今日班級重要須知推播如下：\n\n{{須知清單}}\n\n(若此信件進入垃圾郵件，請將導師信箱加入通訊錄或標示為非垃圾郵件)\n\n班級導師 敬上`)
 
+// 💡 增加 QR Code URL 狀態變數
 const isSavingPrintTemplate = ref(false)
 const printContentTemplate = ref(`【家長聯絡事項單】\n發布日期：{{今日日期}}\n\n親愛的家長您好，今日班級重要須知如下：\n\n{{須知清單}}\n\n煩請您詳閱並於下方簽名，讓孩子明日繳回，感謝您的配合！\n\n家長簽名：_________________________`)
+const printQrUrl = ref('')
 
 const availableRecipients = ref([])
 const isLoadingEmails = ref(true)
@@ -334,7 +341,6 @@ const formatNL = (txt) => String(txt || '').replace(/\n/g, '<br>')
 const updateNewNoticeRichText = (event) => { newNotice.value.content = event.target.innerHTML }
 const updateEditHistoryRichText = (event, index) => { editHistoryNotices.value[index] = event.target.innerHTML }
 
-// 💡 連結操作方法
 const addLink = () => {
   if (!newNotice.value.links) newNotice.value.links = []
   newNotice.value.links.push({ title: '', url: '' })
@@ -362,9 +368,13 @@ const fetchData = async () => {
     printContentTemplate.value = printTmplData.content.replace(/<br\s*\/?>/ig, '\n').replace(/<[^>]+>/g, '') 
   }
 
-  const { data: visData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'parent_notices_board_visible').maybeSingle()
-  if (visData && visData.setting_value !== null) {
-    isVisibleOnIndex.value = visData.setting_value
+  // 💡 同時載入 QR Code 網址與首頁可見度狀態
+  const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', ['parent_notices_board_visible', 'print_qr_url'])
+  if (sysData && sysData.length > 0) {
+    sysData.forEach(s => {
+      if (s.setting_key === 'parent_notices_board_visible') isVisibleOnIndex.value = s.setting_value
+      if (s.setting_key === 'print_qr_url') printQrUrl.value = s.setting_value || ''
+    })
   }
 
   isLoading.value = false
@@ -460,7 +470,6 @@ const activeNoticesPlainText = computed(() => {
   const active = notices.value.filter(n => !n.isHidden && isActiveToday(n.startDate, n.endDate))
   if (active.length === 0) return '(今日尚無生效的須知事項)'
   
-  // 💡 自動在 Email 純文字中附加連結，多數信箱會自動轉為可點擊連結
   return active.map((n, i) => {
     let plainText = `${i + 1}. ${stripHtmlToPlainText(n.content)}`;
     if (n.links && n.links.length > 0) {
@@ -477,17 +486,36 @@ const activeNoticesPlainText = computed(() => {
 const noticePreviewSubject = computed(() => noticeEmailSubjectTemplate.value.replace(/{{今日日期}}/g, todayDisplay))
 const noticePreviewContent = computed(() => noticeEmailContentTemplate.value.replace(/{{須知清單}}/g, activeNoticesPlainText.value))
 
-const printPreviewContent = computed(() => {
-  return printContentTemplate.value
+// 💡 計算最終列印用的 HTML，包含自動附加的 QR Code 圖片
+const printPreviewHtml = computed(() => {
+  let text = printContentTemplate.value
     .replace(/{{今日日期}}/g, todayDisplay)
     .replace(/{{須知清單}}/g, activeNoticesPlainText.value)
+
+  let html = formatNL(text)
+
+  if (printQrUrl.value && printQrUrl.value.trim() !== '') {
+    // 呼叫開源無限制的 QR Server API 產生圖片
+    const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&margin=0&data=${encodeURIComponent(printQrUrl.value.trim())}`
+    
+    // 將 QR 碼區塊附加在排版的最後方 (靠右對齊)
+    html += `
+      <div style="display: flex; justify-content: flex-end; align-items: flex-end; margin-top: 15px;">
+        <div style="text-align: center;">
+          <img src="${qrSrc}" alt="QR Code" style="width: 80px; height: 80px; border: 2px solid #cbd5e1; padding: 2px; border-radius: 4px;" />
+          <div style="font-size: 0.8rem; color: #475569; margin-top: 4px; font-weight: bold;">手機掃描查看</div>
+        </div>
+      </div>
+    `
+  }
+
+  return html
 })
 
 const editNotice = (notice) => {
   editingNoticeId.value = notice.id
   newNotice.value = { ...notice }
   if (newNotice.value.isHidden === undefined) newNotice.value.isHidden = false 
-  // 💡 深拷貝 links，避免編輯時直接改到原資料
   newNotice.value.links = notice.links ? JSON.parse(JSON.stringify(notice.links)) : []
   if (newNoticeEditorRef.value) newNoticeEditorRef.value.innerHTML = notice.content
   window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -520,7 +548,6 @@ const addNotice = async () => {
   if (!newNotice.value.content) return
   isSaving.value = true
   
-  // 💡 過濾掉空網址的連結
   const validLinks = (newNotice.value.links || []).filter(l => l.url.trim() !== '')
 
   let updatedNotices = [...notices.value]
@@ -627,12 +654,21 @@ const saveNoticeEmailTemplate = async () => {
 const savePrintTemplate = async () => {
   isSavingPrintTemplate.value = true
   const safeHtmlContent = printContentTemplate.value.replace(/\n/g, '<br>')
+  
+  // 💡 儲存文字範本
   await supabase.from('email_templates').upsert({ 
     template_id: 'notice_print_template', 
     subject: '紙本列印範本', 
     content: safeHtmlContent 
   })
-  alert('✅ 紙本列印範本已儲存！')
+  
+  // 💡 同時將設定的 QR Code 網址存入系統設定
+  await supabase.from('system_settings').upsert({ 
+    setting_key: 'print_qr_url', 
+    setting_value: printQrUrl.value 
+  }, { onConflict: 'setting_key' })
+
+  alert('✅ 紙本列印設定 (含 QR 網址) 已成功儲存！')
   isSavingPrintTemplate.value = false
 }
 
@@ -657,7 +693,6 @@ const fetchHistory = async () => {
       const startOk = !n.startDate || n.startDate <= targetDate
       const endOk = !n.endDate || n.endDate >= targetDate
       if (!n.isHidden && startOk && endOk && !foundNotices.includes(n.content)) {
-        // 💡 歷史紀錄附加連結
         let histContent = n.content;
         if (n.links && n.links.length > 0) {
           const linksHtml = n.links.map(l => `<a href="${l.url}" target="_blank" style="color:#2563eb;font-weight:bold;">🔗 ${l.title || '參考連結'}</a>`).join('<br>');
@@ -752,7 +787,6 @@ const importJSON = (event) => {
 .rich-text-editor:focus { background: white; border-color: #3b82f6; outline: none; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1); }
 .bullet { display: inline-block; margin-top: 10px; font-size: 1.2rem;}
 
-/* 💡 新增：網址連結專屬樣式 */
 .links-container { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px dashed #cbd5e1; }
 .links-title { display: block; font-weight: bold; color: #475569; margin-bottom: 10px; font-size: 1rem; }
 .link-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
