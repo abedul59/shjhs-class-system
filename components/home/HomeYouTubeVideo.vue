@@ -9,9 +9,22 @@
     
     <div class="card-content">
       <div class="video-layout-wrapper">
-        <!-- 💡 加入 wrapperEl 作為隔離層，保護內部的 iframe 不被 Vue 意外覆蓋 -->
-        <div class="video-responsive-container" ref="wrapperEl">
-          <!-- 內部將由 JS 動態注入給 YouTube 替換用的 div -->
+        <!-- 💡 在這裡建立一個專屬黑框容器，把影片和遮罩全包進來 -->
+        <div class="video-frame-box">
+          <div class="video-responsive-container" ref="wrapperEl">
+            <!-- 內部將由 JS 動態注入給 YouTube 替換用的 iframe -->
+          </div>
+          
+          <!-- 💡 無情黑畫面疊加層 (只有上課時顯示) -->
+          <transition name="fade">
+            <div v-if="isClassTime" class="black-overlay">
+              <div class="overlay-text">
+                <div class="icon">🤫</div>
+                <h4>上課中，專心聽講</h4>
+                <p>影片已隱藏並暫停，下課鐘響將自動恢復播放</p>
+              </div>
+            </div>
+          </transition>
         </div>
       </div>
     </div>
@@ -38,16 +51,13 @@ const wrapperEl = ref(null)
 let player = null
 
 const initPlayer = () => {
-  // 💡 防呆：確保環境為瀏覽器，且 YT API、DOM 元素都已備妥
   if (typeof window === 'undefined' || !window.YT || !window.YT.Player || !wrapperEl.value || !videoId.value) return
 
-  // 如果原本已經有播放器，先安全銷毀
   if (player) {
     try { player.destroy() } catch(e) {}
     player = null
   }
 
-  // 💡 動態建立一個乾淨的 div 讓 YouTube 替換，這樣就不會跟 Vue 的 Virtual DOM 打架
   wrapperEl.value.innerHTML = '<div></div>'
   const targetEl = wrapperEl.value.firstElementChild
 
@@ -55,7 +65,7 @@ const initPlayer = () => {
     width: '100%',
     height: '100%',
     videoId: videoId.value,
-    host: 'https://www.youtube-nocookie.com', // 💡 改用無 Cookie 網域，防電腦版隱私阻擋器
+    host: 'https://www.youtube-nocookie.com',
     playerVars: {
       autoplay: props.isClassTime ? 0 : 1,
       controls: 1,
@@ -104,7 +114,6 @@ const loadYoutubeApi = () => {
   } else if (window.YT && window.YT.Player) {
     initPlayer()
   } else {
-    // 應對網路慢導致 YT 物件存在但 Player 還沒載入完的情況
     const originalOnReady = window.onYouTubeIframeAPIReady
     window.onYouTubeIframeAPIReady = () => {
       if (originalOnReady) originalOnReady()
@@ -113,12 +122,11 @@ const loadYoutubeApi = () => {
   }
 }
 
-// 💡 最關鍵的修正：利用 nextTick 等待 DOM 確實畫好後才執行
 watch(videoId, async (newVal) => {
-  if (typeof window === 'undefined') return // 確保只在客戶端執行
+  if (typeof window === 'undefined') return 
   
   if (newVal) {
-    await nextTick() // 等待 v-if="videoId" 的 HTML 真正長出來
+    await nextTick() 
     loadYoutubeApi()
   } else {
     if (player) {
@@ -203,15 +211,21 @@ onBeforeUnmount(() => {
   margin: 0 auto;
 }
 
+/* 💡 外層相框，負責包住原始影片與黑層 */
+.video-frame-box {
+  position: relative;
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  background-color: #000;
+}
+
 .video-responsive-container {
   position: relative;
   width: 100%;
   padding-bottom: 56.25%;
   height: 0;
-  overflow: hidden;
-  border-radius: 8px;
-  background-color: #000;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
 .video-responsive-container :deep(iframe) {
@@ -220,6 +234,50 @@ onBeforeUnmount(() => {
   left: 0;
   width: 100%;
   height: 100%;
+}
+
+/* 💡 黑畫面遮罩，使用絕對定位完全蓋住影片 */
+.black-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #1e293b; /* 採用質感的深藍黑 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+}
+
+.overlay-text {
+  text-align: center;
+  color: #94a3b8;
+}
+
+.overlay-text .icon {
+  font-size: 3.5rem;
+  margin-bottom: 10px;
+}
+
+.overlay-text h4 {
+  margin: 0 0 8px 0;
+  font-size: 1.5rem;
+  color: #f8fafc;
+  letter-spacing: 2px;
+}
+
+.overlay-text p {
+  margin: 0;
+  font-size: 1rem;
+}
+
+/* 黑畫面出現的漸變特效 */
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.5s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
 }
 
 @media (max-width: 768px) {
