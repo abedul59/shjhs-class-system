@@ -87,7 +87,6 @@
           <input type="number" v-model="clockConfig.size" class="edit-input size-input" min="10" max="150" title="控制下方數字時間的大小" />
         </div>
 
-        <!-- 💡 這裡就是獨立的日期大小控制欄位 -->
         <div class="form-group">
           <label>📅 日期大小 (px)：</label>
           <input type="number" v-model="clockConfig.dateSize" class="edit-input size-input" min="10" max="80" placeholder="預設 18" title="控制上方日期星期的文字大小" />
@@ -128,6 +127,36 @@
       </div>
     </div>
 
+    <!-- 🧩 首頁擴充模組顯示與排序 -->
+    <div class="settings-section" style="margin-top: 25px;">
+      <h4>🧩 首頁擴充模組顯示與排序</h4>
+      <p class="help-text">💡 自由控制首頁右側面板的「擴充模組」是否顯示，並可使用箭頭調整它們的上下順序。</p>
+      
+      <div class="module-list">
+        <div v-for="(mod, index) in indexModules" :key="mod.id" class="module-row" :class="{ 'is-hidden': !mod.isVisible }">
+          
+          <div class="module-info">
+            <label class="icon-toggle mod-toggle">
+              <input type="checkbox" v-model="mod.isVisible" class="large-checkbox" />
+              <span>{{ mod.name }}</span>
+            </label>
+            <span class="status-tag" :class="mod.isVisible ? 'tag-on' : 'tag-off'">
+              {{ mod.isVisible ? '開啟中' : '已隱藏' }}
+            </span>
+          </div>
+
+          <div class="module-actions">
+            <button @click="moveModuleUp(index)" :disabled="index === 0" class="move-btn" title="上移">⬆️</button>
+            <button @click="moveModuleDown(index)" :disabled="index === indexModules.length - 1" class="move-btn" title="下移">⬇️</button>
+          </div>
+        </div>
+      </div>
+
+      <button @click="saveIndexModules" class="save-btn modules-btn" :disabled="isSavingModules" style="margin-top: 20px;">
+        {{ isSavingModules ? '儲存中...' : '💾 儲存模組排序設定' }}
+      </button>
+    </div>
+
   </div>
 </template>
 
@@ -139,13 +168,21 @@ const supabase = useSupabaseClient()
 const pwdConfig = ref({ type: 'dynamic', custom_pwd: '' })
 const isSaving = ref(false)
 
-// 2. 🕒 時鐘樣式總管設定 (💡 加入 dateSize 的預設值 18px)
+// 2. 🕒 時鐘樣式總管設定
 const clockConfig = ref({ theme: 'classic', color: '#1e293b', size: 35, dateSize: 18, showIcon: true })
 const isSavingClock = ref(false)
 
 // 3. 自動更新頻率設定
 const autoRefreshSeconds = ref(60)
 const isSavingRefresh = ref(false)
+
+// 4. 🧩 擴充模組顯示與排序設定
+const indexModules = ref([
+  { id: 'wikiImage', name: '🌍 維基百科每日圖片', isVisible: true },
+  { id: 'wikiOtd', name: '🏛️ 歷史上的今天', isVisible: true },
+  { id: 'youtube', name: '📺 YouTube 推薦影片', isVisible: true }
+])
+const isSavingModules = ref(false)
 
 // 自動計算今天的動態密碼 (YYMMDD + 59)
 const currentDynamicPwd = computed(() => {
@@ -166,10 +203,8 @@ const fetchConfig = async () => {
   const { data: clkData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'index_clock_config').maybeSingle()
   if (clkData && clkData.setting_value) {
     clockConfig.value = { ...clockConfig.value, ...clkData.setting_value }
-    // 防呆：如果舊資料沒有 dateSize，給一個安全的預設值 18
     if (!clockConfig.value.dateSize) clockConfig.value.dateSize = 18 
   } else {
-    // 向下兼容舊版單純字體大小的設定
     const { data: oldSize } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'index_clock_size').maybeSingle()
     if (oldSize) clockConfig.value.size = Number(oldSize.setting_value) || 35
   }
@@ -179,47 +214,68 @@ const fetchConfig = async () => {
   if (refreshData && refreshData.setting_value !== undefined) {
     autoRefreshSeconds.value = Number(refreshData.setting_value)
   }
+
+  // 💡 載入模組排序設定
+  const { data: modData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'index_modules_config').maybeSingle()
+  if (modData && modData.setting_value && Array.isArray(modData.setting_value)) {
+    indexModules.value = modData.setting_value
+  }
 }
 
 onMounted(() => fetchConfig())
 
-// 儲存密碼設定
+// 模組排序功能函式
+const moveModuleUp = (index) => {
+  if (index > 0) {
+    const temp = indexModules.value[index]
+    indexModules.value[index] = indexModules.value[index - 1]
+    indexModules.value[index - 1] = temp
+  }
+}
+
+const moveModuleDown = (index) => {
+  if (index < indexModules.value.length - 1) {
+    const temp = indexModules.value[index]
+    indexModules.value[index] = indexModules.value[index + 1]
+    indexModules.value[index + 1] = temp
+  }
+}
+
+// 儲存設定函式群
 const saveSettings = async () => {
   if (pwdConfig.value.type === 'custom' && !pwdConfig.value.custom_pwd.trim()) {
     return alert('❌ 請輸入您的自訂密碼！')
   }
   isSaving.value = true
-  const { error } = await supabase.from('system_settings').upsert(
-    { setting_key: 'admin_password', setting_value: pwdConfig.value },
-    { onConflict: 'setting_key' }
-  )
+  const { error } = await supabase.from('system_settings').upsert({ setting_key: 'admin_password', setting_value: pwdConfig.value }, { onConflict: 'setting_key' })
   if (!error) alert('✅ 密碼設定已成功更新！下次登入或發信即刻生效。')
   else alert('❌ 儲存失敗')
   isSaving.value = false
 }
 
-// 儲存時鐘樣式總管設定
 const saveClockSettings = async () => {
   isSavingClock.value = true
-  const { error } = await supabase.from('system_settings').upsert(
-    { setting_key: 'index_clock_config', setting_value: clockConfig.value },
-    { onConflict: 'setting_key' }
-  )
+  const { error } = await supabase.from('system_settings').upsert({ setting_key: 'index_clock_config', setting_value: clockConfig.value }, { onConflict: 'setting_key' })
   if (!error) alert('✅ 首頁時鐘樣式已成功更新！請回首頁查看效果。')
   else alert('❌ 儲存失敗')
   isSavingClock.value = false
 }
 
-// 儲存自動更新秒數
 const saveRefreshSettings = async () => {
   isSavingRefresh.value = true
-  const { error } = await supabase.from('system_settings').upsert(
-    { setting_key: 'index_auto_refresh_seconds', setting_value: autoRefreshSeconds.value },
-    { onConflict: 'setting_key' }
-  )
+  const { error } = await supabase.from('system_settings').upsert({ setting_key: 'index_auto_refresh_seconds', setting_value: autoRefreshSeconds.value }, { onConflict: 'setting_key' })
   if (!error) alert('✅ 自動更新頻率設定成功！重整首頁後生效。')
   else alert('❌ 儲存失敗')
   isSavingRefresh.value = false
+}
+
+// 💡 儲存模組排序與顯示設定
+const saveIndexModules = async () => {
+  isSavingModules.value = true
+  const { error } = await supabase.from('system_settings').upsert({ setting_key: 'index_modules_config', setting_value: indexModules.value }, { onConflict: 'setting_key' })
+  if (!error) alert('✅ 首頁擴充模組排序設定成功！重新整理首頁後生效。')
+  else alert('❌ 儲存失敗')
+  isSavingModules.value = false
 }
 </script>
 
@@ -262,11 +318,28 @@ const saveRefreshSettings = async () => {
 .save-btn:disabled { background: #94a3b8; cursor: not-allowed; }
 
 .clock-save-btn { background-color: #10b981; }
-
 .refresh-box { margin-left: 0; border-left-color: #8b5cf6; margin-bottom: 20px;}
 .refresh-btn { margin-top: 0; padding: 8px 16px; font-size: 1rem; background-color: #8b5cf6; }
+.modules-btn { background-color: #f59e0b; }
 
 /* 為 optgroup 增加閱讀性 */
 optgroup { font-weight: bold; color: #1e3a8a; background: #f1f5f9; }
 option { font-weight: normal; color: #1e293b; background: white; }
+
+/* 💡 模組排序設定專用樣式 */
+.module-list { display: flex; flex-direction: column; gap: 10px; max-width: 600px; }
+.module-row { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px 20px; border-radius: 8px; transition: 0.3s; }
+.module-row:hover { border-color: #94a3b8; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+.module-row.is-hidden { background: #f1f5f9; opacity: 0.6; }
+
+.module-info { display: flex; align-items: center; gap: 15px; }
+.mod-toggle span { font-weight: bold; font-size: 1.1rem; color: #1e293b; }
+.status-tag { font-size: 0.85rem; font-weight: bold; padding: 3px 8px; border-radius: 4px; }
+.tag-on { background: #dcfce7; color: #166534; }
+.tag-off { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
+
+.module-actions { display: flex; gap: 5px; }
+.move-btn { background: white; border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px 10px; cursor: pointer; transition: 0.2s; font-size: 1.1rem; }
+.move-btn:hover:not(:disabled) { background: #e2e8f0; border-color: #94a3b8; }
+.move-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 </style>
