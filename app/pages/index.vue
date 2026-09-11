@@ -115,8 +115,12 @@
 
             <WikiOnThisDay />
 
-            <!-- 💡 新增：首頁 YouTube 輪播影片 -->
-            <HomeYouTubeVideo :videoUrl="todayVideoUrl" />
+            <!-- 💡 新增：將上課狀態與靜音設定傳給 YouTube 播放器 -->
+            <HomeYouTubeVideo 
+              :videoUrl="todayVideoUrl" 
+              :isMuted="youtubeIsMuted"
+              :isClassTime="isClassTime"
+            />
           </div>
         </div>
         
@@ -188,8 +192,6 @@ import LargeScheduleModal from '~~/components/home/LargeScheduleModal.vue'
 import PasswordModal from '~~/components/home/PasswordModal.vue'
 import IdentityModal from '~~/components/home/IdentityModal.vue'
 import WikiDailyImage from '~~/components/home/WikiDailyImage.vue'
-
-// 💡 引入 YouTube 播放器元件
 import HomeYouTubeVideo from '~~/components/home/HomeYouTubeVideo.vue'
 
 const supabase = useSupabaseClient()
@@ -251,10 +253,12 @@ const seatingChart = ref({ isVisible: false, isRotated: false, seats: [], settin
 const defaultHygieneData = { isVisibleOnIndex: false, morning: {}, lunch: {}, squad: {} }
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
-// 💡 新增：YouTube 一週排程資料
+// 💡 YouTube 一週排程與靜音設定
 const youtubeSchedule = ref({})
+const youtubeIsMuted = ref(true) // 預設靜音
+
 const todayVideoUrl = computed(() => {
-  const currentDayIndex = new Date(nowTick.value).getDay() // 0(日) ~ 6(六)
+  const currentDayIndex = new Date(nowTick.value).getDay() 
   return youtubeSchedule.value[currentDayIndex] || ''
 })
 
@@ -426,6 +430,11 @@ const scheduleDisplay = computed(() => {
   return { current: currentClass, next: nextClass }
 })
 
+// 💡 動態判斷現在是否為「上課時間」
+const isClassTime = computed(() => {
+  return scheduleDisplay.value?.current?.status === '上課中'
+})
+
 const showPwdModal = ref(false)
 const pwdTarget = ref('')
 const pwdModalTitle = ref('')
@@ -458,7 +467,7 @@ const fetchData = async () => {
     'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible',
     'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings',
     'index_clock_size', 'index_clock_config', 'index_auto_refresh_seconds', 'role_button_settings',
-    'force_logout_timestamp', 'marquee_settings', 'youtube_schedule_data' // 💡 增加抓取 YT 設定
+    'force_logout_timestamp', 'marquee_settings', 'youtube_schedule_data' 
   ]
 
   const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', keysToFetch)
@@ -483,8 +492,18 @@ const fetchData = async () => {
           case 'index_auto_refresh_seconds': autoRefreshSeconds.value = Number(v) || 60; break;
           case 'exam_schedule_data': examData.value = { ...examData.value, ...v }; break;
           
-          // 💡 解析並儲存 YouTube 排程資料
-          case 'youtube_schedule_data': youtubeSchedule.value = typeof v === 'object' ? v : {}; break;
+          // 💡 解析 YouTube 排程與靜音狀態
+          case 'youtube_schedule_data': 
+            if (typeof v === 'object') {
+              if (v.videos) {
+                youtubeSchedule.value = v.videos;
+                youtubeIsMuted.value = v.isMuted !== false; // 預設靜音 (防呆)
+              } else {
+                youtubeSchedule.value = v;
+                youtubeIsMuted.value = true;
+              }
+            }
+            break;
 
           case 'parent_notices_data': 
             if (Array.isArray(v)) { 
