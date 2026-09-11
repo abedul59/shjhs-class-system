@@ -1,5 +1,4 @@
 <template>
-  <!-- 只有當今天有設定有效的 YouTube 網址時，才顯示這個區塊 -->
   <div class="yt-board-card" v-if="videoId">
     <div class="card-header">
       <h3>📺 今日推薦影片</h3>
@@ -9,11 +8,10 @@
     </div>
     
     <div class="card-content">
-      <!-- 💡 將版面縮小至 2/3 並置中對齊 -->
       <div class="video-layout-wrapper">
-        <div class="video-responsive-container">
-          <!-- 💡 這裡將會由 YouTube Iframe API 動態注入播放器 -->
-          <div ref="ytPlayerEl"></div>
+        <!-- 💡 加入 wrapperEl 作為隔離層，保護內部的 iframe 不被 Vue 意外覆蓋 -->
+        <div class="video-responsive-container" ref="wrapperEl">
+          <!-- 內部將由 JS 動態注入給 YouTube 替換用的 div -->
         </div>
       </div>
     </div>
@@ -21,15 +19,14 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onBeforeUnmount, nextTick } from 'vue'
 
 const props = defineProps({
   videoUrl: { type: String, default: '' },
   isMuted: { type: Boolean, default: true },
-  isClassTime: { type: Boolean, default: false } // 上課時間為 true
+  isClassTime: { type: Boolean, default: false }
 })
 
-// 自動解析 11 碼 Video ID
 const videoId = computed(() => {
   if (!props.videoUrl) return null
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/
@@ -37,79 +34,102 @@ const videoId = computed(() => {
   return (match && match[2].length === 11) ? match[2] : null
 })
 
-// === 💡 YouTube IFrame API 核心邏輯 ===
-const ytPlayerEl = ref(null)
+const wrapperEl = ref(null)
 let player = null
 
 const initPlayer = () => {
-  // 防呆：確保 API 與 DOM 元素都已準備好
-  if (!window.YT || !window.YT.Player || !ytPlayerEl.value || !videoId.value) return
+  // 💡 防呆：確保環境為瀏覽器，且 YT API、DOM 元素都已備妥
+  if (typeof window === 'undefined' || !window.YT || !window.YT.Player || !wrapperEl.value || !videoId.value) return
 
-  // 銷毀舊的播放器（如果有的話）
+  // 如果原本已經有播放器，先安全銷毀
   if (player) {
-    player.destroy()
+    try { player.destroy() } catch(e) {}
+    player = null
   }
 
-  // 建立由 API 控制的新播放器
-  player = new window.YT.Player(ytPlayerEl.value, {
+  // 💡 動態建立一個乾淨的 div 讓 YouTube 替換，這樣就不會跟 Vue 的 Virtual DOM 打架
+  wrapperEl.value.innerHTML = '<div></div>'
+  const targetEl = wrapperEl.value.firstElementChild
+
+  player = new window.YT.Player(targetEl, {
+    width: '100%',
+    height: '100%',
     videoId: videoId.value,
+    host: 'https://www.youtube-nocookie.com', // 💡 改用無 Cookie 網域，防電腦版隱私阻擋器
     playerVars: {
-      autoplay: props.isClassTime ? 0 : 1, // 如果正在上課，就不要自動播放
-      controls: 1, // 保留控制列讓使用者可以手動全螢幕
+      autoplay: props.isClassTime ? 0 : 1,
+      controls: 1,
       rel: 0,
       loop: 1,
       playlist: videoId.value,
-      mute: props.isMuted ? 1 : 0
+      mute: props.isMuted ? 1 : 0,
+      origin: typeof window !== 'undefined' ? window.location.origin : '',
+      playsinline: 1
     },
     events: {
       onReady: (event) => {
-        // 確保靜音狀態與後台同步
         if (props.isMuted) event.target.mute()
         else event.target.unMute()
 
-        // 如果現在是下課，且 API 允許，強制執行播放
         if (!props.isClassTime) {
           event.target.playVideo()
         } else {
           event.target.pauseVideo()
         }
+      },
+      onError: (event) => {
+        console.error("YouTube 播放器發生錯誤，代碼:", event.data)
       }
     }
   })
 }
 
 const loadYoutubeApi = () => {
+  if (typeof window === 'undefined') return
+
   if (!window.YT) {
     const tag = document.createElement('script')
     tag.src = "https://www.youtube.com/iframe_api"
     const firstScriptTag = document.getElementsByTagName('script')[0]
-    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag)
     
-    // API 載入完成後會自動呼叫此全域函式
+    if (firstScriptTag) {
+      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag)
+    } else {
+      document.head.appendChild(tag)
+    }
+    
     window.onYouTubeIframeAPIReady = () => {
       initPlayer()
     }
-  } else {
-    // 如果之前已經載入過 API，直接初始化
+  } else if (window.YT && window.YT.Player) {
     initPlayer()
+  } else {
+    // 應對網路慢導致 YT 物件存在但 Player 還沒載入完的情況
+    const originalOnReady = window.onYouTubeIframeAPIReady
+    window.onYouTubeIframeAPIReady = () => {
+      if (originalOnReady) originalOnReady()
+      initPlayer()
+    }
   }
 }
 
-// 元件掛載時啟動
-onMounted(() => {
-  if (videoId.value) {
+// 💡 最關鍵的修正：利用 nextTick 等待 DOM 確實畫好後才執行
+watch(videoId, async (newVal) => {
+  if (typeof window === 'undefined') return // 確保只在客戶端執行
+  
+  if (newVal) {
+    await nextTick() // 等待 v-if="videoId" 的 HTML 真正長出來
     loadYoutubeApi()
+  } else {
+    if (player) {
+      try { player.destroy() } catch(e) {}
+      player = null
+    }
   }
-})
+}, { immediate: true })
 
-// 監聽網址變化 (換天時更新影片)
-watch(videoId, (newVal) => {
-  if (newVal) initPlayer()
-})
-
-// 💡 核心功能：監聽上/下課狀態，程式化自動播放或暫停
 watch(() => props.isClassTime, (isClass) => {
-  if (!player || !player.pauseVideo) return
+  if (!player || typeof player.pauseVideo !== 'function') return
   if (isClass) {
     player.pauseVideo()
   } else {
@@ -117,9 +137,8 @@ watch(() => props.isClassTime, (isClass) => {
   }
 })
 
-// 監聽後台傳來的靜音設定
 watch(() => props.isMuted, (muted) => {
-  if (!player || !player.mute) return
+  if (!player || typeof player.mute !== 'function') return
   if (muted) {
     player.mute()
   } else {
@@ -127,10 +146,9 @@ watch(() => props.isMuted, (muted) => {
   }
 })
 
-// 離開網頁時銷毀播放器，釋放記憶體
 onBeforeUnmount(() => {
   if (player && typeof player.destroy === 'function') {
-    player.destroy()
+    try { player.destroy() } catch(e) {}
   }
 })
 </script>
@@ -180,17 +198,15 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-/* 💡 將版面縮小至 2/3 (66.66%) 並置中 */
 .video-layout-wrapper {
   width: 66.66%;
   margin: 0 auto;
 }
 
-/* 確保 YouTube 影片能維持 16:9 比例 */
 .video-responsive-container {
   position: relative;
   width: 100%;
-  padding-bottom: 56.25%; /* 16:9 比例公式 */
+  padding-bottom: 56.25%;
   height: 0;
   overflow: hidden;
   border-radius: 8px;
@@ -198,7 +214,6 @@ onBeforeUnmount(() => {
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
-/* 將 API 注入的 iframe 拉滿 16:9 的外框 */
 .video-responsive-container :deep(iframe) {
   position: absolute;
   top: 0;
@@ -207,7 +222,6 @@ onBeforeUnmount(() => {
   height: 100%;
 }
 
-/* 手機版時恢復 100% 寬度，避免過小無法觀看 */
 @media (max-width: 768px) {
   .video-layout-wrapper {
     width: 100%;
