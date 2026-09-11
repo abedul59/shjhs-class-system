@@ -111,11 +111,12 @@
               @update-item="updateEditingContactItem"
             />
             
-            <!-- 💡 新增：維基百科每日圖片元件 -->
             <WikiDailyImage />
 
-            <!-- 💡 新增：歷史上的今天 -->
             <WikiOnThisDay />
+
+            <!-- 💡 新增：首頁 YouTube 輪播影片 -->
+            <HomeYouTubeVideo :videoUrl="todayVideoUrl" />
           </div>
         </div>
         
@@ -186,9 +187,10 @@ import ControlPanel from '~~/components/home/ControlPanel.vue'
 import LargeScheduleModal from '~~/components/home/LargeScheduleModal.vue'
 import PasswordModal from '~~/components/home/PasswordModal.vue'
 import IdentityModal from '~~/components/home/IdentityModal.vue'
-
-// 💡 引入維基百科每日圖片元件
 import WikiDailyImage from '~~/components/home/WikiDailyImage.vue'
+
+// 💡 引入 YouTube 播放器元件
+import HomeYouTubeVideo from '~~/components/home/HomeYouTubeVideo.vue'
 
 const supabase = useSupabaseClient()
 
@@ -248,6 +250,13 @@ const editingClassNoteItems = ref([])
 const seatingChart = ref({ isVisible: false, isRotated: false, seats: [], settings: {} })
 const defaultHygieneData = { isVisibleOnIndex: false, morning: {}, lunch: {}, squad: {} }
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
+
+// 💡 新增：YouTube 一週排程資料
+const youtubeSchedule = ref({})
+const todayVideoUrl = computed(() => {
+  const currentDayIndex = new Date(nowTick.value).getDay() // 0(日) ~ 6(六)
+  return youtubeSchedule.value[currentDayIndex] || ''
+})
 
 // ===== 權限與身分狀態 =====
 const showIdentityModal = ref(false)
@@ -449,7 +458,7 @@ const fetchData = async () => {
     'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible',
     'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings',
     'index_clock_size', 'index_clock_config', 'index_auto_refresh_seconds', 'role_button_settings',
-    'force_logout_timestamp', 'marquee_settings' 
+    'force_logout_timestamp', 'marquee_settings', 'youtube_schedule_data' // 💡 增加抓取 YT 設定
   ]
 
   const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', keysToFetch)
@@ -474,9 +483,11 @@ const fetchData = async () => {
           case 'index_auto_refresh_seconds': autoRefreshSeconds.value = Number(v) || 60; break;
           case 'exam_schedule_data': examData.value = { ...examData.value, ...v }; break;
           
+          // 💡 解析並儲存 YouTube 排程資料
+          case 'youtube_schedule_data': youtubeSchedule.value = typeof v === 'object' ? v : {}; break;
+
           case 'parent_notices_data': 
             if (Array.isArray(v)) { 
-              // 💡 修正：不再使用 .map(n => n.content) 刪去其他屬性，而是傳遞完整物件！
               parentNotices.value = v.filter(n => 
                 !n.isHidden && 
                 (!n.startDate || n.startDate <= todayISO) && 
