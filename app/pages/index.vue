@@ -111,16 +111,20 @@
               @update-item="updateEditingContactItem"
             />
             
-            <WikiDailyImage />
-
-            <WikiOnThisDay />
-
-            <!-- 💡 新增：將上課狀態與靜音設定傳給 YouTube 播放器 -->
-            <HomeYouTubeVideo 
-              :videoUrl="todayVideoUrl" 
-              :isMuted="youtubeIsMuted"
-              :isClassTime="isClassTime"
-            />
+            <!-- 💡 根據後台設定動態渲染擴充模組 -->
+            <template v-for="mod in indexModulesConfig" :key="mod.id">
+              <WikiDailyImage v-if="mod.id === 'wikiImage' && mod.isVisible" />
+              
+              <WikiOnThisDay v-if="mod.id === 'wikiOtd' && mod.isVisible" />
+              
+              <HomeYouTubeVideo 
+                v-if="mod.id === 'youtube' && mod.isVisible"
+                :videoUrl="todayVideoUrl" 
+                :isMuted="youtubeIsMuted"
+                :isClassTime="isClassTime"
+              />
+            </template>
+            
           </div>
         </div>
         
@@ -253,9 +257,16 @@ const seatingChart = ref({ isVisible: false, isRotated: false, seats: [], settin
 const defaultHygieneData = { isVisibleOnIndex: false, morning: {}, lunch: {}, squad: {} }
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
-// 💡 YouTube 一週排程與靜音設定
+// 💡 擴充模組排序設定預設值
+const indexModulesConfig = ref([
+  { id: 'wikiImage', name: '🌍 維基百科每日圖片', isVisible: true },
+  { id: 'wikiOtd', name: '🏛️ 歷史上的今天', isVisible: true },
+  { id: 'youtube', name: '📺 YouTube 推薦影片', isVisible: true }
+])
+
+// 💡 YouTube 設定
 const youtubeSchedule = ref({})
-const youtubeIsMuted = ref(true) // 預設靜音
+const youtubeIsMuted = ref(true)
 
 const todayVideoUrl = computed(() => {
   const currentDayIndex = new Date(nowTick.value).getDay() 
@@ -430,7 +441,6 @@ const scheduleDisplay = computed(() => {
   return { current: currentClass, next: nextClass }
 })
 
-// 💡 動態判斷現在是否為「上課時間」
 const isClassTime = computed(() => {
   return scheduleDisplay.value?.current?.status === '上課中'
 })
@@ -467,7 +477,8 @@ const fetchData = async () => {
     'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible',
     'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings',
     'index_clock_size', 'index_clock_config', 'index_auto_refresh_seconds', 'role_button_settings',
-    'force_logout_timestamp', 'marquee_settings', 'youtube_schedule_data' 
+    'force_logout_timestamp', 'marquee_settings', 'youtube_schedule_data',
+    'index_modules_config' // 💡 抓取模組排序設定
   ]
 
   const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', keysToFetch)
@@ -492,12 +503,16 @@ const fetchData = async () => {
           case 'index_auto_refresh_seconds': autoRefreshSeconds.value = Number(v) || 60; break;
           case 'exam_schedule_data': examData.value = { ...examData.value, ...v }; break;
           
-          // 💡 解析 YouTube 排程與靜音狀態
+          // 💡 讀取擴充模組設定
+          case 'index_modules_config': 
+            if (Array.isArray(v)) indexModulesConfig.value = v; 
+            break;
+
           case 'youtube_schedule_data': 
             if (typeof v === 'object') {
               if (v.videos) {
                 youtubeSchedule.value = v.videos;
-                youtubeIsMuted.value = v.isMuted !== false; // 預設靜音 (防呆)
+                youtubeIsMuted.value = v.isMuted !== false;
               } else {
                 youtubeSchedule.value = v;
                 youtubeIsMuted.value = true;
@@ -613,7 +628,6 @@ const saveClassNoteItems = async () => {
 <style scoped>
 /* =========================================================
    💡 手機版響應式 (RWD) 核心防護機制 
-   確保最外層嚴格限制在 100vw，防止內部表格撐破版面
    ========================================================= */
 .page-container { 
   min-height: 100vh; 
