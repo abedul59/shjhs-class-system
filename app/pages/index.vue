@@ -111,8 +111,8 @@
               @update-item="updateEditingContactItem"
             />
             
-            <!-- 💡 根據後台設定動態渲染擴充模組 -->
-            <template v-for="mod in indexModulesConfig" :key="mod.id">
+            <!-- 💡 根據後台設定動態渲染與洗牌擴充模組 -->
+            <template v-for="mod in displayModules" :key="mod.id">
               <WikiDailyImage v-if="mod.id === 'wikiImage' && mod.isVisible" />
               
               <WikiOnThisDay v-if="mod.id === 'wikiOtd' && mod.isVisible" />
@@ -257,12 +257,13 @@ const seatingChart = ref({ isVisible: false, isRotated: false, seats: [], settin
 const defaultHygieneData = { isVisibleOnIndex: false, morning: {}, lunch: {}, squad: {} }
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
-// 💡 擴充模組排序設定預設值
+// 💡 模組排序原始資料與動態排序開關
 const indexModulesConfig = ref([
   { id: 'wikiImage', name: '🌍 維基百科每日圖片', isVisible: true },
   { id: 'wikiOtd', name: '🏛️ 歷史上的今天', isVisible: true },
   { id: 'youtube', name: '📺 YouTube 推薦影片', isVisible: true }
 ])
+const indexDynamicSorting = ref(false)
 
 // 💡 YouTube 設定
 const youtubeSchedule = ref({})
@@ -445,6 +446,24 @@ const isClassTime = computed(() => {
   return scheduleDisplay.value?.current?.status === '上課中'
 })
 
+// 💡 動態重組模組順序 (核心邏輯)
+const displayModules = computed(() => {
+  let mods = [...indexModulesConfig.value]
+  
+  if (indexDynamicSorting.value) {
+    const ytIndex = mods.findIndex(m => m.id === 'youtube')
+    if (ytIndex !== -1) {
+      const ytMod = mods.splice(ytIndex, 1)[0]
+      if (isClassTime.value) {
+        mods.push(ytMod)    // 上課：塞到最下面
+      } else {
+        mods.unshift(ytMod) // 下課：提到最上面
+      }
+    }
+  }
+  return mods
+})
+
 const showPwdModal = ref(false)
 const pwdTarget = ref('')
 const pwdModalTitle = ref('')
@@ -478,7 +497,7 @@ const fetchData = async () => {
     'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings',
     'index_clock_size', 'index_clock_config', 'index_auto_refresh_seconds', 'role_button_settings',
     'force_logout_timestamp', 'marquee_settings', 'youtube_schedule_data',
-    'index_modules_config' // 💡 抓取模組排序設定
+    'index_modules_config'
   ]
 
   const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', keysToFetch)
@@ -503,9 +522,13 @@ const fetchData = async () => {
           case 'index_auto_refresh_seconds': autoRefreshSeconds.value = Number(v) || 60; break;
           case 'exam_schedule_data': examData.value = { ...examData.value, ...v }; break;
           
-          // 💡 讀取擴充模組設定
           case 'index_modules_config': 
-            if (Array.isArray(v)) indexModulesConfig.value = v; 
+            if (Array.isArray(v)) {
+              indexModulesConfig.value = v; 
+            } else if (typeof v === 'object') {
+              if (v.modules) indexModulesConfig.value = v.modules;
+              if (v.dynamicSorting !== undefined) indexDynamicSorting.value = v.dynamicSorting;
+            }
             break;
 
           case 'youtube_schedule_data': 
@@ -626,51 +649,30 @@ const saveClassNoteItems = async () => {
 </script>
 
 <style scoped>
-/* =========================================================
-   💡 手機版響應式 (RWD) 核心防護機制 
-   ========================================================= */
 .page-container { 
-  min-height: 100vh; 
-  background-color: #f3f4f6; 
-  padding: 20px; 
-  font-family: sans-serif; 
-  display: flex; 
-  flex-direction: column; 
-  gap: 20px; 
-  transition: 0.3s; 
-  max-width: 100vw; 
-  overflow-x: hidden; 
-  box-sizing: border-box; 
+  min-height: 100vh; background-color: #f3f4f6; padding: 20px; font-family: sans-serif; 
+  display: flex; flex-direction: column; gap: 20px; transition: 0.3s; max-width: 100vw; overflow-x: hidden; box-sizing: border-box; 
 }
-
 .is-exam-mode { padding: 0; background: var(--ex-bg); overflow: hidden; }
-
 .normal-home-content { width: 100%; max-width: 100%; box-sizing: border-box; }
-
 .main-split { display: flex; gap: 20px; align-items: flex-start; width: 100%; box-sizing: border-box; }
 .left-panel { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; width: 100%; box-sizing: border-box;}
 .right-panel { flex: 1; min-width: 0; width: 100%; box-sizing: border-box;}
-
 .unverified-placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: white; padding: 80px 20px; border-radius: 12px; border: 1px dashed #cbd5e1; margin-top: 20px; }
 .spinner-icon { font-size: 4rem; animation: pulse 2s infinite; margin-bottom: 20px; }
 .unverified-placeholder h2 { color: #334155; margin-bottom: 10px; }
 .unverified-placeholder p { color: #64748b; font-size: 1.1rem; }
 @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
-
 .weekend-prompt { text-align: center; padding: 15px; background: #fef3c7; border: 2px dashed #fde68a; border-radius: 8px; color: #d97706; font-size: 1rem; font-weight: bold; margin-top: 10px;}
-
 .identity-banner { background: #e0f2fe; color: #0369a1; padding: 12px 20px; text-align: center; font-weight: bold; border-radius: 8px; display: flex; justify-content: center; align-items: center; gap: 15px; border: 1px solid #bae6fd; margin-bottom: -5px;}
 .change-id-btn { background: #0ea5e9; color: white; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.95rem; font-weight: bold; transition: 0.2s; }
 .change-id-btn:hover { background: #0284c7; }
-
 @media (max-width: 1024px) { .main-split { flex-direction: column; } }
 @media (max-width: 768px) { .page-container { padding: 10px; } }
-
 :deep(.text-sm) { font-size: 0.9rem !important; line-height: 1.5; }
 :deep(.text-xs) { font-size: 0.75rem !important; color: #64748b; font-weight: normal; line-height: 1.4; }
 :deep(.mt-10) { margin-top: 10px; }
 :deep(.mt-15) { margin-top: 15px; }
-
 :deep(.custom-table) { width: 100%; border-collapse: collapse; min-width: 800px; text-align: center; font-size: 0.95rem; }
 :deep(.custom-table th), :deep(.custom-table td) { border: 1px solid #000; padding: 8px; vertical-align: middle; }
 :deep(.custom-table th) { background-color: #f1f5f9; font-weight: bold; }
@@ -679,7 +681,6 @@ const saveClassNoteItems = async () => {
 :deep(.lunch-table th) { background: transparent; font-weight: bold; }
 :deep(.lunch-table td) { background: transparent; }
 :deep(.seat-num), :deep(.seat-number) { font-size: 1.2rem; font-weight: bold; }
-
 :deep(.morning-table tbody tr td:nth-child(2)) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
 :deep(.morning-table tbody tr td[rowspan] + td) { font-size: inherit !important; font-weight: normal !important; }
 :deep(.morning-table tbody tr td[rowspan] + td + td) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
@@ -687,24 +688,9 @@ const saveClassNoteItems = async () => {
 :deep(.squad-table tbody tr td:nth-child(2)) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
 :deep(.squad-table tbody tr td[rowspan] + td) { font-size: inherit !important; font-weight: normal !important; }
 :deep(.squad-table tbody tr td[rowspan] + td + td) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
-
 @media (max-width: 850px) {
-  :deep(.custom-table) { 
-    display: block; 
-    overflow-x: auto; 
-    white-space: nowrap; 
-    min-width: 100%; 
-    border: none; 
-  }
-  :deep(.custom-table th), :deep(.custom-table td) {
-    white-space: nowrap;
-  }
-  :deep(.morning-table tbody tr td:nth-child(2)), 
-  :deep(.morning-table tbody tr td[rowspan] + td + td), 
-  :deep(.lunch-table tbody tr:nth-child(even) td), 
-  :deep(.squad-table tbody tr td:nth-child(2)), 
-  :deep(.squad-table tbody tr td[rowspan] + td + td) { 
-    font-size: 1.2rem !important; 
-  }
+  :deep(.custom-table) { display: block; overflow-x: auto; white-space: nowrap; min-width: 100%; border: none; }
+  :deep(.custom-table th), :deep(.custom-table td) { white-space: nowrap; }
+  :deep(.morning-table tbody tr td:nth-child(2)), :deep(.morning-table tbody tr td[rowspan] + td + td), :deep(.lunch-table tbody tr:nth-child(even) td), :deep(.squad-table tbody tr td:nth-child(2)), :deep(.squad-table tbody tr td[rowspan] + td + td) { font-size: 1.2rem !important; }
 }
 </style>
