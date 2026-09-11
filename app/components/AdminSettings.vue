@@ -30,7 +30,7 @@
       </button>
     </div>
 
-    <!-- 🕒 首頁時鐘樣式總管區塊 (30種) -->
+    <!-- 🕒 首頁時鐘樣式總管區塊 -->
     <div class="settings-section" style="margin-top: 25px;">
       <h4>🕒 首頁時鐘樣式總管</h4>
       <p class="help-text">💡 自由搭配 30 種專屬風格、顏色與大小，打造獨一無二的班級看板！</p>
@@ -130,8 +130,17 @@
     <!-- 🧩 首頁擴充模組顯示與排序 -->
     <div class="settings-section" style="margin-top: 25px;">
       <h4>🧩 首頁擴充模組顯示與排序</h4>
-      <p class="help-text">💡 自由控制首頁右側面板的「擴充模組」是否顯示，並可使用箭頭調整它們的上下順序。</p>
+      <p class="help-text">💡 自由控制首頁右側面板的「擴充模組」是否顯示，並可使用箭頭調整它們的預設上下順序。</p>
       
+      <!-- 💡 新增：動態排序開關 -->
+      <div class="dynamic-sort-box">
+        <label class="icon-toggle mod-toggle" style="background: transparent; border: none; padding: 0;">
+          <input type="checkbox" v-model="dynamicSorting" class="large-checkbox" />
+          <span style="font-weight: bold; color: #1d4ed8; font-size: 1.15rem;">🔄 啟用「上下課動態排序」</span>
+        </label>
+        <p class="help-text-sm">打勾後，系統會自動無視下方順序：<strong>下課時將 YT 影片置頂吸引目光，上課時自動將 YT 影片沉底。</strong></p>
+      </div>
+
       <div class="module-list">
         <div v-for="(mod, index) in indexModules" :key="mod.id" class="module-row" :class="{ 'is-hidden': !mod.isVisible }">
           
@@ -153,7 +162,7 @@
       </div>
 
       <button @click="saveIndexModules" class="save-btn modules-btn" :disabled="isSavingModules" style="margin-top: 20px;">
-        {{ isSavingModules ? '儲存中...' : '💾 儲存模組排序設定' }}
+        {{ isSavingModules ? '儲存中...' : '💾 儲存排序與顯示設定' }}
       </button>
     </div>
 
@@ -164,27 +173,24 @@
 import { ref, computed, onMounted } from 'vue'
 const supabase = useSupabaseClient()
 
-// 1. 密碼設定
 const pwdConfig = ref({ type: 'dynamic', custom_pwd: '' })
 const isSaving = ref(false)
 
-// 2. 🕒 時鐘樣式總管設定
 const clockConfig = ref({ theme: 'classic', color: '#1e293b', size: 35, dateSize: 18, showIcon: true })
 const isSavingClock = ref(false)
 
-// 3. 自動更新頻率設定
 const autoRefreshSeconds = ref(60)
 const isSavingRefresh = ref(false)
 
-// 4. 🧩 擴充模組顯示與排序設定
 const indexModules = ref([
   { id: 'wikiImage', name: '🌍 維基百科每日圖片', isVisible: true },
   { id: 'wikiOtd', name: '🏛️ 歷史上的今天', isVisible: true },
   { id: 'youtube', name: '📺 YouTube 推薦影片', isVisible: true }
 ])
+// 💡 動態排序狀態
+const dynamicSorting = ref(false)
 const isSavingModules = ref(false)
 
-// 自動計算今天的動態密碼 (YYMMDD + 59)
 const currentDynamicPwd = computed(() => {
   const d = new Date()
   const yy = String(d.getFullYear()).slice(2)
@@ -193,13 +199,10 @@ const currentDynamicPwd = computed(() => {
   return `${yy}${mm}${dd}59`
 })
 
-// 載入當前所有設定
 const fetchConfig = async () => {
-  // 載入密碼設定
   const { data: pwdData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'admin_password').maybeSingle()
   if (pwdData?.setting_value) pwdConfig.value = pwdData.setting_value
 
-  // 載入時鐘綜合設定
   const { data: clkData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'index_clock_config').maybeSingle()
   if (clkData && clkData.setting_value) {
     clockConfig.value = { ...clockConfig.value, ...clkData.setting_value }
@@ -209,22 +212,25 @@ const fetchConfig = async () => {
     if (oldSize) clockConfig.value.size = Number(oldSize.setting_value) || 35
   }
 
-  // 載入自動更新秒數設定
   const { data: refreshData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'index_auto_refresh_seconds').maybeSingle()
   if (refreshData && refreshData.setting_value !== undefined) {
     autoRefreshSeconds.value = Number(refreshData.setting_value)
   }
 
-  // 💡 載入模組排序設定
+  // 💡 相容舊陣列與新物件的設定載入
   const { data: modData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'index_modules_config').maybeSingle()
-  if (modData && modData.setting_value && Array.isArray(modData.setting_value)) {
-    indexModules.value = modData.setting_value
+  if (modData && modData.setting_value) {
+    if (Array.isArray(modData.setting_value)) {
+      indexModules.value = modData.setting_value
+    } else {
+      if (modData.setting_value.modules) indexModules.value = modData.setting_value.modules
+      if (modData.setting_value.dynamicSorting !== undefined) dynamicSorting.value = modData.setting_value.dynamicSorting
+    }
   }
 }
 
 onMounted(() => fetchConfig())
 
-// 模組排序功能函式
 const moveModuleUp = (index) => {
   if (index > 0) {
     const temp = indexModules.value[index]
@@ -241,14 +247,11 @@ const moveModuleDown = (index) => {
   }
 }
 
-// 儲存設定函式群
 const saveSettings = async () => {
-  if (pwdConfig.value.type === 'custom' && !pwdConfig.value.custom_pwd.trim()) {
-    return alert('❌ 請輸入您的自訂密碼！')
-  }
+  if (pwdConfig.value.type === 'custom' && !pwdConfig.value.custom_pwd.trim()) return alert('❌ 請輸入您的自訂密碼！')
   isSaving.value = true
   const { error } = await supabase.from('system_settings').upsert({ setting_key: 'admin_password', setting_value: pwdConfig.value }, { onConflict: 'setting_key' })
-  if (!error) alert('✅ 密碼設定已成功更新！下次登入或發信即刻生效。')
+  if (!error) alert('✅ 密碼設定已成功更新！')
   else alert('❌ 儲存失敗')
   isSaving.value = false
 }
@@ -256,7 +259,7 @@ const saveSettings = async () => {
 const saveClockSettings = async () => {
   isSavingClock.value = true
   const { error } = await supabase.from('system_settings').upsert({ setting_key: 'index_clock_config', setting_value: clockConfig.value }, { onConflict: 'setting_key' })
-  if (!error) alert('✅ 首頁時鐘樣式已成功更新！請回首頁查看效果。')
+  if (!error) alert('✅ 首頁時鐘樣式已成功更新！')
   else alert('❌ 儲存失敗')
   isSavingClock.value = false
 }
@@ -264,16 +267,20 @@ const saveClockSettings = async () => {
 const saveRefreshSettings = async () => {
   isSavingRefresh.value = true
   const { error } = await supabase.from('system_settings').upsert({ setting_key: 'index_auto_refresh_seconds', setting_value: autoRefreshSeconds.value }, { onConflict: 'setting_key' })
-  if (!error) alert('✅ 自動更新頻率設定成功！重整首頁後生效。')
+  if (!error) alert('✅ 自動更新頻率設定成功！')
   else alert('❌ 儲存失敗')
   isSavingRefresh.value = false
 }
 
-// 💡 儲存模組排序與顯示設定
+// 💡 儲存包含「動態排序」狀態的設定物件
 const saveIndexModules = async () => {
   isSavingModules.value = true
-  const { error } = await supabase.from('system_settings').upsert({ setting_key: 'index_modules_config', setting_value: indexModules.value }, { onConflict: 'setting_key' })
-  if (!error) alert('✅ 首頁擴充模組排序設定成功！重新整理首頁後生效。')
+  const payload = {
+    modules: indexModules.value,
+    dynamicSorting: dynamicSorting.value
+  }
+  const { error } = await supabase.from('system_settings').upsert({ setting_key: 'index_modules_config', setting_value: payload }, { onConflict: 'setting_key' })
+  if (!error) alert('✅ 模組排序設定成功！重整首頁後生效。')
   else alert('❌ 儲存失敗')
   isSavingModules.value = false
 }
@@ -286,13 +293,11 @@ const saveIndexModules = async () => {
 .settings-section h4 { margin-top: 0; color: #1e293b; }
 .help-text { font-size: 0.95rem; color: #64748b; margin-bottom: 20px; border-bottom: 1px dashed #cbd5e1; padding-bottom: 15px; }
 
-/* 密碼區塊樣式 */
 .radio-group { display: flex; flex-direction: column; gap: 15px; margin: 20px 0; font-size: 1.1rem; }
 .radio-group label { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .preview-tag { background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 6px; font-size: 0.95rem; font-weight: bold; margin-left: 10px; }
 .custom-pwd-box { margin-left: 28px; padding: 15px; background: #f8fafc; border-left: 4px solid #3b82f6; border-radius: 4px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;}
 
-/* 時鐘設定網格排版 */
 .clock-settings-grid { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; padding: 15px; background: #f8fafc; border-left: 4px solid #10b981; border-radius: 4px;}
 .form-group { display: flex; flex-direction: column; gap: 8px; }
 .form-group label { font-weight: bold; color: #475569; }
@@ -312,7 +317,6 @@ const saveIndexModules = async () => {
 .icon-toggle:hover { background: #f1f5f9; }
 .large-checkbox { transform: scale(1.3); accent-color: #10b981; cursor: pointer; }
 
-/* 儲存按鈕群 */
 .save-btn { background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; font-size: 1.1rem; cursor: pointer; transition: 0.2s;}
 .save-btn:hover:not(:disabled) { filter: brightness(0.9); }
 .save-btn:disabled { background: #94a3b8; cursor: not-allowed; }
@@ -322,11 +326,13 @@ const saveIndexModules = async () => {
 .refresh-btn { margin-top: 0; padding: 8px 16px; font-size: 1rem; background-color: #8b5cf6; }
 .modules-btn { background-color: #f59e0b; }
 
-/* 為 optgroup 增加閱讀性 */
 optgroup { font-weight: bold; color: #1e3a8a; background: #f1f5f9; }
 option { font-weight: normal; color: #1e293b; background: white; }
 
-/* 💡 模組排序設定專用樣式 */
+/* 💡 動態排序提示框 */
+.dynamic-sort-box { background: #eff6ff; border: 1px dashed #93c5fd; padding: 15px 20px; border-radius: 8px; margin-bottom: 15px; }
+.help-text-sm { margin: 8px 0 0 32px; font-size: 0.95rem; color: #2563eb; }
+
 .module-list { display: flex; flex-direction: column; gap: 10px; max-width: 600px; }
 .module-row { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px 20px; border-radius: 8px; transition: 0.3s; }
 .module-row:hover { border-color: #94a3b8; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
