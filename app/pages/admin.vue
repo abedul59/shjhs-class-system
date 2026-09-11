@@ -32,7 +32,10 @@
           
           <button @click="currentTab = 'settings'" :class="{ active: currentTab === 'settings' }">⚙️ 系統密碼設定</button>
           <button @click="currentTab = 'marqueeSettings'" :class="{ active: currentTab === 'marqueeSettings' }">📢 首頁跑馬燈設定</button>
-          <!-- 💡 加入廣播系統按鈕 -->
+          
+          <!-- 💡 加入首頁 YouTube 輪播設定按鈕 -->
+          <button @click="currentTab = 'youtubeSchedule'" :class="{ active: currentTab === 'youtubeSchedule' }">📺 首頁輪播影片設定</button>
+          
           <button @click="currentTab = 'broadcast'" :class="{ active: currentTab === 'broadcast' }">📢 遠端廣播與定時</button>
           
           <button @click="currentTab = 'backup'" :class="{ active: currentTab === 'backup' }">📦 系統備份</button>
@@ -71,7 +74,9 @@
         <AdminSettings v-if="currentTab === 'settings'" />
         <AdminMarqueeSettings v-if="currentTab === 'marqueeSettings'" />
         
-        <!-- 💡 掛載廣播獨立設定面板 -->
+        <!-- 💡 掛載 YouTube 排程面板 -->
+        <AdminYouTubeSchedule v-if="currentTab === 'youtubeSchedule'" />
+        
         <AdminBroadcast v-if="currentTab === 'broadcast'" />
         
         <AdminIndexButtons v-if="currentTab === 'indexButtons'" />
