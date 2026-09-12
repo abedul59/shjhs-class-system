@@ -127,9 +127,33 @@
       </div>
     </div>
 
-    <!-- 🧩 首頁擴充模組顯示與排序 -->
+    <!-- 🎵 新增：今日推薦英語歌曲設定 -->
     <div class="settings-section" style="margin-top: 25px;">
-      <h4>🧩 首頁擴充模組顯示與排序</h4>
+      <h4>🎵 今日推薦英語歌曲 (顯示於左側)</h4>
+      <p class="help-text">💡 設定每天要在首頁左下角播放的英語歌曲 YouTube 網址，上課時間會自動暫停並變黑畫面。</p>
+      
+      <div class="dynamic-sort-box" style="margin-bottom: 15px;">
+        <label class="icon-toggle mod-toggle" style="background: transparent; border: none; padding: 0;">
+          <input type="checkbox" v-model="englishSongSchedule.isVisible" class="large-checkbox" />
+          <span style="font-weight: bold; color: #ec4899; font-size: 1.15rem;">顯示「今日推薦英語歌曲」面板</span>
+        </label>
+      </div>
+
+      <div class="schedule-grid">
+        <div v-for="(day, index) in ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']" :key="index" class="form-group row-align">
+          <label class="day-label">{{ day }} 網址：</label>
+          <input type="text" v-model="englishSongSchedule[index]" class="edit-input flex-grow" placeholder="請貼上 YouTube 影片網址..." />
+        </div>
+      </div>
+
+      <button @click="saveEnglishSongSettings" class="save-btn song-btn" :disabled="isSavingSong" style="margin-top: 20px;">
+        {{ isSavingSong ? '儲存中...' : '💾 儲存英語歌曲設定' }}
+      </button>
+    </div>
+
+    <!-- 🧩 首頁擴充模組顯示與排序 (右側) -->
+    <div class="settings-section" style="margin-top: 25px;">
+      <h4>🧩 首頁擴充模組顯示與排序 (右側)</h4>
       <p class="help-text">💡 自由控制首頁右側面板的「擴充模組」是否顯示，並可使用箭頭調整它們的預設上下順序。</p>
       
       <div class="dynamic-sort-box">
@@ -181,7 +205,10 @@ const isSavingClock = ref(false)
 const autoRefreshSeconds = ref(60)
 const isSavingRefresh = ref(false)
 
-// 💡 更新預設模組清單，加入 CNN 與 ABC News
+// 💡 英語歌曲設定狀態
+const englishSongSchedule = ref({ 0: '', 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', isVisible: true })
+const isSavingSong = ref(false)
+
 const defaultModules = [
   { id: 'wikiImage', name: '🌍 維基百科每日圖片', isVisible: true },
   { id: 'wikiOtd', name: '🏛️ 歷史上的今天', isVisible: true },
@@ -220,7 +247,12 @@ const fetchConfig = async () => {
     autoRefreshSeconds.value = Number(refreshData.setting_value)
   }
 
-  // 💡 自動補齊機制
+  // 💡 載入英語歌曲設定
+  const { data: songData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'english_song_schedule_data').maybeSingle()
+  if (songData && songData.setting_value) {
+    englishSongSchedule.value = { ...englishSongSchedule.value, ...songData.setting_value }
+  }
+
   const { data: modData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'index_modules_config').maybeSingle()
   if (modData && modData.setting_value) {
     let loadedMods = []
@@ -284,12 +316,18 @@ const saveRefreshSettings = async () => {
   isSavingRefresh.value = false
 }
 
+// 💡 儲存英語歌曲設定
+const saveEnglishSongSettings = async () => {
+  isSavingSong.value = true
+  const { error } = await supabase.from('system_settings').upsert({ setting_key: 'english_song_schedule_data', setting_value: englishSongSchedule.value }, { onConflict: 'setting_key' })
+  if (!error) alert('✅ 英語歌曲設定成功！重整首頁後生效。')
+  else alert('❌ 儲存失敗')
+  isSavingSong.value = false
+}
+
 const saveIndexModules = async () => {
   isSavingModules.value = true
-  const payload = {
-    modules: indexModules.value,
-    dynamicSorting: dynamicSorting.value
-  }
+  const payload = { modules: indexModules.value, dynamicSorting: dynamicSorting.value }
   const { error } = await supabase.from('system_settings').upsert({ setting_key: 'index_modules_config', setting_value: payload }, { onConflict: 'setting_key' })
   if (!error) alert('✅ 模組排序設定成功！重整首頁後生效。')
   else alert('❌ 儲存失敗')
@@ -336,6 +374,13 @@ const saveIndexModules = async () => {
 .refresh-box { margin-left: 0; border-left-color: #8b5cf6; margin-bottom: 20px;}
 .refresh-btn { margin-top: 0; padding: 8px 16px; font-size: 1rem; background-color: #8b5cf6; }
 .modules-btn { background-color: #f59e0b; }
+.song-btn { background-color: #ec4899; } /* 英語歌曲的粉紅按鈕 */
+
+/* 英語歌曲排程專用樣式 */
+.schedule-grid { display: flex; flex-direction: column; gap: 10px; max-width: 600px; }
+.row-align { flex-direction: row; align-items: center; }
+.day-label { width: 100px; text-align: right; }
+.flex-grow { flex-grow: 1; }
 
 optgroup { font-weight: bold; color: #1e3a8a; background: #f1f5f9; }
 option { font-weight: normal; color: #1e293b; background: white; }
