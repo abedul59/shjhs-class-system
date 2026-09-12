@@ -15,7 +15,7 @@
     </div>
     
     <div class="card-content" v-else>
-      <!-- 💡 加入 2/3 寬度的外層容器 -->
+      <!-- 💡 維持 2/3 寬度的外層容器 -->
       <div class="news-layout-wrapper">
         <a :href="newsData.link" target="_blank" title="點擊前往 Fox News 閱讀完整新聞" class="news-link">
           <div class="news-image-wrapper">
@@ -38,10 +38,17 @@ const hasData = ref(false)
 const newsData = ref({ title: '', image: '', link: '' })
 
 const fetchNews = async () => {
+  // 💡 設定 8 秒強制超時控制器，防止無限轉圈圈
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 8000)
+
   try {
     const targetUrl = 'https://www.foxnews.com/'
-    // 💡 透過 JSON 格式的 /get 端點，能更穩定地繞過防護取得原始碼
-    const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`)
+    const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`, { 
+      signal: controller.signal 
+    })
+    
+    clearTimeout(timeoutId) // 成功連線就解除倒數計時
     const data = await res.json()
     
     if (!data.contents) throw new Error('沒有回傳內容')
@@ -49,13 +56,12 @@ const fetchNews = async () => {
     const parser = new DOMParser()
     const doc = parser.parseFromString(data.contents, 'text/html')
     
-    // 💡 尋找所有的 article，Fox News 首頁第一篇通常就是最大頭條
     const articles = doc.querySelectorAll('article')
     let found = false
     
     for (let article of articles) {
-      // 根據您的截圖，精準定位標題與圖片
-      const titleLink = article.querySelector('.info-header .title a') || article.querySelector('h2.title a')
+      // 定位最大頭條的標題與圖片
+      const titleLink = article.querySelector('.info-header .title a') || article.querySelector('h2.title a') || article.querySelector('h3.title a')
       const imgEl = article.querySelector('picture img') || article.querySelector('img')
       
       if (titleLink && imgEl) {
@@ -67,8 +73,7 @@ const fetchNews = async () => {
         
         const titleText = titleLink.textContent.trim()
         
-        // 過濾掉可能抓到 1x1 像素追蹤圖片或無效內容的情況
-        if (imgUrl && linkUrl && titleText && !imgUrl.includes('data:image')) {
+        if (imgUrl && linkUrl && titleText && !imgUrl.includes('data:image') && imgUrl.length > 20) {
           newsData.value = {
             title: titleText,
             image: imgUrl,
@@ -76,17 +81,42 @@ const fetchNews = async () => {
           }
           hasData.value = true
           found = true
-          break // 抓到第一個符合條件的最大頭條後就停止迴圈
+          break
         }
       }
     }
     
-    if (!found) throw new Error('解析不到頭條結構')
+    // 如果 HTML 結構變了導致找不到，主動拋出錯誤進入備用方案
+    if (!found) throw new Error('找不到頭條結構，準備啟用 RSS 備案')
     
   } catch (err) {
-    console.error('取得 Fox News 發生錯誤:', err)
-    hasData.value = false
+    console.warn('首頁解析失敗或超時，自動切換至 RSS 備用方案...', err.message)
+    
+    // 💡 備用方案：直接抓取官方 RSS，保證一定有新聞可以顯示
+    try {
+      const rssUrl = 'http://feeds.foxnews.com/foxnews/latest'
+      const rssRes = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
+      const rssData = await rssRes.json()
+      
+      if (rssData && rssData.status === 'ok' && rssData.items && rssData.items.length > 0) {
+        const item = rssData.items.find(i => i.thumbnail || (i.enclosure && i.enclosure.link)) || rssData.items[0]
+        let imgUrl = item.thumbnail || (item.enclosure && item.enclosure.link) || 'https://a57.foxnews.com/static.foxnews.com/foxnews.com/content/uploads/2022/02/896/500/Fox-News-Logo.jpg'
+        
+        newsData.value = {
+          title: item.title,
+          image: imgUrl,
+          link: item.link
+        }
+        hasData.value = true
+      } else {
+        hasData.value = false
+      }
+    } catch (fallbackErr) {
+      console.error('所有抓取方式皆失敗', fallbackErr)
+      hasData.value = false
+    }
   } finally {
+    // 確保無論成功或失敗，轉圈圈一定會停下來
     isLoading.value = false
   }
 }
@@ -164,7 +194,7 @@ onMounted(() => {
   transition: transform 0.4s ease;
 }
 .news-link:hover .news-image {
-  transform: scale(1.05); /* 滑鼠游標經過時微微放大圖片 */
+  transform: scale(1.05);
 }
 
 .news-title-box {
@@ -201,7 +231,6 @@ onMounted(() => {
 }
 @keyframes spin { 100% { transform: rotate(360deg); } }
 
-/* 手機版時恢復 100% 寬度，避免文字與圖片過小 */
 @media (max-width: 768px) {
   .news-layout-wrapper {
     width: 100%;
