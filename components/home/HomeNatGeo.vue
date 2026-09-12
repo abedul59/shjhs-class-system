@@ -38,11 +38,11 @@ const hasData = ref(false)
 const newsData = ref({ title: '', image: '', link: '' })
 
 const fetchNews = async () => {
+  // 💡 1. 加入 8 秒超時保護，避免無限轉圈圈
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 8000)
 
   try {
-    // 鎖定國家地理科學分類頁面
     const targetUrl = 'https://www.natgeomedia.com/science/'
     const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`, { 
       signal: controller.signal 
@@ -55,43 +55,82 @@ const fetchNews = async () => {
     const parser = new DOMParser()
     const doc = parser.parseFromString(data.contents, 'text/html')
     
-    // 根據您提供的截圖，鎖定具有 class="article-link-wrap" 的第一個主區塊
-    const firstArticle = doc.querySelector('.article-link-wrap') || doc.querySelector('article')
+    let titleText = ''
+    let linkUrl = ''
+    let imgUrl = ''
     
-    if (firstArticle) {
-      // 尋找圖片 (可能在 data-src 作為 lazy load)
-      const imgEl = firstArticle.querySelector('img')
-      // 尋找標題連結 (依照截圖結構，標題藏在 h4 的 a 標籤內)
-      const titleLink = firstArticle.querySelector('h4 a') || firstArticle.querySelector('h3 a') || firstArticle.querySelector('a')
-      
-      if (imgEl && titleLink) {
-        let imgUrl = imgEl.getAttribute('src') || imgEl.getAttribute('data-src') || ''
-        if (imgUrl.startsWith('//')) imgUrl = 'https:' + imgUrl
+    // 💡 2. 寬容尋找：找出任何可能是頭條標題的連結
+    const aTags = doc.querySelectorAll('.art-btn-la-text a, .article-link-wrap a, article a, h4 a, h3 a')
+    
+    for (let a of aTags) {
+      const text = a.textContent.trim()
+      if (text.length > 8) { // 標題通常超過 8 個字，避免抓到「閱讀更多」
+        titleText = text
+        linkUrl = a.getAttribute('href')
         
-        let linkUrl = titleLink.getAttribute('href') || ''
-        if (linkUrl.startsWith('/')) linkUrl = 'https://www.natgeomedia.com' + linkUrl
-        
-        const titleText = titleLink.textContent.trim()
-        
-        if (imgUrl && linkUrl && titleText) {
-          newsData.value = {
-            title: titleText,
-            image: imgUrl,
-            link: linkUrl
-          }
-          hasData.value = true
-        } else {
-          throw new Error('資訊不齊全')
+        // 往上找尋容器，看看有沒有包含圖片標籤
+        const parent = a.closest('.article-link-wrap, .artcle-btn-large, article, div[class*="article"]')
+        if (parent) {
+          const img = parent.querySelector('img')
+          if (img) imgUrl = img.getAttribute('src') || img.getAttribute('data-src') || ''
         }
-      } else {
-        throw new Error('找不到完整的圖片或標題標籤')
+        break
       }
-    } else {
-      throw new Error('找不到主要的文章區塊')
     }
+    
+    // 💡 3. 如果在 DOM 找不到圖片 (因為被 Vue/JS 隱藏了)，直接用正則表達式暴力掃描原始碼裡的大圖！
+    if (!imgUrl || imgUrl.length < 10 || imgUrl.includes('data:image')) {
+      const match = data.contents.match(/(https?:\/\/[a-zA-Z0-9.-]+\.natgeomedia\.com\/[^"']+\.(?:jpg|jpeg|png|webp))/i)
+      if (match) {
+        imgUrl = match[1]
+      }
+    }
+    
+    // 💡 4. 終極圖片兜底 (NatGeo Logo)，防止破圖
+    if (!imgUrl || imgUrl.includes('data:image')) {
+      imgUrl = 'https://www.natgeomedia.com/assets/images/logo.svg'
+    }
+    
+    if (linkUrl && linkUrl.startsWith('/')) {
+      linkUrl = 'https://www.natgeomedia.com' + linkUrl
+    }
+    
+    if (titleText && linkUrl) {
+      newsData.value = {
+        title: titleText,
+        image: imgUrl,
+        link: linkUrl
+      }
+      hasData.value = true
+    } else {
+      throw new Error('無法從網頁中解析到頭條文章')
+    }
+    
   } catch (err) {
-    console.error('取得 NatGeo 發生錯誤:', err)
-    hasData.value = false
+    console.warn('NatGeo 解析失敗，立刻無縫切換至備用 RSS...', err)
+    
+    // 💡 5. 無情備用方案：如果國家地理擋住我們了，立刻改抓「Yahoo 科技與科學新知」RSS！保證有內容可看。
+    try {
+      const rssUrl = 'https://tw.news.yahoo.com/rss/technology'
+      const rssRes = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
+      const rssData = await rssRes.json()
+      
+      if (rssData && rssData.items && rssData.items.length > 0) {
+        const item = rssData.items.find(i => i.thumbnail || (i.enclosure && i.enclosure.link)) || rssData.items[0]
+        let imgUrl = item.thumbnail || (item.enclosure && item.enclosure.link) || 'https://s.yimg.com/cv/apiv2/social/images/yahoo_default_logo.png'
+        
+        newsData.value = {
+          title: item.title,
+          image: imgUrl,
+          link: item.link
+        }
+        hasData.value = true
+      } else {
+        hasData.value = false
+      }
+    } catch (fallbackErr) {
+      hasData.value = false
+    }
   } finally {
     isLoading.value = false
   }
@@ -107,8 +146,7 @@ onMounted(() => fetchNews())
   padding: 20px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   border: 1px solid #e2e8f0;
-  /* 💡 不需要設寬度，它會自動填滿父層 left-panel 的空間 */
-  width: 100%;
+  width: 100%; /* 完美貼合左側面板寬度 */
   box-sizing: border-box;
   transition: 0.3s;
 }
@@ -142,7 +180,6 @@ onMounted(() => fetchNews())
   width: 100%;
 }
 
-/* 為了配合左側欄位寬度，這裡填滿 100%，並使用滿版設計 */
 .news-layout-wrapper {
   width: 100%;
 }
@@ -165,7 +202,10 @@ onMounted(() => fetchNews())
   width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  background-color: #e2e8f0;
+  background-color: #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .news-image {
