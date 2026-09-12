@@ -211,7 +211,7 @@ const unreadMsgCount = ref(0)
 const marqueeSettings = ref({})
 const clockConfig = ref({ theme: 'classic', color: '#1e293b', size: 35, showIcon: true })
 
-// 💡 更新為智慧變速設定結構 (預設值)
+// 💡 智慧變速設定結構
 const autoRefreshConfig = ref({ classTime: 60, breakTime: 60, weekend: 60 }) 
 let dataRefreshTimer = null
 
@@ -760,9 +760,20 @@ const startAutoRefresh = () => {
   }
 }
 
-// 💡 監聽狀態改變，鐘聲一響瞬間切換計時器
-watch(currentRefreshInterval, () => { 
-  startAutoRefresh() 
+// 💡 監聽上下課切換！只要鐘聲一響，立刻強制更新一次！
+watch(isClassTime, (newVal, oldVal) => {
+  if (newVal !== oldVal) {
+    console.log('🔔 鐘聲響起，狀態切換，立刻觸發資料更新！')
+    fetchData()         // 立刻抓取最新資料
+    startAutoRefresh()  // 重新啟動背景倒數計時器
+  }
+})
+
+// 💡 監聽秒數設定變動 (例如老師剛在後台改了秒數)
+watch(currentRefreshInterval, (newVal, oldVal) => { 
+  if (newVal !== oldVal) {
+    startAutoRefresh() 
+  }
 })
 
 const isScheduleButtonVisible = computed(() => {
