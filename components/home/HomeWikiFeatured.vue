@@ -18,7 +18,7 @@
     <div class="card-content" v-else>
       <a :href="articleData.link" target="_blank" title="點擊閱讀維基百科完整條目" class="article-link">
         
-        <!-- 如果有配圖就顯示 -->
+        <!-- 💡 如果有官方配圖就顯示 -->
         <div class="article-image-wrapper" v-if="articleData.image">
           <img :src="articleData.image" :alt="articleData.title" class="article-image" loading="lazy" />
         </div>
@@ -56,7 +56,7 @@ const fetchFeaturedArticle = async () => {
     let res = await fetch(url)
     let data = await res.json()
     
-    // 💡 如果今天維基百科還沒更新條目，自動退回去抓「昨天」的
+    // 如果今天維基百科還沒更新條目，自動退回去抓「昨天」的
     if (data.error) {
       const yesterday = new Date(Date.now() - 86400000)
       pageName = getPageName(yesterday)
@@ -70,35 +70,34 @@ const fetchFeaturedArticle = async () => {
       const parser = new DOMParser()
       const doc = parser.parseFromString(html, 'text/html')
       
-      // 1. 抓取標題與連結
-      const titleLink = doc.querySelector('b a') || doc.querySelector('strong a') || doc.querySelector('a')
-      let titleText = titleLink ? (titleLink.getAttribute('title') || titleLink.textContent) : '今日典範條目'
-      let linkUrl = titleLink ? titleLink.getAttribute('href') : ''
-      if (linkUrl && linkUrl.startsWith('/')) linkUrl = 'https://zh.wikipedia.org' + linkUrl
+      // 💡 步驟 1：從模板中找出主角條目的名稱 (粗體的超連結)
+      const titleLink = doc.querySelector('b a') || doc.querySelector('strong a')
+      let targetTitle = titleLink ? (titleLink.getAttribute('title') || titleLink.textContent) : ''
       
-      // 2. 抓取配圖 (如果有的話)
-      let imgUrl = ''
-      const imgEl = doc.querySelector('img')
-      if (imgEl) {
-        imgUrl = imgEl.getAttribute('src') || ''
-        if (imgUrl.startsWith('//')) imgUrl = 'https:' + imgUrl
-        // 透過置換參數取得 640px 的高畫質縮圖
-        imgUrl = imgUrl.replace(/\/\d+px-/, '/640px-')
-      }
-      
-      // 3. 抓取簡介摘要 (清除不必要的標籤與空白)
-      const cleanDoc = doc.body.cloneNode(true)
-      cleanDoc.querySelectorAll('div, style, script, img, table').forEach(el => el.remove())
-      
-      let summaryText = cleanDoc.textContent.replace(/\s+/g, ' ').trim()
-      if (summaryText.length > 110) summaryText = summaryText.substring(0, 110) + '...'
-      // 清除維基百科結尾常見的贅字
-      summaryText = summaryText.replace(/（\d+字）$|（\s*）$|（了解更多\.\.\.）$/g, '')
-      
-      if (titleText && linkUrl) {
-        articleData.value = { title: titleText, image: imgUrl, link: linkUrl, summary: summaryText }
-        hasData.value = true
-        return // 成功取得今日條目，結束程式
+      if (targetTitle) {
+        // 💡 步驟 2：拿著標題去 Query API 請求「頁面圖片 (pageimages)」與「純文字摘要 (extracts)」
+        const queryUrl = `https://zh.wikipedia.org/w/api.php?action=query&prop=extracts|pageimages&titles=${encodeURIComponent(targetTitle)}&exintro=1&explaintext=1&pithumbsize=640&format=json&origin=*`
+        const queryRes = await fetch(queryUrl)
+        const queryData = await queryRes.json()
+        const pages = queryData.query.pages
+        const pageId = Object.keys(pages)[0]
+        const pageInfo = pages[pageId]
+        
+        if (pageInfo) {
+          let summaryText = pageInfo.extract || ''
+          // 擷取前 120 字作為簡介
+          if (summaryText.length > 120) summaryText = summaryText.substring(0, 120) + '...'
+          
+          articleData.value = {
+            title: pageInfo.title,
+            // 透過 pageimages 取得官方指定的縮圖，如果沒有圖則維持空字串 (會自動隱藏圖片區塊)
+            image: pageInfo.thumbnail ? pageInfo.thumbnail.source : '',
+            link: `https://zh.wikipedia.org/wiki/${encodeURIComponent(pageInfo.title)}`,
+            summary: summaryText || '點擊閱讀完整維基百科精選條目。'
+          }
+          hasData.value = true
+          return // 成功取得並結束程式
+        }
       }
     }
     
@@ -107,7 +106,7 @@ const fetchFeaturedArticle = async () => {
   } catch (err) {
     console.warn('典範條目抓取失敗，啟動保底的科普精選備用方案...', err)
     
-    // 💡 100% 絕對不會失敗的備用方案：隨機抓取我們定義好的科普與人文條目
+    // 💡 100% 絕對不會失敗的備用方案：隨機抓取我們定義好的精選條目
     try {
       const fallbackArticles = ['相對論', '量子力學', '黑洞', '人工智慧', '列奥纳多·达·芬奇', '阿波罗11号', '瑪麗·居禮', '艾薩克·牛頓', '查尔斯·达尔文', '地球', '太陽系', '工業革命']
       const randomTitle = fallbackArticles[Math.floor(Math.random() * fallbackArticles.length)]
@@ -124,7 +123,7 @@ const fetchFeaturedArticle = async () => {
           title: page.title,
           image: page.thumbnail ? page.thumbnail.source : '',
           link: `https://zh.wikipedia.org/wiki/${encodeURIComponent(page.title)}`,
-          summary: page.extract ? page.extract.substring(0, 110) + '...' : '維基百科精選條目。'
+          summary: page.extract ? page.extract.substring(0, 120) + '...' : '維基百科精選條目。'
         }
         hasData.value = true
       } else {
@@ -210,7 +209,7 @@ onMounted(() => fetchFeaturedArticle())
 
 .article-image-wrapper {
   width: 100%;
-  height: 180px; /* 降低圖片高度，讓排版更適合放在側邊欄 */
+  height: 180px; /* 控制高度讓圖片不會佔用太多空間 */
   overflow: hidden;
   background-color: #f1f5f9;
   border-bottom: 1px solid #e2e8f0;
