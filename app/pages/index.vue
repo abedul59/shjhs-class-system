@@ -111,19 +111,14 @@
               @update-item="updateEditingContactItem"
             />
             
-            <!-- 💡 根據後台設定動態渲染與洗牌擴充模組 -->
-            <template v-for="mod in displayModules" :key="mod.id">
-              <WikiDailyImage v-if="mod.id === 'wikiImage' && mod.isVisible" />
-              
-              <WikiOnThisDay v-if="mod.id === 'wikiOtd' && mod.isVisible" />
-              
-              <HomeYouTubeVideo 
-                v-if="mod.id === 'youtube' && mod.isVisible"
-                :videoUrl="todayVideoUrl" 
-                :isMuted="youtubeIsMuted"
-                :isClassTime="isClassTime"
-              />
-            </template>
+            <!-- 💡 將所有擴充模組交給這個新元件去管理！ -->
+            <IndexModulesPanel 
+              :indexModulesConfig="indexModulesConfig"
+              :indexDynamicSorting="indexDynamicSorting"
+              :isClassTime="isClassTime"
+              :todayVideoUrl="todayVideoUrl"
+              :youtubeIsMuted="youtubeIsMuted"
+            />
             
           </div>
         </div>
@@ -148,43 +143,15 @@
     </div> 
 
     <!-- 彈窗群組 -->
-    <PasswordModal 
-      :show="showPwdModal" 
-      :title="pwdModalTitle" 
-      :desc="pwdModalDesc" 
-      :target="pwdTarget"
-      :officerPasswords="officerPasswords"
-      @close="showPwdModal = false"
-      @success="handlePwdSuccess" 
-    />
-
-    <IdentityModal 
-      :show="showIdentityModal" 
-      :students="allStudentsForLogin"
-      :schools="availableSchools"
-      :expectedTeacherPwd="expectedTeacherPwd"
-      :hasCurrentIdentity="currentIdentity !== '匿名來訪者'"
-      :privacyFilter="privacyFilter"
-      @close="showIdentityModal = false"
-      @verified="handleIdentityVerified" 
-    />
-
-    <LargeScheduleModal 
-      v-if="showLargeSchedule"
-      :scheduleData="scheduleData"
-      :scheduleButtonConfig="scheduleButtonConfig"
-      :isIpBrownlisted="isIpBrownlisted"
-      :privacyFilter="privacyFilter"
-      @close="showLargeSchedule = false"
-    />
-
+    <PasswordModal :show="showPwdModal" :title="pwdModalTitle" :desc="pwdModalDesc" :target="pwdTarget" :officerPasswords="officerPasswords" @close="showPwdModal = false" @success="handlePwdSuccess" />
+    <IdentityModal :show="showIdentityModal" :students="allStudentsForLogin" :schools="availableSchools" :expectedTeacherPwd="expectedTeacherPwd" :hasCurrentIdentity="currentIdentity !== '匿名來訪者'" :privacyFilter="privacyFilter" @close="showIdentityModal = false" @verified="handleIdentityVerified" />
+    <LargeScheduleModal v-if="showLargeSchedule" :scheduleData="scheduleData" :scheduleButtonConfig="scheduleButtonConfig" :isIpBrownlisted="isIpBrownlisted" :privacyFilter="privacyFilter" @close="showLargeSchedule = false" />
     <EmergencyModal v-if="showEmergencyModal" @close="showEmergencyModal = false" />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import WikiOnThisDay from '~~/components/home/WikiOnThisDay.vue'
 import ExamDashboard from '~~/components/home/ExamDashboard.vue'
 import AttendanceGrid from '~~/components/home/AttendanceGrid.vue'
 import ContactBook from '~~/components/home/ContactBook.vue'
@@ -195,12 +162,12 @@ import ControlPanel from '~~/components/home/ControlPanel.vue'
 import LargeScheduleModal from '~~/components/home/LargeScheduleModal.vue'
 import PasswordModal from '~~/components/home/PasswordModal.vue'
 import IdentityModal from '~~/components/home/IdentityModal.vue'
-import WikiDailyImage from '~~/components/home/WikiDailyImage.vue'
-import HomeYouTubeVideo from '~~/components/home/HomeYouTubeVideo.vue'
+
+// 💡 只需要引入這一個大管家元件
+import IndexModulesPanel from '~~/components/home/IndexModulesPanel.vue'
 
 const supabase = useSupabaseClient()
 
-// ===== 系統時間與常數 =====
 const dDate = new Date()
 const todayISO = `${dDate.getFullYear()}-${String(dDate.getMonth()+1).padStart(2,'0')}-${String(dDate.getDate()).padStart(2,'0')}`
 const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
@@ -216,7 +183,6 @@ const updateTime = () => {
   currentTime.value = new Date().toLocaleTimeString('zh-TW', { hour12: false })
 }
 
-// ===== UI 控制狀態 =====
 const showEmergencyModal = ref(false)
 const showSeatingChartLocal = ref(false)
 const showHygieneLocal = ref(false)
@@ -226,18 +192,15 @@ const isNoticeBoardVisibleOnIndex = ref(true)
 const isParentAnnouncementVisibleOnIndex = ref(true)
 const showLargeSchedule = ref(false)
 const isExamModeView = ref(false)
-
 const isIpWhitelisted = ref(false)
 const isIpBrownlisted = ref(false)
 const currentIpStr = ref('')
-
 const unreadMsgCount = ref(0)
 const marqueeSettings = ref({})
 const clockConfig = ref({ theme: 'classic', color: '#1e293b', size: 35, showIcon: true })
 const autoRefreshSeconds = ref(60) 
 let dataRefreshTimer = null
 
-// ===== 核心資料狀態 =====
 const announcements = ref([])
 const parentAnnouncements = ref([])
 const parentNotices = ref([])
@@ -257,15 +220,15 @@ const seatingChart = ref({ isVisible: false, isRotated: false, seats: [], settin
 const defaultHygieneData = { isVisibleOnIndex: false, morning: {}, lunch: {}, squad: {} }
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
-// 💡 模組排序原始資料與動態排序開關
+// 💡 擴展預設的模組清單
 const indexModulesConfig = ref([
   { id: 'wikiImage', name: '🌍 維基百科每日圖片', isVisible: true },
   { id: 'wikiOtd', name: '🏛️ 歷史上的今天', isVisible: true },
-  { id: 'youtube', name: '📺 YouTube 推薦影片', isVisible: true }
+  { id: 'youtube', name: '📺 YouTube 推薦影片', isVisible: true },
+  { id: 'foxNews', name: '🦊 Fox News 頭條', isVisible: true }
 ])
 const indexDynamicSorting = ref(false)
 
-// 💡 YouTube 設定
 const youtubeSchedule = ref({})
 const youtubeIsMuted = ref(true)
 
@@ -274,7 +237,6 @@ const todayVideoUrl = computed(() => {
   return youtubeSchedule.value[currentDayIndex] || ''
 })
 
-// ===== 權限與身分狀態 =====
 const showIdentityModal = ref(false)
 const currentIdentity = ref('匿名來訪者')
 const expectedTeacherPwd = ref('168168168')
@@ -292,7 +254,6 @@ const defaultRoleSettings = {
 }
 const roleButtonSettings = ref(JSON.parse(JSON.stringify(defaultRoleSettings)))
 
-// 1. 點名大腦
 const { 
   allStudents, allStudentsForLogin, todayAttendances,
   expectedCount, presentCount, leaveCount, lateLeaveCount, earlyLeaveCount, lateCount, absentCount,
@@ -300,10 +261,7 @@ const {
 } = useAttendance(todayISO)
 
 const toggleAttendance = (student) => toggleAttendanceLogic(student, isWeekday, expectedTeacherPwd.value)
-
-// 2. 大考大腦
 const { currentThemeStyles, examStatus, countdownMinutes, countdownText } = useExamMode(examData, nowTick)
-
 
 const activeRoleCategory = computed(() => {
   const id = currentIdentity.value;
@@ -446,24 +404,6 @@ const isClassTime = computed(() => {
   return scheduleDisplay.value?.current?.status === '上課中'
 })
 
-// 💡 動態重組模組順序 (核心邏輯)
-const displayModules = computed(() => {
-  let mods = [...indexModulesConfig.value]
-  
-  if (indexDynamicSorting.value) {
-    const ytIndex = mods.findIndex(m => m.id === 'youtube')
-    if (ytIndex !== -1) {
-      const ytMod = mods.splice(ytIndex, 1)[0]
-      if (isClassTime.value) {
-        mods.push(ytMod)    // 上課：塞到最下面
-      } else {
-        mods.unshift(ytMod) // 下課：提到最上面
-      }
-    }
-  }
-  return mods
-})
-
 const showPwdModal = ref(false)
 const pwdTarget = ref('')
 const pwdModalTitle = ref('')
@@ -523,12 +463,29 @@ const fetchData = async () => {
           case 'exam_schedule_data': examData.value = { ...examData.value, ...v }; break;
           
           case 'index_modules_config': 
+            let loadedMods = [];
             if (Array.isArray(v)) {
-              indexModulesConfig.value = v; 
+              loadedMods = v; 
             } else if (typeof v === 'object') {
-              if (v.modules) indexModulesConfig.value = v.modules;
+              if (v.modules) loadedMods = v.modules;
               if (v.dynamicSorting !== undefined) indexDynamicSorting.value = v.dynamicSorting;
             }
+            
+            const existingIds = loadedMods.map(m => m.id);
+            const defaultModsList = [
+              { id: 'wikiImage', name: '🌍 維基百科每日圖片', isVisible: true },
+              { id: 'wikiOtd', name: '🏛️ 歷史上的今天', isVisible: true },
+              { id: 'youtube', name: '📺 YouTube 推薦影片', isVisible: true },
+              { id: 'foxNews', name: '🦊 Fox News 頭條', isVisible: true }
+            ];
+            
+            defaultModsList.forEach(defMod => {
+              if (!existingIds.includes(defMod.id)) {
+                loadedMods.push(defMod);
+              }
+            });
+            
+            indexModulesConfig.value = loadedMods;
             break;
 
           case 'youtube_schedule_data': 
