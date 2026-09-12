@@ -5,7 +5,6 @@
     <MarqueeWidget :marqueeData="marqueeSettings" />
 
     <div class="top-status-bar">
-      <!-- 將日期與時鐘包裝成一個群組 -->
       <div class="clock-date-group">
         <div class="date-display" :style="{ fontSize: (clockConfig?.dateSize || 18) + 'px' }">
           {{ currentDateStr }}
@@ -20,19 +19,19 @@
       <WeatherWidget />
     </div>
 
-    <!-- 💡 下課時，縮小為左側懸浮按鈕 -->
-    <div v-if="isButtonsCollapsed" class="floating-btn-container btn-pos" @click="isButtonsCollapsed = false" title="展開功能選單">
+    <!-- 💡 加入 mobile-hide -->
+    <div v-if="isButtonsCollapsed" class="floating-btn-container btn-pos mobile-hide" @click="isButtonsCollapsed = false" title="展開功能選單">
       <div class="floating-btn">
         <span class="icon">⚙️</span>
         <span class="text">功<br>能<br>鍵</span>
       </div>
     </div>
 
-    <!-- 💡 展開時的完整按鈕區 (加入 relative-wrap) -->
-    <div v-show="!isButtonsCollapsed" class="action-buttons-wrapper relative-wrap">
+    <!-- 💡 移除 v-show，改用 class -->
+    <div class="action-buttons-wrapper relative-wrap" :class="{ 'desktop-collapsed': isButtonsCollapsed }">
       
-      <!-- 💡 絕對定位的迷你懸浮按鈕：不佔空間，漂浮在右上角間隙 -->
-      <button v-if="!isClassTime" @click="isButtonsCollapsed = true" class="btn-collapse-float">
+      <!-- 💡 加入 mobile-hide -->
+      <button v-if="!isClassTime" @click="isButtonsCollapsed = true" class="btn-collapse-float mobile-hide">
         收起功能 ➔
       </button>
 
@@ -121,17 +120,25 @@ onUnmounted(() => {
 .clock-date-group { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .date-display { font-weight: 900; color: #475569; letter-spacing: 2px; }
 
-/* 💡 讓按鈕容器相對定位，以便裡面的迷你按鈕絕對定位 */
 .relative-wrap {
   position: relative;
   transition: all 0.3s ease;
   width: 100%;
 }
 
-/* 💡 迷你懸浮收起按鈕：浮在右上角空隙 */
+/* 💡 RWD：螢幕寬度超過 850px (電腦、大平板) 才執行收合 */
+@media (min-width: 851px) {
+  .desktop-collapsed { display: none !important; }
+}
+
+/* 💡 RWD：螢幕寬度小於 850px (手機、小平板) 隱藏所有手動收起按鈕與懸浮列 */
+@media (max-width: 850px) {
+  .mobile-hide { display: none !important; }
+}
+
 .btn-collapse-float {
   position: absolute;
-  top: -25px; /* 利用上方的 margin 空隙，完全不佔用排版空間 */
+  top: -25px; 
   right: 0;
   background-color: transparent;
   color: #64748b;
@@ -150,14 +157,13 @@ onUnmounted(() => {
   border-color: #94a3b8;
 }
 
-/* 左側懸浮按鈕樣式 */
 .floating-btn-container {
   position: fixed;
   left: 0;
   z-index: 100;
   cursor: pointer;
 }
-.btn-pos { top: 50%; transform: translateY(-50%); }
+.btn-pos { top: 50%; transform: translateY(-50%); } 
 
 .floating-btn {
   background-color: #f59e0b; 
