@@ -181,12 +181,14 @@ const isSavingClock = ref(false)
 const autoRefreshSeconds = ref(60)
 const isSavingRefresh = ref(false)
 
-// 💡 更新預設的模組清單，加入 foxNews
+// 💡 更新預設模組清單，加入 CNN 與 ABC News
 const defaultModules = [
   { id: 'wikiImage', name: '🌍 維基百科每日圖片', isVisible: true },
   { id: 'wikiOtd', name: '🏛️ 歷史上的今天', isVisible: true },
   { id: 'youtube', name: '📺 YouTube 推薦影片', isVisible: true },
-  { id: 'foxNews', name: '🦊 Fox News 頭條', isVisible: true }
+  { id: 'foxNews', name: '🦊 Fox News 頭條', isVisible: true },
+  { id: 'cnnNews', name: '🟥 CNN News 頭條', isVisible: true },
+  { id: 'abcNews', name: '⬛ ABC News 頭條', isVisible: true }
 ]
 const indexModules = ref(JSON.parse(JSON.stringify(defaultModules)))
 const dynamicSorting = ref(false)
@@ -218,7 +220,7 @@ const fetchConfig = async () => {
     autoRefreshSeconds.value = Number(refreshData.setting_value)
   }
 
-  // 💡 自動合併邏輯：保留舊的排序與狀態，自動補齊新加入的模組 (如 foxNews)
+  // 💡 自動補齊機制
   const { data: modData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'index_modules_config').maybeSingle()
   if (modData && modData.setting_value) {
     let loadedMods = []
@@ -229,11 +231,10 @@ const fetchConfig = async () => {
       if (modData.setting_value.dynamicSorting !== undefined) dynamicSorting.value = modData.setting_value.dynamicSorting
     }
     
-    // 合併：尋找是否有缺失的模組
     const existingIds = loadedMods.map(m => m.id)
     defaultModules.forEach(defMod => {
       if (!existingIds.includes(defMod.id)) {
-        loadedMods.push(defMod) // 補上新的
+        loadedMods.push(defMod)
       }
     })
     indexModules.value = loadedMods
