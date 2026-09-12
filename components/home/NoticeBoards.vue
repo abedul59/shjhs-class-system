@@ -1,5 +1,22 @@
 <template>
-  <div class="boards-container">
+  <!-- 💡 狀態一：下課時，公佈欄縮小為左側懸浮按鈕 (位置偏上) -->
+  <div v-if="isBoardsCollapsed" class="floating-btn-container top-pos" @click="isBoardsCollapsed = false" title="展開公佈欄">
+    <div class="floating-btn">
+      <span class="icon">📌</span>
+      <span class="text">公<br>告<br>欄</span>
+    </div>
+  </div>
+
+  <!-- 💡 狀態二：展開時的完整公佈欄 -->
+  <div v-show="!isBoardsCollapsed" class="boards-container">
+    
+    <!-- 💡 手動收起按鈕 -->
+    <div class="header-action" v-if="!isClassTime">
+      <button @click="isBoardsCollapsed = true" class="btn-collapse">
+        ◀ 收起公佈欄
+      </button>
+    </div>
+
     <!-- 📢 家長須知 (僅褐名單外顯示) -->
     <div v-if="isNoticeBoardVisibleOnIndex && !isIpBrownlisted" class="blackboard top-board">
       <h2 class="board-title notice-title">📢 家長須知事項</h2>
@@ -12,10 +29,7 @@
             <li v-for="(notice, index) in parentNotices" :key="'n-'+index" class="rich-notice-item">
               <span class="bullet">📌</span>
               <div class="rich-notice-wrapper">
-                <!-- 💡 渲染內容 -->
                 <div class="rich-notice-content" v-html="privacyFilter(notice.content)"></div>
-                
-                <!-- 💡 渲染網址按鈕 (已修正手機版撐破問題) -->
                 <div v-if="notice.links && notice.links.length > 0" class="notice-links-box">
                   <a v-for="(link, i) in notice.links" :key="'nlink-'+i" :href="link.url" target="_blank" class="notice-link-btn">
                     🔗 {{ privacyFilter(link.title) || '參考連結' }}
@@ -86,7 +100,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 const props = defineProps({
   isIpBrownlisted: Boolean,
@@ -98,16 +112,88 @@ const props = defineProps({
   announcements: Array,
   privacyFilter: Function,
   formatDateTime: Function,
-  formatNL: Function
+  formatNL: Function,
+  
+  // 💡 新增傳入上下課狀態
+  isClassTime: { type: Boolean, default: false }
 })
 
 const isNoticeExpanded = ref(false)
 const isClassAnnExpanded = ref(false)
+
+// === 💡 公佈欄自動收合邏輯 ===
+const isBoardsCollapsed = ref(false)
+
+watch(() => props.isClassTime, (newIsClassTime) => {
+  // 上課時展開 (false)，下課時收合 (true)
+  isBoardsCollapsed.value = !newIsClassTime
+}, { immediate: true })
 </script>
 
 <style scoped>
 .boards-container { display: flex; flex-direction: column; gap: 20px; margin-bottom: 20px;}
 
+/* 💡 手動收起按鈕 (統一風格) */
+.header-action {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: -10px;
+}
+.btn-collapse {
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px dashed #cbd5e1;
+  padding: 6px 15px;
+  border-radius: 20px;
+  font-size: 0.95rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.btn-collapse:hover {
+  background-color: #e2e8f0;
+  color: #1e293b;
+  border-color: #94a3b8;
+}
+
+/* 💡 左側懸浮按鈕樣式 (使用橘紅色系區分) */
+.floating-btn-container {
+  position: fixed;
+  left: 0;
+  z-index: 100;
+  cursor: pointer;
+}
+
+/* 位於螢幕上半部 (25%) */
+.top-pos {
+  top: 25%;
+  transform: translateY(-50%);
+}
+
+.floating-btn {
+  background-color: #ea580c; 
+  color: white;
+  padding: 15px 8px 15px 12px;
+  border-radius: 0 12px 12px 0;
+  box-shadow: 2px 4px 10px rgba(0,0,0,0.25);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-weight: bold;
+  font-size: 1.1rem;
+  line-height: 1.2;
+  transition: background-color 0.2s, padding-left 0.2s, transform 0.2s;
+  border: 1px solid #c2410c;
+  border-left: none;
+}
+
+.floating-btn:hover {
+  background-color: #c2410c;
+  padding-left: 18px;
+}
+
+/* -- 原本木紋公佈欄的華麗 CSS -- */
 .corkboard { background-color: #d1a36a; background-image: url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.12"/></svg>'); border: 10px solid #754d29; border-radius: 8px; padding: 20px 25px; box-shadow: 0 6px 12px rgba(0,0,0,0.15), inset 0 0 10px rgba(0,0,0,0.3); }
 .board-header-clickable { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; padding: 5px; border-radius: 8px; transition: 0.2s;}
 .board-header-clickable:hover { background: rgba(255,255,255,0.1); }
@@ -123,7 +209,6 @@ const isClassAnnExpanded = ref(false)
 .cork-card-content { color: #451a03; line-height: 1.5; font-size: 1rem; margin-bottom: 15px; word-wrap: break-word;}
 .cork-card-links { display: flex; flex-direction: column; gap: 8px; }
 
-/* 💡 公佈欄的按鈕防爆版設定 */
 .cork-link { display: inline-flex; align-items: center; justify-content: center; background: #fbbf24; color: #92400e; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 0.95rem; border: 1px dashed #d97706; transition: 0.2s; text-align: left; word-break: break-word; white-space: normal; line-height: 1.4;}
 .cork-link:hover { background: #f59e0b; color: white; }
 
@@ -143,15 +228,13 @@ const isClassAnnExpanded = ref(false)
 .item-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
 .rich-notice-item { display: flex; align-items: flex-start; gap: 8px; width: 100%; font-size: 1.15rem; letter-spacing: 0.5px; margin-bottom: 10px;}
 
-/* 💡 限制內容容器寬度，強制換行 */
-.rich-notice-wrapper { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; /* 防止 flex 子元素撐破父容器 */ }
+.rich-notice-wrapper { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 
 .rich-notice-content { word-wrap: break-word; overflow-wrap: break-word; line-height: 1.5; }
 .rich-notice-content :deep(p) { margin: 0 0 5px 0; }
 .rich-notice-content :deep(a) { color: #fbbf24; text-decoration: underline; word-break: break-all; }
 .rich-notice-content :deep(ol), .rich-notice-content :deep(ul) { margin: 5px 0; padding-left: 20px; }
 
-/* 💡 須知連結按鈕的防爆版排版 */
 .notice-links-box { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px; width: 100%;}
 .notice-link-btn { display: inline-flex; align-items: flex-start; background: #e0f2fe; color: #0369a1; padding: 8px 15px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 0.95rem; transition: 0.2s; border: 1px solid #bae6fd; word-break: break-word; white-space: normal; line-height: 1.4; max-width: 100%;}
 .notice-link-btn:hover { background: #bae6fd; color: #0284c7; box-shadow: 0 2px 4px rgba(0,0,0,0.1);}
@@ -164,7 +247,6 @@ const isClassAnnExpanded = ref(false)
   .fade-mask { display: none; }
   .desktop-only { display: none; }
   
-  /* 手機版連結填滿整列，且保證多行文字對齊 */
   .notice-links-box { flex-direction: column; }
   .notice-link-btn { width: 100%; box-sizing: border-box; }
 }
