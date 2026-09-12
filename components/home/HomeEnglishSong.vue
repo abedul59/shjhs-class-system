@@ -10,8 +10,16 @@
     <div class="card-content">
       <div class="video-layout-wrapper">
         <div class="video-frame-box">
-          <div class="video-responsive-container" ref="wrapperEl">
-            <!-- 內部將由 JS 動態注入給 YouTube 替換用的 iframe -->
+          
+          <div class="video-responsive-container">
+            <!-- 💡 終極解法：改用原生 iframe，完全避開 API 衝突 -->
+            <iframe
+              ref="ytIframe"
+              :src="iframeSrc"
+              frameborder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowfullscreen
+            ></iframe>
           </div>
           
           <!-- 無情黑畫面疊加層 (只有上課時顯示) -->
@@ -20,10 +28,11 @@
               <div class="overlay-text">
                 <div class="icon">🤫</div>
                 <h4>上課中，專心聽講</h4>
-                <p>歌曲已隱藏並暫停，下課鐘響將自動恢復播放</p>
+                <p>歌曲已暫停，下課鐘響將自動恢復</p>
               </div>
             </div>
           </transition>
+          
         </div>
       </div>
     </div>
@@ -31,14 +40,17 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 const props = defineProps({
   videoUrl: { type: String, default: '' },
-  isMuted: { type: Boolean, default: false }, // 歌曲預設不靜音
+  isMuted: { type: Boolean, default: false },
   isClassTime: { type: Boolean, default: false }
 })
 
+const ytIframe = ref(null)
+
+// 💡 解析網址，抓出 11 碼的影片 ID
 const videoId = computed(() => {
   if (!props.videoUrl) return null
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/
@@ -46,116 +58,40 @@ const videoId = computed(() => {
   return (match && match[2].length === 11) ? match[2] : null
 })
 
-const wrapperEl = ref(null)
-let player = null
+// 💡 動態產生 YouTube 網址，加上 enablejsapi=1 允許我們從外部控制暫停/播放
+const iframeSrc = computed(() => {
+  if (!videoId.value) return ''
+  const autoplay = props.isClassTime ? 0 : 1
+  const mute = props.isMuted ? 1 : 0
+  return `https://www.youtube-nocookie.com/embed/${videoId.value}?enablejsapi=1&autoplay=${autoplay}&mute=${mute}&loop=1&playlist=${videoId.value}&rel=0&controls=1`
+})
 
-const initPlayer = () => {
-  if (typeof window === 'undefined' || !window.YT || !window.YT.Player || !wrapperEl.value || !videoId.value) return
-
-  if (player) {
-    try { player.destroy() } catch(e) {}
-    player = null
-  }
-
-  wrapperEl.value.innerHTML = '<div></div>'
-  const targetEl = wrapperEl.value.firstElementChild
-
-  player = new window.YT.Player(targetEl, {
-    width: '100%',
-    height: '100%',
-    videoId: videoId.value,
-    host: 'https://www.youtube-nocookie.com',
-    playerVars: {
-      autoplay: props.isClassTime ? 0 : 1,
-      controls: 1,
-      rel: 0,
-      loop: 1,
-      playlist: videoId.value,
-      mute: props.isMuted ? 1 : 0,
-      origin: typeof window !== 'undefined' ? window.location.origin : '',
-      playsinline: 1
-    },
-    events: {
-      onReady: (event) => {
-        if (props.isMuted) event.target.mute()
-        else event.target.unMute()
-
-        if (!props.isClassTime) {
-          event.target.playVideo()
-        } else {
-          event.target.pauseVideo()
-        }
-      },
-      onError: (event) => {
-        console.error("YouTube 播放器發生錯誤", event.data)
-      }
-    }
-  })
-}
-
-const loadYoutubeApi = () => {
-  if (typeof window === 'undefined') return
-
-  if (!window.YT) {
-    const tag = document.createElement('script')
-    tag.src = "https://www.youtube.com/iframe_api"
-    const firstScriptTag = document.getElementsByTagName('script')[0]
-    
-    if (firstScriptTag) {
-      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag)
-    } else {
-      document.head.appendChild(tag)
-    }
-    
-    window.onYouTubeIframeAPIReady = () => {
-      initPlayer()
-    }
-  } else if (window.YT && window.YT.Player) {
-    initPlayer()
-  } else {
-    const originalOnReady = window.onYouTubeIframeAPIReady
-    window.onYouTubeIframeAPIReady = () => {
-      if (originalOnReady) originalOnReady()
-      initPlayer()
-    }
+// 💡 透過瀏覽器原生的 postMessage 遙控 YouTube 影片
+const sendCommand = (func) => {
+  if (ytIframe.value && ytIframe.value.contentWindow) {
+    ytIframe.value.contentWindow.postMessage(JSON.stringify({
+      event: 'command',
+      func: func,
+      args: []
+    }), '*')
   }
 }
 
-watch(videoId, async (newVal) => {
-  if (typeof window === 'undefined') return 
-  
-  if (newVal) {
-    await nextTick() 
-    loadYoutubeApi()
-  } else {
-    if (player) {
-      try { player.destroy() } catch(e) {}
-      player = null
-    }
-  }
-}, { immediate: true })
-
+// 監聽上下課狀態
 watch(() => props.isClassTime, (isClass) => {
-  if (!player || typeof player.pauseVideo !== 'function') return
   if (isClass) {
-    player.pauseVideo()
+    sendCommand('pauseVideo')
   } else {
-    player.playVideo()
+    sendCommand('playVideo')
   }
 })
 
+// 監聽靜音狀態 (若未來需要擴充)
 watch(() => props.isMuted, (muted) => {
-  if (!player || typeof player.mute !== 'function') return
   if (muted) {
-    player.mute()
+    sendCommand('mute')
   } else {
-    player.unMute()
-  }
-})
-
-onBeforeUnmount(() => {
-  if (player && typeof player.destroy === 'function') {
-    try { player.destroy() } catch(e) {}
+    sendCommand('unMute')
   }
 })
 </script>
@@ -208,7 +144,6 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-/* 左側欄位較窄，改為 100% 滿版填滿 */
 .video-layout-wrapper {
   width: 100%;
 }
@@ -225,11 +160,12 @@ onBeforeUnmount(() => {
 .video-responsive-container {
   position: relative;
   width: 100%;
-  padding-bottom: 56.25%;
+  padding-bottom: 56.25%; /* 完美的 16:9 比例 */
   height: 0;
 }
 
-.video-responsive-container :deep(iframe) {
+/* 確保 iframe 乖乖填滿容器 */
+.video-responsive-container iframe {
   position: absolute;
   top: 0;
   left: 0;
