@@ -1,5 +1,5 @@
 <template>
-  <!-- 💡 狀態一：下課時縮小為左側懸浮按鈕 -->
+  <!-- 下課時縮小為左側懸浮按鈕 -->
   <div v-if="isCollapsed" class="floating-btn-container" @click="isCollapsed = false" title="展開點名板">
     <div class="floating-btn">
       <span class="icon">📋</span>
@@ -7,15 +7,13 @@
     </div>
   </div>
 
-  <!-- 💡 狀態二：展開時的完整點名板 -->
-  <div v-show="!isCollapsed" class="attendance-wrapper">
+  <!-- 展開時的完整點名板 (加入 relative-wrap) -->
+  <div v-show="!isCollapsed" class="attendance-wrapper relative-wrap">
     
-    <!-- 💡 若目前是下課時間，允許導師手動再把它收起來 -->
-    <div class="header-action" v-if="!isClassTime">
-      <button @click="isCollapsed = true" class="btn-collapse">
-        ◀ 收起點名板
-      </button>
-    </div>
+    <!-- 💡 絕對定位的迷你懸浮按鈕：不佔空間，漂浮在右上角間隙 -->
+    <button v-if="!isClassTime" @click="isCollapsed = true" class="btn-collapse-float">
+      收起點名板 ➔
+    </button>
 
     <!-- 📊 頂部統計數據列 -->
     <div class="stats-row">
@@ -104,6 +102,34 @@ const getStatusClass = (studentId) => {
 <style scoped>
 .attendance-wrapper { background: transparent; width: 100%; transition: all 0.3s ease; }
 
+/* 💡 讓點名板相對定位，以便裡面的迷你按鈕絕對定位 */
+.relative-wrap {
+  position: relative;
+}
+
+/* 💡 迷你懸浮收起按鈕：浮在右上角空隙 */
+.btn-collapse-float {
+  position: absolute;
+  top: -25px; /* 利用元件上方的空隙，不佔用排版空間 */
+  right: 0;
+  background-color: transparent;
+  color: #64748b;
+  border: 1px dashed #cbd5e1;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 0.85rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: 0.2s;
+  z-index: 10;
+}
+.btn-collapse-float:hover {
+  background-color: #e2e8f0;
+  color: #334155;
+  border-color: #94a3b8;
+}
+
+/* 左側懸浮按鈕樣式 */
 .floating-btn-container {
   position: fixed;
   left: 0;
@@ -136,28 +162,7 @@ const getStatusClass = (studentId) => {
   padding-left: 18px; 
 }
 
-.header-action {
-  display: flex;
-  justify-content: flex-start;
-  margin-bottom: 12px;
-}
-.btn-collapse {
-  background-color: #f1f5f9;
-  color: #475569;
-  border: 1px dashed #cbd5e1;
-  padding: 6px 15px;
-  border-radius: 20px;
-  font-size: 0.95rem;
-  font-weight: bold;
-  cursor: pointer;
-  transition: 0.2s;
-}
-.btn-collapse:hover {
-  background-color: #e2e8f0;
-  color: #1e293b;
-  border-color: #94a3b8;
-}
-
+/* --- 📊 統計列樣式 --- */
 .stats-row { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
 .stat-box { flex: 1; text-align: center; padding: 10px; border-radius: 8px; font-size: 1rem; border: 1px solid transparent; min-width: 90px; }
 .stat-box strong { font-size: 1.15rem; margin-left: 2px; }
@@ -170,6 +175,7 @@ const getStatusClass = (studentId) => {
 .stat-late { background-color: #dbeafe; border-color: #bfdbfe; color: #1d4ed8; }
 .stat-absent { background-color: #fee2e2; border-color: #fca5a5; color: #991b1b; }
 
+/* --- 👨‍🎓 學生網格樣式 --- */
 .grid-container { display: grid; grid-template-columns: repeat(6, 1fr); gap: 15px; }
 
 .student-card { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px 5px; border-radius: 10px; cursor: pointer; border: 1px solid transparent; transition: all 0.2s ease; font-family: inherit; }
