@@ -1,19 +1,19 @@
 <template>
   <!-- 💡 狀態一：下課時縮小為左側懸浮按鈕 -->
-  <div v-if="isCollapsed" class="floating-btn-container" @click="isCollapsed = false" title="展開點名版">
+  <div v-if="isCollapsed" class="floating-btn-container" @click="isCollapsed = false" title="展開點名板">
     <div class="floating-btn">
       <span class="icon">📋</span>
-      <span class="text">點<br>名<br>版</span>
+      <span class="text">點<br>名<br>板</span>
     </div>
   </div>
 
-  <!-- 💡 狀態二：展開時的完整點名版 -->
+  <!-- 💡 狀態二：展開時的完整點名板 -->
   <div v-show="!isCollapsed" class="attendance-wrapper">
     
     <!-- 💡 若目前是下課時間，允許導師手動再把它收起來 -->
     <div class="header-action" v-if="!isClassTime">
       <button @click="isCollapsed = true" class="btn-collapse">
-        ◀ 收起點名版
+        ◀ 收起點名板
       </button>
     </div>
 
@@ -74,18 +74,14 @@ const props = defineProps({
   lateCount: { type: Number, default: 0 },
   absentCount: { type: Number, default: 0 },
   privacyFilter: { type: Function, default: (val) => val },
-  // 💡 新增傳入上下課狀態
   isClassTime: { type: Boolean, default: false }
 })
 
 defineEmits(['toggle-attendance'])
 
-// 💡 預設為展開，會立刻被底下的 watch 覆寫修正
 const isCollapsed = ref(false)
 
-// 💡 核心邏輯：監聽上下課狀態自動切換！
 watch(() => props.isClassTime, (newIsClassTime) => {
-  // 如果是上課，強制不收起 (false)；如果是下課，自動收起 (true)
   isCollapsed.value = !newIsClassTime
 }, { immediate: true })
 
@@ -108,7 +104,6 @@ const getStatusClass = (studentId) => {
 <style scoped>
 .attendance-wrapper { background: transparent; width: 100%; transition: all 0.3s ease; }
 
-/* --- 💡 左側懸浮按鈕樣式 --- */
 .floating-btn-container {
   position: fixed;
   left: 0;
@@ -119,7 +114,7 @@ const getStatusClass = (studentId) => {
 }
 
 .floating-btn {
-  background-color: #3b82f6; /* 藍色按鈕 */
+  background-color: #3b82f6; 
   color: white;
   padding: 15px 8px 15px 12px;
   border-radius: 0 12px 12px 0;
@@ -138,10 +133,9 @@ const getStatusClass = (studentId) => {
 
 .floating-btn:hover {
   background-color: #2563eb;
-  padding-left: 18px; /* 滑鼠經過時稍微滑出 */
+  padding-left: 18px; 
 }
 
-/* --- 手動收起按鈕 --- */
 .header-action {
   display: flex;
   justify-content: flex-start;
@@ -164,12 +158,10 @@ const getStatusClass = (studentId) => {
   border-color: #94a3b8;
 }
 
-/* --- 📊 統計列樣式 --- */
 .stats-row { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
 .stat-box { flex: 1; text-align: center; padding: 10px; border-radius: 8px; font-size: 1rem; border: 1px solid transparent; min-width: 90px; }
 .stat-box strong { font-size: 1.15rem; margin-left: 2px; }
 
-/* 統計列色彩對應 */
 .stat-expected { background-color: #f8fafc; border-color: #e2e8f0; color: #334155; }
 .stat-present { background-color: #dcfce7; border-color: #bbf7d0; color: #166534; }
 .stat-leave { background-color: #fef9c3; border-color: #fde047; color: #a16207; }
@@ -178,7 +170,6 @@ const getStatusClass = (studentId) => {
 .stat-late { background-color: #dbeafe; border-color: #bfdbfe; color: #1d4ed8; }
 .stat-absent { background-color: #fee2e2; border-color: #fca5a5; color: #991b1b; }
 
-/* --- 👨‍🎓 學生網格樣式 --- */
 .grid-container { display: grid; grid-template-columns: repeat(6, 1fr); gap: 15px; }
 
 .student-card { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px 5px; border-radius: 10px; cursor: pointer; border: 1px solid transparent; transition: all 0.2s ease; font-family: inherit; }
@@ -188,7 +179,6 @@ const getStatusClass = (studentId) => {
 .st-name { font-size: 1.2rem; font-weight: 900; margin-bottom: 8px; letter-spacing: 1px; }
 .st-status { font-size: 0.9rem; font-weight: bold; white-space: pre-wrap; line-height: 1.3;}
 
-/* 學生卡片狀態色彩對應 */
 .is-absent { background-color: #fee2e2; border-color: #fca5a5; color: #991b1b; } 
 .is-present { background-color: #dcfce7; border-color: #86efac; color: #14532d; } 
 .is-leave { background-color: #fef9c3; border-color: #fde047; color: #713f12; }  
@@ -196,7 +186,6 @@ const getStatusClass = (studentId) => {
 .is-early-leave { background-color: #f3e8ff; border-color: #d8b4fe; color: #6b21a8; } 
 .is-late { background-color: #dbeafe; border-color: #93c5fd; color: #1e3a8a; }    
 
-/* --- RWD --- */
 @media (max-width: 1024px) { .grid-container { grid-template-columns: repeat(5, 1fr); } }
 @media (max-width: 768px) {
   .grid-container { grid-template-columns: repeat(4, 1fr); gap: 10px; }
