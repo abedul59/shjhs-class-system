@@ -115,19 +115,29 @@
 
     <!-- 🔄 首頁自動更新頻率設定區塊 -->
     <div class="settings-section" style="margin-top: 25px;">
-      <h4>🔄 首頁自動更新頻率設定</h4>
-      <p class="help-text">💡 設定首頁在背景「無感重新整理」資料的頻率（預設為 60 秒）。若設為 0 則代表關閉自動更新。</p>
+      <h4>🔄 首頁自動更新頻率設定 (智慧變速)</h4>
+      <p class="help-text">💡 設定首頁在背景「無感重新整理」的頻率。建議：<b>上課時間拉長以節省伺服器效能，下課時間縮短以保持畫面即時性。</b>(設為 0 代表關閉)</p>
       
-      <div class="custom-pwd-box refresh-box">
-        <label>更新間隔 (秒)：</label>
-        <input type="number" v-model="autoRefreshSeconds" class="edit-input" style="width: 150px;" min="0" max="3600" />
-        <button @click="saveRefreshSettings" class="save-btn refresh-btn" :disabled="isSavingRefresh">
-          {{ isSavingRefresh ? '儲存中...' : '💾 儲存更新頻率' }}
-        </button>
+      <div class="refresh-grid">
+        <div class="form-group row-align">
+          <label class="day-label">上課期間 (秒)：</label>
+          <input type="number" v-model="refreshConfig.classTime" class="edit-input" style="width: 120px;" min="0" max="3600" />
+        </div>
+        <div class="form-group row-align">
+          <label class="day-label">下課期間 (秒)：</label>
+          <input type="number" v-model="refreshConfig.breakTime" class="edit-input" style="width: 120px;" min="0" max="3600" />
+        </div>
+        <div class="form-group row-align">
+          <label class="day-label">週末假日 (秒)：</label>
+          <input type="number" v-model="refreshConfig.weekend" class="edit-input" style="width: 120px;" min="0" max="3600" />
+        </div>
       </div>
+      <button @click="saveRefreshSettings" class="save-btn refresh-btn" :disabled="isSavingRefresh" style="margin-top: 15px;">
+        {{ isSavingRefresh ? '儲存中...' : '💾 儲存更新頻率' }}
+      </button>
     </div>
 
-    <!-- 🎵 新增：今日推薦英語歌曲設定 -->
+    <!-- 🎵 今日推薦英語歌曲設定 -->
     <div class="settings-section" style="margin-top: 25px;">
       <h4>🎵 今日推薦英語歌曲 (顯示於左側)</h4>
       <p class="help-text">💡 設定每天要在首頁左下角播放的英語歌曲 YouTube 網址，上課時間會自動暫停並變黑畫面。</p>
@@ -202,10 +212,10 @@ const isSaving = ref(false)
 const clockConfig = ref({ theme: 'classic', color: '#1e293b', size: 35, dateSize: 18, showIcon: true })
 const isSavingClock = ref(false)
 
-const autoRefreshSeconds = ref(60)
+// 💡 更新頻率資料結構 (預設: 週末 60, 上課 120, 下課 30)
+const refreshConfig = ref({ classTime: 120, breakTime: 30, weekend: 60 })
 const isSavingRefresh = ref(false)
 
-// 💡 英語歌曲設定狀態
 const englishSongSchedule = ref({ 0: '', 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', isVisible: true })
 const isSavingSong = ref(false)
 
@@ -242,12 +252,19 @@ const fetchConfig = async () => {
     if (oldSize) clockConfig.value.size = Number(oldSize.setting_value) || 35
   }
 
-  const { data: refreshData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'index_auto_refresh_seconds').maybeSingle()
-  if (refreshData && refreshData.setting_value !== undefined) {
-    autoRefreshSeconds.value = Number(refreshData.setting_value)
+  // 💡 載入新的智慧變速更新設定
+  const { data: refreshData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'index_auto_refresh_config').maybeSingle()
+  if (refreshData && refreshData.setting_value) {
+    refreshConfig.value = { ...refreshConfig.value, ...refreshData.setting_value }
+  } else {
+    // 若無新設定，向下相容舊版的單一秒數設定
+    const { data: oldRefresh } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'index_auto_refresh_seconds').maybeSingle()
+    if (oldRefresh && oldRefresh.setting_value !== undefined) {
+      const oldVal = Number(oldRefresh.setting_value) || 60
+      refreshConfig.value = { classTime: oldVal, breakTime: oldVal, weekend: oldVal }
+    }
   }
 
-  // 💡 載入英語歌曲設定
   const { data: songData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'english_song_schedule_data').maybeSingle()
   if (songData && songData.setting_value) {
     englishSongSchedule.value = { ...englishSongSchedule.value, ...songData.setting_value }
@@ -308,15 +325,15 @@ const saveClockSettings = async () => {
   isSavingClock.value = false
 }
 
+// 💡 儲存智慧變速更新設定
 const saveRefreshSettings = async () => {
   isSavingRefresh.value = true
-  const { error } = await supabase.from('system_settings').upsert({ setting_key: 'index_auto_refresh_seconds', setting_value: autoRefreshSeconds.value }, { onConflict: 'setting_key' })
-  if (!error) alert('✅ 自動更新頻率設定成功！')
+  const { error } = await supabase.from('system_settings').upsert({ setting_key: 'index_auto_refresh_config', setting_value: refreshConfig.value }, { onConflict: 'setting_key' })
+  if (!error) alert('✅ 自動更新頻率 (智慧變速) 設定成功！')
   else alert('❌ 儲存失敗')
   isSavingRefresh.value = false
 }
 
-// 💡 儲存英語歌曲設定
 const saveEnglishSongSettings = async () => {
   isSavingSong.value = true
   const { error } = await supabase.from('system_settings').upsert({ setting_key: 'english_song_schedule_data', setting_value: englishSongSchedule.value }, { onConflict: 'setting_key' })
@@ -371,15 +388,16 @@ const saveIndexModules = async () => {
 .save-btn:disabled { background: #94a3b8; cursor: not-allowed; }
 
 .clock-save-btn { background-color: #10b981; }
-.refresh-box { margin-left: 0; border-left-color: #8b5cf6; margin-bottom: 20px;}
-.refresh-btn { margin-top: 0; padding: 8px 16px; font-size: 1rem; background-color: #8b5cf6; }
-.modules-btn { background-color: #f59e0b; }
-.song-btn { background-color: #ec4899; } /* 英語歌曲的粉紅按鈕 */
 
-/* 英語歌曲排程專用樣式 */
+/* 💡 更新頻率專用排版 */
+.refresh-grid { display: flex; flex-direction: column; gap: 15px; max-width: 400px; padding: 15px; background: #faf5ff; border-left: 4px solid #8b5cf6; border-radius: 4px; margin-bottom: 20px;}
+.refresh-btn { margin-top: 0; background-color: #8b5cf6; }
+.modules-btn { background-color: #f59e0b; }
+.song-btn { background-color: #ec4899; }
+
 .schedule-grid { display: flex; flex-direction: column; gap: 10px; max-width: 600px; }
 .row-align { flex-direction: row; align-items: center; }
-.day-label { width: 100px; text-align: right; }
+.day-label { width: 120px; text-align: right; }
 .flex-grow { flex-grow: 1; }
 
 optgroup { font-weight: bold; color: #1e3a8a; background: #f1f5f9; }
