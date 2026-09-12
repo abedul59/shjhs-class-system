@@ -81,6 +81,10 @@
             <div v-if="isIpBrownlisted && !isWeekday" class="weekend-prompt">
               🌴 今天是週末，點名版僅供查閱，點擊需輸入導師密碼解鎖。
             </div>
+
+            <!-- 💡 新增：NatGeo知識模組 (放在左側底部) -->
+            <HomeNatGeo />
+            
           </div>
 
           <div class="right-panel">
@@ -163,6 +167,7 @@ import LargeScheduleModal from '~~/components/home/LargeScheduleModal.vue'
 import PasswordModal from '~~/components/home/PasswordModal.vue'
 import IdentityModal from '~~/components/home/IdentityModal.vue'
 import IndexModulesPanel from '~~/components/home/IndexModulesPanel.vue'
+import HomeNatGeo from '~~/components/home/HomeNatGeo.vue' // 💡 新增這行
 
 const supabase = useSupabaseClient()
 
