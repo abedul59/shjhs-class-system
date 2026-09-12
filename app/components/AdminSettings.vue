@@ -132,7 +132,6 @@
       <h4>🧩 首頁擴充模組顯示與排序</h4>
       <p class="help-text">💡 自由控制首頁右側面板的「擴充模組」是否顯示，並可使用箭頭調整它們的預設上下順序。</p>
       
-      <!-- 💡 新增：動態排序開關 -->
       <div class="dynamic-sort-box">
         <label class="icon-toggle mod-toggle" style="background: transparent; border: none; padding: 0;">
           <input type="checkbox" v-model="dynamicSorting" class="large-checkbox" />
@@ -182,12 +181,14 @@ const isSavingClock = ref(false)
 const autoRefreshSeconds = ref(60)
 const isSavingRefresh = ref(false)
 
-const indexModules = ref([
+// 💡 更新預設的模組清單，加入 foxNews
+const defaultModules = [
   { id: 'wikiImage', name: '🌍 維基百科每日圖片', isVisible: true },
   { id: 'wikiOtd', name: '🏛️ 歷史上的今天', isVisible: true },
-  { id: 'youtube', name: '📺 YouTube 推薦影片', isVisible: true }
-])
-// 💡 動態排序狀態
+  { id: 'youtube', name: '📺 YouTube 推薦影片', isVisible: true },
+  { id: 'foxNews', name: '🦊 Fox News 頭條', isVisible: true }
+]
+const indexModules = ref(JSON.parse(JSON.stringify(defaultModules)))
 const dynamicSorting = ref(false)
 const isSavingModules = ref(false)
 
@@ -217,15 +218,25 @@ const fetchConfig = async () => {
     autoRefreshSeconds.value = Number(refreshData.setting_value)
   }
 
-  // 💡 相容舊陣列與新物件的設定載入
+  // 💡 自動合併邏輯：保留舊的排序與狀態，自動補齊新加入的模組 (如 foxNews)
   const { data: modData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'index_modules_config').maybeSingle()
   if (modData && modData.setting_value) {
+    let loadedMods = []
     if (Array.isArray(modData.setting_value)) {
-      indexModules.value = modData.setting_value
+      loadedMods = modData.setting_value
     } else {
-      if (modData.setting_value.modules) indexModules.value = modData.setting_value.modules
+      if (modData.setting_value.modules) loadedMods = modData.setting_value.modules
       if (modData.setting_value.dynamicSorting !== undefined) dynamicSorting.value = modData.setting_value.dynamicSorting
     }
+    
+    // 合併：尋找是否有缺失的模組
+    const existingIds = loadedMods.map(m => m.id)
+    defaultModules.forEach(defMod => {
+      if (!existingIds.includes(defMod.id)) {
+        loadedMods.push(defMod) // 補上新的
+      }
+    })
+    indexModules.value = loadedMods
   }
 }
 
@@ -272,7 +283,6 @@ const saveRefreshSettings = async () => {
   isSavingRefresh.value = false
 }
 
-// 💡 儲存包含「動態排序」狀態的設定物件
 const saveIndexModules = async () => {
   isSavingModules.value = true
   const payload = {
@@ -329,7 +339,6 @@ const saveIndexModules = async () => {
 optgroup { font-weight: bold; color: #1e3a8a; background: #f1f5f9; }
 option { font-weight: normal; color: #1e293b; background: white; }
 
-/* 💡 動態排序提示框 */
 .dynamic-sort-box { background: #eff6ff; border: 1px dashed #93c5fd; padding: 15px 20px; border-radius: 8px; margin-bottom: 15px; }
 .help-text-sm { margin: 8px 0 0 32px; font-size: 0.95rem; color: #2563eb; }
 
