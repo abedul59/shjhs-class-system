@@ -10,13 +10,6 @@
   <!-- 💡 狀態二：展開時的完整公佈欄 -->
   <div v-show="!isBoardsCollapsed" class="boards-container">
     
-    <!-- 💡 手動收起按鈕 -->
-    <div class="header-action" v-if="!isClassTime">
-      <button @click="isBoardsCollapsed = true" class="btn-collapse">
-        ◀ 收起公佈欄
-      </button>
-    </div>
-
     <!-- 📢 家長須知 (僅褐名單外顯示) -->
     <div v-if="isNoticeBoardVisibleOnIndex && !isIpBrownlisted" class="blackboard top-board">
       <h2 class="board-title notice-title">📢 家長須知事項</h2>
@@ -96,6 +89,14 @@
         </div>
       </div>
     </div>
+
+    <!-- 💡 手動收起按鈕：移到最下方，並靠右縮小對齊 -->
+    <div class="footer-action" v-if="!isClassTime">
+      <button @click="isBoardsCollapsed = true" class="btn-collapse-small">
+        收起公佈欄 ➔
+      </button>
+    </div>
+
   </div>
 </template>
 
@@ -114,7 +115,7 @@ const props = defineProps({
   formatDateTime: Function,
   formatNL: Function,
   
-  // 💡 新增傳入上下課狀態
+  // 💡 傳入上下課狀態
   isClassTime: { type: Boolean, default: false }
 })
 
@@ -133,26 +134,26 @@ watch(() => props.isClassTime, (newIsClassTime) => {
 <style scoped>
 .boards-container { display: flex; flex-direction: column; gap: 20px; margin-bottom: 20px;}
 
-/* 💡 手動收起按鈕 (統一風格) */
-.header-action {
+/* 💡 右下方縮小版手動收起按鈕 */
+.footer-action {
   display: flex;
-  justify-content: flex-start;
-  margin-bottom: -10px;
+  justify-content: flex-end; /* 靠右對齊 */
+  margin-top: -10px; /* 稍微往上拉近一點，讓視覺更緊湊 */
 }
-.btn-collapse {
-  background-color: #f1f5f9;
-  color: #475569;
+.btn-collapse-small {
+  background-color: transparent;
+  color: #64748b;
   border: 1px dashed #cbd5e1;
-  padding: 6px 15px;
-  border-radius: 20px;
-  font-size: 0.95rem;
+  padding: 4px 12px; /* 按鈕縮小 */
+  border-radius: 16px;
+  font-size: 0.85rem; /* 字體縮小 */
   font-weight: bold;
   cursor: pointer;
   transition: 0.2s;
 }
-.btn-collapse:hover {
+.btn-collapse-small:hover {
   background-color: #e2e8f0;
-  color: #1e293b;
+  color: #334155;
   border-color: #94a3b8;
 }
 
