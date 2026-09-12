@@ -18,8 +18,7 @@
     <div class="card-content" v-else>
       <a :href="articleData.link" target="_blank" title="點擊閱讀維基百科完整條目" class="article-link">
         
-        <!-- 💡 圖片區塊 (現在保證 100% 會有圖片可以顯示) -->
-        <div class="article-image-wrapper">
+        <div class="article-image-wrapper" v-if="articleData.image">
           <img :src="articleData.image" :alt="articleData.title" class="article-image" loading="lazy" />
         </div>
         
@@ -44,7 +43,7 @@ const fetchFeaturedArticle = async () => {
   try {
     let targetTitle = ''
     
-    // 💡 步驟 1：取得今天、昨天或前天的典範條目名稱 (容錯機制，最多往前找 3 天)
+    // 取得今天、昨天或前天的典範條目名稱
     const getPageName = (date) => `Wikipedia:典范条目/${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`
     
     for (let i = 0; i < 3; i++) {
@@ -59,30 +58,25 @@ const fetchFeaturedArticle = async () => {
           const titleLink = doc.querySelector('b a') || doc.querySelector('strong a')
           if (titleLink) {
             targetTitle = titleLink.getAttribute('title') || titleLink.textContent
-            break // 成功找到標題就立刻跳出迴圈
+            break 
           }
         }
-      } catch (e) {
-        // 忽略單次錯誤，繼續嘗試前一天的
-      }
+      } catch (e) {}
     }
 
-    // 如果還是找不到，啟用保底的「絕對高畫質」科學/人文條目庫
     if (!targetTitle) {
       const fallbacks = ['地球', '太陽系', '銀河系', '詹姆斯·韦伯空间望远镜', '阿波罗11号', '列奥纳多·达·芬奇', '文藝復興']
       targetTitle = fallbacks[Math.floor(Math.random() * fallbacks.length)]
     }
 
-    // 💡 步驟 2：使用維基百科最新的 REST API (專為網頁卡片預覽設計，取圖最精準)
+    // 使用 REST API 取得精準摘要與圖檔
     const summaryUrl = `https://zh.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(targetTitle)}`
     const summaryRes = await fetch(summaryUrl)
     const summaryData = await summaryRes.json()
     
     if (summaryData && summaryData.title) {
-      // 優先取得高畫質縮圖，若無則取原始大圖
       let imgUrl = summaryData.thumbnail?.source || summaryData.originalimage?.source || ''
       
-      // 💡 終極防破圖機制：如果這篇文章真的完全沒有圖片，我們給他一張高質感的維基地球 Logo
       if (!imgUrl) {
         imgUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Wikipedia-logo-v2.svg/640px-Wikipedia-logo-v2.svg.png'
       }
@@ -137,7 +131,6 @@ onMounted(() => fetchFeaturedArticle())
   gap: 12px;
 }
 
-/* 維基百科經典標誌風格 */
 .wiki-icon {
   font-family: 'Times New Roman', Times, serif;
   font-size: 1.5rem;
@@ -179,26 +172,30 @@ onMounted(() => fetchFeaturedArticle())
   border-color: #cbd5e1;
 }
 
+/* 💡 圖片外層框：加入淡灰色背景，當作相框 */
 .article-image-wrapper {
   width: 100%;
-  height: 200px; /* 統一高度，確保版面整齊 */
+  height: 220px; /* 稍微加高一點，讓完整圖片有呼吸空間 */
   overflow: hidden;
-  background-color: #ffffff;
+  background-color: #f1f5f9; /* 💡 淡灰色畫框底色 */
   border-bottom: 1px solid #e2e8f0;
   display: flex;
   justify-content: center;
   align-items: center;
+  padding: 10px; /* 留白 */
+  box-sizing: border-box;
 }
 
+/* 💡 圖片本體：改為 contain 完整顯示 */
 .article-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover; /* 讓圖片完美填滿，不會變形 */
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain; /* 💡 關鍵修改：不裁切，保留完整圖片 */
   display: block;
   transition: transform 0.4s ease;
 }
 .article-link:hover .article-image {
-  transform: scale(1.05); /* 滑鼠游標移過去的放大特效 */
+  transform: scale(1.03); /* 放大特效稍微收斂一點，確保不跑版 */
 }
 
 .article-info {
