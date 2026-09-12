@@ -1,7 +1,23 @@
 <template>
-  <div class="attendance-wrapper">
+  <!-- 💡 狀態一：下課時縮小為左側懸浮按鈕 -->
+  <div v-if="isCollapsed" class="floating-btn-container" @click="isCollapsed = false" title="展開點名版">
+    <div class="floating-btn">
+      <span class="icon">📋</span>
+      <span class="text">點<br>名<br>版</span>
+    </div>
+  </div>
+
+  <!-- 💡 狀態二：展開時的完整點名版 -->
+  <div v-show="!isCollapsed" class="attendance-wrapper">
     
-    <!-- 📊 頂部統計數據列 (擴充為 7 格) -->
+    <!-- 💡 若目前是下課時間，允許導師手動再把它收起來 -->
+    <div class="header-action" v-if="!isClassTime">
+      <button @click="isCollapsed = true" class="btn-collapse">
+        ◀ 收起點名版
+      </button>
+    </div>
+
+    <!-- 📊 頂部統計數據列 -->
     <div class="stats-row">
       <div class="stat-box stat-expected">
         應到: <strong>{{ expectedCount }}</strong>
@@ -37,7 +53,6 @@
       >
         <div class="st-num">{{ student.seat_number }}</div>
         <div class="st-name">{{ privacyFilter(student.real_name || student.hidden_name) }}</div>
-        <!-- 狀態會顯示包含時間的字串，例如 晚到請假(10:00) -->
         <div class="st-status">{{ getStatusText(student.id) }}</div>
       </button>
     </div>
@@ -46,27 +61,39 @@
 </template>
 
 <script setup>
+import { ref, watch } from 'vue'
+
 const props = defineProps({
   allStudents: { type: Array, default: () => [] },
   todayAttendances: { type: Array, default: () => [] },
   expectedCount: { type: Number, default: 0 },
   presentCount: { type: Number, default: 0 },
   leaveCount: { type: Number, default: 0 },
-  lateLeaveCount: { type: Number, default: 0 }, // 新增晚到
-  earlyLeaveCount: { type: Number, default: 0 }, // 新增早退
+  lateLeaveCount: { type: Number, default: 0 },
+  earlyLeaveCount: { type: Number, default: 0 },
   lateCount: { type: Number, default: 0 },
   absentCount: { type: Number, default: 0 },
-  privacyFilter: { type: Function, default: (val) => val }
+  privacyFilter: { type: Function, default: (val) => val },
+  // 💡 新增傳入上下課狀態
+  isClassTime: { type: Boolean, default: false }
 })
 
 defineEmits(['toggle-attendance'])
+
+// 💡 預設為展開，會立刻被底下的 watch 覆寫修正
+const isCollapsed = ref(false)
+
+// 💡 核心邏輯：監聽上下課狀態自動切換！
+watch(() => props.isClassTime, (newIsClassTime) => {
+  // 如果是上課，強制不收起 (false)；如果是下課，自動收起 (true)
+  isCollapsed.value = !newIsClassTime
+}, { immediate: true })
 
 const getStatusText = (studentId) => {
   const record = props.todayAttendances.find(a => a.student_id === studentId)
   return record?.status || '未到'
 }
 
-// 根據不同狀態套用專屬的顏色 Class
 const getStatusClass = (studentId) => {
   const status = getStatusText(studentId)
   if (status === '已到') return 'is-present'
@@ -74,12 +101,68 @@ const getStatusClass = (studentId) => {
   if (status.startsWith('晚到請假')) return 'is-late-leave'
   if (status.startsWith('早退請假')) return 'is-early-leave'
   if (status.startsWith('遲到')) return 'is-late'
-  return 'is-absent' // 預設未到 (紅色)
+  return 'is-absent' 
 }
 </script>
 
 <style scoped>
-.attendance-wrapper { background: transparent; width: 100%; }
+.attendance-wrapper { background: transparent; width: 100%; transition: all 0.3s ease; }
+
+/* --- 💡 左側懸浮按鈕樣式 --- */
+.floating-btn-container {
+  position: fixed;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 100;
+  cursor: pointer;
+}
+
+.floating-btn {
+  background-color: #3b82f6; /* 藍色按鈕 */
+  color: white;
+  padding: 15px 8px 15px 12px;
+  border-radius: 0 12px 12px 0;
+  box-shadow: 2px 4px 10px rgba(0,0,0,0.25);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-weight: bold;
+  font-size: 1.1rem;
+  line-height: 1.2;
+  transition: background-color 0.2s, padding-left 0.2s, transform 0.2s;
+  border: 1px solid #2563eb;
+  border-left: none;
+}
+
+.floating-btn:hover {
+  background-color: #2563eb;
+  padding-left: 18px; /* 滑鼠經過時稍微滑出 */
+}
+
+/* --- 手動收起按鈕 --- */
+.header-action {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 12px;
+}
+.btn-collapse {
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px dashed #cbd5e1;
+  padding: 6px 15px;
+  border-radius: 20px;
+  font-size: 0.95rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.btn-collapse:hover {
+  background-color: #e2e8f0;
+  color: #1e293b;
+  border-color: #94a3b8;
+}
 
 /* --- 📊 統計列樣式 --- */
 .stats-row { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
@@ -90,8 +173,8 @@ const getStatusClass = (studentId) => {
 .stat-expected { background-color: #f8fafc; border-color: #e2e8f0; color: #334155; }
 .stat-present { background-color: #dcfce7; border-color: #bbf7d0; color: #166534; }
 .stat-leave { background-color: #fef9c3; border-color: #fde047; color: #a16207; }
-.stat-late-leave { background-color: #ffedd5; border-color: #fdba74; color: #c2410c; } /* 晚到請假(橘) */
-.stat-early-leave { background-color: #f3e8ff; border-color: #d8b4fe; color: #6b21a8; } /* 早退請假(紫) */
+.stat-late-leave { background-color: #ffedd5; border-color: #fdba74; color: #c2410c; }
+.stat-early-leave { background-color: #f3e8ff; border-color: #d8b4fe; color: #6b21a8; }
 .stat-late { background-color: #dbeafe; border-color: #bfdbfe; color: #1d4ed8; }
 .stat-absent { background-color: #fee2e2; border-color: #fca5a5; color: #991b1b; }
 
