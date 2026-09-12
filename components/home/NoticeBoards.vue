@@ -1,17 +1,17 @@
 <template>
-  <!-- 狀態一：下課時，公佈欄縮小為左側懸浮按鈕 (位置偏上) -->
-  <div v-if="isBoardsCollapsed" class="floating-btn-container top-pos" @click="isBoardsCollapsed = false" title="展開公佈欄">
+  <!-- 💡 加入 mobile-hide：手機版隱藏此懸浮按鈕 -->
+  <div v-if="isBoardsCollapsed" class="floating-btn-container top-pos mobile-hide" @click="isBoardsCollapsed = false" title="展開公佈欄">
     <div class="floating-btn">
       <span class="icon">📌</span>
       <span class="text">公<br>告<br>欄</span>
     </div>
   </div>
 
-  <!-- 狀態二：展開時的完整公佈欄 (加入 relative-wrap 以便讓按鈕漂浮) -->
-  <div v-show="!isBoardsCollapsed" class="boards-container relative-wrap">
+  <!-- 💡 移除 v-show，改用 class：只有電腦版才會套用隱藏 -->
+  <div class="boards-container relative-wrap" :class="{ 'desktop-collapsed': isBoardsCollapsed }">
     
-    <!-- 💡 絕對定位的迷你懸浮按鈕：不佔空間，漂浮在右上角間隙 -->
-    <button v-if="!isClassTime" @click="isBoardsCollapsed = true" class="btn-collapse-float">
+    <!-- 💡 加入 mobile-hide：手機版隱藏此手動收起按鈕 -->
+    <button v-if="!isClassTime" @click="isBoardsCollapsed = true" class="btn-collapse-float mobile-hide">
       收起公佈欄 ➔
     </button>
 
@@ -116,7 +116,6 @@ const props = defineProps({
 
 const isNoticeExpanded = ref(false)
 const isClassAnnExpanded = ref(false)
-
 const isBoardsCollapsed = ref(false)
 
 watch(() => props.isClassTime, (newIsClassTime) => {
@@ -126,16 +125,21 @@ watch(() => props.isClassTime, (newIsClassTime) => {
 
 <style scoped>
 .boards-container { display: flex; flex-direction: column; gap: 20px; margin-bottom: 20px;}
+.relative-wrap { position: relative; }
 
-/* 💡 讓公佈欄容器相對定位，以便裡面的迷你按鈕絕對定位 */
-.relative-wrap {
-  position: relative;
+/* 💡 RWD：螢幕寬度超過 850px (電腦、大平板) 才執行收合 */
+@media (min-width: 851px) {
+  .desktop-collapsed { display: none !important; }
 }
 
-/* 💡 迷你懸浮收起按鈕：浮在右上角空隙 */
+/* 💡 RWD：螢幕寬度小於 850px (手機、小平板) 隱藏所有手動收起按鈕與懸浮列 */
+@media (max-width: 850px) {
+  .mobile-hide { display: none !important; }
+}
+
 .btn-collapse-float {
   position: absolute;
-  top: -25px; /* 利用上方的 margin 空隙，完全不佔用排版空間 */
+  top: -25px; 
   right: 0;
   background-color: transparent;
   color: #64748b;
@@ -154,19 +158,16 @@ watch(() => props.isClassTime, (newIsClassTime) => {
   border-color: #94a3b8;
 }
 
-/* 左側懸浮按鈕樣式 */
 .floating-btn-container {
   position: fixed;
   left: 0;
   z-index: 100;
   cursor: pointer;
 }
-
 .top-pos {
-  top: 25%;
+  top: 30%; /* 與功能鍵 50%、點名板 70% 形成等距 */
   transform: translateY(-50%);
 }
-
 .floating-btn {
   background-color: #ea580c; 
   color: white;
@@ -184,7 +185,6 @@ watch(() => props.isClassTime, (newIsClassTime) => {
   border: 1px solid #c2410c;
   border-left: none;
 }
-
 .floating-btn:hover {
   background-color: #c2410c;
   padding-left: 18px;
@@ -226,7 +226,6 @@ watch(() => props.isClassTime, (newIsClassTime) => {
 .rich-notice-item { display: flex; align-items: flex-start; gap: 8px; width: 100%; font-size: 1.15rem; letter-spacing: 0.5px; margin-bottom: 10px;}
 
 .rich-notice-wrapper { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-
 .rich-notice-content { word-wrap: break-word; overflow-wrap: break-word; line-height: 1.5; }
 .rich-notice-content :deep(p) { margin: 0 0 5px 0; }
 .rich-notice-content :deep(a) { color: #fbbf24; text-decoration: underline; word-break: break-all; }
