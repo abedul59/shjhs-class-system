@@ -157,7 +157,7 @@ onUnmounted(() => {
   z-index: 100;
   cursor: pointer;
 }
-.btn-pos { top: 65%; transform: translateY(-50%); }
+.btn-pos { top: 50%; transform: translateY(-50%); }
 
 .floating-btn {
   background-color: #f59e0b; 
