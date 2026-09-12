@@ -1,0 +1,65 @@
+<template>
+  <div class="index-modules-panel">
+    <!-- 💡 根據後台設定與動態洗牌邏輯，依序渲染模組 -->
+    <template v-for="mod in displayModules" :key="mod.id">
+      
+      <WikiDailyImage v-if="mod.id === 'wikiImage' && mod.isVisible" />
+      
+      <WikiOnThisDay v-if="mod.id === 'wikiOtd' && mod.isVisible" />
+      
+      <HomeYouTubeVideo 
+        v-if="mod.id === 'youtube' && mod.isVisible"
+        :videoUrl="todayVideoUrl" 
+        :isMuted="youtubeIsMuted"
+        :isClassTime="isClassTime"
+      />
+
+      <HomeFoxNews v-if="mod.id === 'foxNews' && mod.isVisible" />
+      
+    </template>
+  </div>
+</template>
+
+<script setup>
+import { computed } from 'vue'
+
+// 💡 將子元件全部集中到這裡引入，釋放 index.vue 的負擔
+import WikiDailyImage from '~~/components/home/WikiDailyImage.vue'
+import WikiOnThisDay from '~~/components/home/WikiOnThisDay.vue'
+import HomeYouTubeVideo from '~~/components/home/HomeYouTubeVideo.vue'
+import HomeFoxNews from '~~/components/home/HomeFoxNews.vue'
+
+const props = defineProps({
+  indexModulesConfig: { type: Array, default: () => [] },
+  indexDynamicSorting: { type: Boolean, default: false },
+  isClassTime: { type: Boolean, default: false },
+  todayVideoUrl: { type: String, default: '' },
+  youtubeIsMuted: { type: Boolean, default: true }
+})
+
+// 💡 動態重組模組順序 (核心邏輯移至此處)
+const displayModules = computed(() => {
+  let mods = [...props.indexModulesConfig]
+  
+  if (props.indexDynamicSorting) {
+    const ytIndex = mods.findIndex(m => m.id === 'youtube')
+    if (ytIndex !== -1) {
+      const ytMod = mods.splice(ytIndex, 1)[0]
+      if (props.isClassTime) {
+        mods.push(ytMod)    // 上課：塞到最下面 (默默隱藏並變黑畫面)
+      } else {
+        mods.unshift(ytMod) // 下課：提到最上面 (吸引目光)
+      }
+    }
+  }
+  return mods
+})
+</script>
+
+<style scoped>
+.index-modules-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+</style>
