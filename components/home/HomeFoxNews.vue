@@ -36,48 +36,66 @@ const newsData = ref({ title: '', image: '', link: '' })
 
 const fetchNews = async () => {
   try {
-    // 💡 使用 allorigins 代理伺服器繞過 CORS 限制取得 Fox News 網頁原始碼
-    const targetUrl = 'https://www.foxnews.com/'
-    const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`)
-    if (!res.ok) throw new Error('API 請求失敗')
+    // 💡 終極解法：使用 Fox News 官方 RSS Feed，再透過 rss2json 轉為乾淨的 JSON，無視網頁阻擋機制
+    const rssUrl = 'http://feeds.foxnews.com/foxnews/latest'
+    const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
     
-    const html = await res.text()
+    if (!res.ok) throw new Error('RSS API 請求失敗')
     
-    // 建立虛擬 DOM 來解析 HTML
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(html, 'text/html')
+    const data = await res.json()
     
-    // 💡 根據您的截圖結構，尋找第一個包含圖片的 article 區塊
-    const firstArticle = doc.querySelector('article')
-    
-    if (firstArticle) {
-      // 1. 取得圖片
-      const imgEl = firstArticle.querySelector('img')
-      // 2. 取得標題與連結
-      const aEl = firstArticle.querySelector('.info-header .title a') || firstArticle.querySelector('a')
+    if (data && data.status === 'ok' && data.items && data.items.length > 0) {
+      // 尋找第一篇擁有圖片的新聞
+      const item = data.items.find(i => i.thumbnail || (i.enclosure && i.enclosure.link)) || data.items[0]
       
-      if (imgEl && aEl) {
-        let imgUrl = imgEl.getAttribute('src') || imgEl.getAttribute('data-src') || ''
-        if (imgUrl && imgUrl.startsWith('//')) imgUrl = 'https:' + imgUrl
-        
-        let linkUrl = aEl.getAttribute('href') || ''
-        if (linkUrl && linkUrl.startsWith('/')) linkUrl = 'https://www.foxnews.com' + linkUrl
-        
-        newsData.value = {
-          title: aEl.textContent.trim() || imgEl.getAttribute('alt') || '最新焦點新聞',
-          image: imgUrl,
-          link: linkUrl
-        }
-        hasData.value = true
-      } else {
-        throw new Error('找不到指定的 DOM 結構')
+      // 解析圖片：優先取 thumbnail，若無則取 enclosure 內的圖片，最後給予預設的 Fox News Logo 避免破圖
+      let imgUrl = item.thumbnail || (item.enclosure && item.enclosure.link) || 'https://a57.foxnews.com/static.foxnews.com/foxnews.com/content/uploads/2022/02/896/500/Fox-News-Logo.jpg'
+      
+      newsData.value = {
+        title: item.title,
+        image: imgUrl,
+        link: item.link
       }
+      hasData.value = true
     } else {
-      throw new Error('找不到新聞文章區塊')
+      throw new Error('無法解析 RSS 內容')
     }
   } catch (err) {
     console.error('取得 Fox News 發生錯誤:', err)
-    hasData.value = false
+    
+    // 💡 備用方案 (Fallback)：如果 RSS 壞了，我們才用高容錯的 HTML 解析法
+    try {
+      const targetUrl = 'https://www.foxnews.com/'
+      const htmlRes = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`)
+      const htmlData = await htmlRes.json()
+      
+      const parser = new DOMParser()
+      const doc = parser.parseFromString(htmlData.contents, 'text/html')
+      
+      // 用更廣泛的搜尋條件找尋文章，不限死單一結構
+      const articles = doc.querySelectorAll('article')
+      for (let article of articles) {
+        const aEl = article.querySelector('.title a, h3 a, h2 a')
+        const imgEl = article.querySelector('img')
+        
+        if (aEl && imgEl) {
+          let imgUrl = imgEl.getAttribute('src') || imgEl.getAttribute('data-src') || ''
+          if (imgUrl && imgUrl.startsWith('//')) imgUrl = 'https:' + imgUrl
+          let linkUrl = aEl.getAttribute('href') || ''
+          if (linkUrl && linkUrl.startsWith('/')) linkUrl = 'https://www.foxnews.com' + linkUrl
+          
+          // 確保圖片是有效的網址，而不是 base64 佔位符
+          if (imgUrl && imgUrl.length > 50 && !imgUrl.includes('data:image')) {
+            newsData.value = { title: aEl.textContent.trim(), image: imgUrl, link: linkUrl }
+            hasData.value = true
+            return
+          }
+        }
+      }
+    } catch (fallbackErr) {
+      console.error('備用方案也失敗:', fallbackErr)
+      hasData.value = false
+    }
   } finally {
     isLoading.value = false
   }
