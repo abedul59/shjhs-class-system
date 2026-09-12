@@ -133,7 +133,7 @@ const getStatusClass = (studentId) => {
 .floating-btn-container {
   position: fixed;
   left: 0;
-  top: 50%;
+  top: 70%;
   transform: translateY(-50%);
   z-index: 100;
   cursor: pointer;
