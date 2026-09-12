@@ -39,6 +39,7 @@
           <div class="left-panel">
             
             <ControlPanel 
+              :isClassTime="isClassTime"  <!-- 💡 補上這行即可 -->
               :marqueeSettings="marqueeSettings"
               :clockConfig="clockConfig"
               :currentTime="currentTime"
