@@ -16,6 +16,11 @@
 
       <HomeFoxNews v-if="mod.id === 'foxNews' && mod.isVisible" />
       
+      <!-- 💡 加入 CNN 與 ABC -->
+      <HomeCnnNews v-if="mod.id === 'cnnNews' && mod.isVisible" />
+      
+      <HomeAbcNews v-if="mod.id === 'abcNews' && mod.isVisible" />
+      
     </template>
   </div>
 </template>
@@ -23,11 +28,13 @@
 <script setup>
 import { computed } from 'vue'
 
-// 💡 將子元件全部集中到這裡引入，釋放 index.vue 的負擔
+// 💡 集中管理引入，保持 index.vue 乾淨
 import WikiDailyImage from '~~/components/home/WikiDailyImage.vue'
 import WikiOnThisDay from '~~/components/home/WikiOnThisDay.vue'
 import HomeYouTubeVideo from '~~/components/home/HomeYouTubeVideo.vue'
 import HomeFoxNews from '~~/components/home/HomeFoxNews.vue'
+import HomeCnnNews from '~~/components/home/HomeCnnNews.vue'
+import HomeAbcNews from '~~/components/home/HomeAbcNews.vue'
 
 const props = defineProps({
   indexModulesConfig: { type: Array, default: () => [] },
@@ -37,7 +44,7 @@ const props = defineProps({
   youtubeIsMuted: { type: Boolean, default: true }
 })
 
-// 💡 動態重組模組順序 (核心邏輯移至此處)
+// 💡 動態重組模組順序
 const displayModules = computed(() => {
   let mods = [...props.indexModulesConfig]
   
@@ -46,9 +53,9 @@ const displayModules = computed(() => {
     if (ytIndex !== -1) {
       const ytMod = mods.splice(ytIndex, 1)[0]
       if (props.isClassTime) {
-        mods.push(ytMod)    // 上課：塞到最下面 (默默隱藏並變黑畫面)
+        mods.push(ytMod)    // 上課：塞到最下面
       } else {
-        mods.unshift(ytMod) // 下課：提到最上面 (吸引目光)
+        mods.unshift(ytMod) // 下課：提到最上面
       }
     }
   }
