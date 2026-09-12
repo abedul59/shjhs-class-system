@@ -5,7 +5,7 @@
     <MarqueeWidget :marqueeData="marqueeSettings" />
 
     <div class="top-status-bar">
-      <!-- 💡 將日期與時鐘包裝成一個群組 -->
+      <!-- 將日期與時鐘包裝成一個群組 -->
       <div class="clock-date-group">
         <div class="date-display" :style="{ fontSize: (clockConfig?.dateSize || 18) + 'px' }">
           {{ currentDateStr }}
@@ -20,7 +20,7 @@
       <WeatherWidget />
     </div>
 
-    <!-- 💡 狀態一：下課時，按鈕區縮小為左側懸浮按鈕 (位置偏下) -->
+    <!-- 💡 下課時，縮小為左側懸浮按鈕 -->
     <div v-if="isButtonsCollapsed" class="floating-btn-container btn-pos" @click="isButtonsCollapsed = false" title="展開功能選單">
       <div class="floating-btn">
         <span class="icon">⚙️</span>
@@ -28,15 +28,13 @@
       </div>
     </div>
 
-    <!-- 💡 狀態二：展開時的完整按鈕區 -->
-    <div v-show="!isButtonsCollapsed" class="action-buttons-wrapper">
+    <!-- 💡 展開時的完整按鈕區 (加入 relative-wrap) -->
+    <div v-show="!isButtonsCollapsed" class="action-buttons-wrapper relative-wrap">
       
-      <!-- 💡 允許導師手動再把它收起來 -->
-      <div class="header-action" v-if="!isClassTime">
-        <button @click="isButtonsCollapsed = true" class="btn-collapse">
-          ◀ 收起功能按鈕
-        </button>
-      </div>
+      <!-- 💡 絕對定位的迷你懸浮按鈕：不佔空間，漂浮在右上角間隙 -->
+      <button v-if="!isClassTime" @click="isButtonsCollapsed = true" class="btn-collapse-float">
+        收起功能 ➔
+      </button>
 
       <HomeActionButtons 
         :scheduleDisplay="scheduleDisplay"
@@ -86,23 +84,17 @@ const props = defineProps({
   hygieneData: Object,
   showHygieneLocal: Boolean,
   isHistoryVisibleOnIndex: Boolean,
-  
-  // 💡 新增傳入上下課狀態
   isClassTime: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['enterExam', 'openLargeSchedule', 'openPwd', 'update:showSeatingChartLocal', 'update:showHygieneLocal'])
 
-// === 💡 按鈕自動收合邏輯 ===
 const isButtonsCollapsed = ref(false)
 
 watch(() => props.isClassTime, (newIsClassTime) => {
-  // 上課時展開 (false)，下課時收合 (true)
   isButtonsCollapsed.value = !newIsClassTime
 }, { immediate: true })
 
-
-// === 💡 日期字串邏輯 ===
 const currentDateStr = ref('')
 let dateTimer = null
 
@@ -129,48 +121,43 @@ onUnmounted(() => {
 .clock-date-group { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .date-display { font-weight: 900; color: #475569; letter-spacing: 2px; }
 
-/* 💡 按鈕外層容器增加動畫 */
-.action-buttons-wrapper {
+/* 💡 讓按鈕容器相對定位，以便裡面的迷你按鈕絕對定位 */
+.relative-wrap {
+  position: relative;
   transition: all 0.3s ease;
   width: 100%;
 }
 
-/* 💡 手動收起按鈕 (與點名板一致的樣式) */
-.header-action {
-  display: flex;
-  justify-content: flex-start;
-  margin-bottom: 12px;
-}
-.btn-collapse {
-  background-color: #f1f5f9;
-  color: #475569;
+/* 💡 迷你懸浮收起按鈕：浮在右上角空隙 */
+.btn-collapse-float {
+  position: absolute;
+  top: -25px; /* 利用上方的 margin 空隙，完全不佔用排版空間 */
+  right: 0;
+  background-color: transparent;
+  color: #64748b;
   border: 1px dashed #cbd5e1;
-  padding: 6px 15px;
-  border-radius: 20px;
-  font-size: 0.95rem;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 0.85rem;
   font-weight: bold;
   cursor: pointer;
   transition: 0.2s;
+  z-index: 10;
 }
-.btn-collapse:hover {
+.btn-collapse-float:hover {
   background-color: #e2e8f0;
-  color: #1e293b;
+  color: #334155;
   border-color: #94a3b8;
 }
 
-/* 💡 左側懸浮按鈕樣式 (使用橘黃色系區分) */
+/* 左側懸浮按鈕樣式 */
 .floating-btn-container {
   position: fixed;
   left: 0;
   z-index: 100;
   cursor: pointer;
 }
-
-/* 將按鈕位置固定在畫面的垂直 65% 處，避免跟點名板的 50% 撞在一起 */
-.btn-pos {
-  top: 65%;
-  transform: translateY(-50%);
-}
+.btn-pos { top: 65%; transform: translateY(-50%); }
 
 .floating-btn {
   background-color: #f59e0b; 
@@ -189,11 +176,7 @@ onUnmounted(() => {
   border: 1px solid #d97706;
   border-left: none;
 }
-
-.floating-btn:hover {
-  background-color: #d97706;
-  padding-left: 18px;
-}
+.floating-btn:hover { background-color: #d97706; padding-left: 18px; }
 
 @media (min-width: 768px) { .top-status-bar { flex-direction: row; flex-wrap: wrap; } }
 </style>
