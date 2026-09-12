@@ -111,7 +111,6 @@
               @update-item="updateEditingContactItem"
             />
             
-            <!-- 💡 將所有擴充模組交給這個新元件去管理！ -->
             <IndexModulesPanel 
               :indexModulesConfig="indexModulesConfig"
               :indexDynamicSorting="indexDynamicSorting"
@@ -162,8 +161,6 @@ import ControlPanel from '~~/components/home/ControlPanel.vue'
 import LargeScheduleModal from '~~/components/home/LargeScheduleModal.vue'
 import PasswordModal from '~~/components/home/PasswordModal.vue'
 import IdentityModal from '~~/components/home/IdentityModal.vue'
-
-// 💡 只需要引入這一個大管家元件
 import IndexModulesPanel from '~~/components/home/IndexModulesPanel.vue'
 
 const supabase = useSupabaseClient()
@@ -220,12 +217,14 @@ const seatingChart = ref({ isVisible: false, isRotated: false, seats: [], settin
 const defaultHygieneData = { isVisibleOnIndex: false, morning: {}, lunch: {}, squad: {} }
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
-// 💡 擴展預設的模組清單
+// 💡 修正 1：將初始設定補上 CNN 與 ABC
 const indexModulesConfig = ref([
   { id: 'wikiImage', name: '🌍 維基百科每日圖片', isVisible: true },
   { id: 'wikiOtd', name: '🏛️ 歷史上的今天', isVisible: true },
   { id: 'youtube', name: '📺 YouTube 推薦影片', isVisible: true },
-  { id: 'foxNews', name: '🦊 Fox News 頭條', isVisible: true }
+  { id: 'foxNews', name: '🦊 Fox News 頭條', isVisible: true },
+  { id: 'cnnNews', name: '🟥 CNN News 頭條', isVisible: true },
+  { id: 'abcNews', name: '⬛ ABC News 頭條', isVisible: true }
 ])
 const indexDynamicSorting = ref(false)
 
@@ -472,11 +471,14 @@ const fetchData = async () => {
             }
             
             const existingIds = loadedMods.map(m => m.id);
+            // 💡 修正 2：確保防呆檢查包含 CNN 與 ABC
             const defaultModsList = [
               { id: 'wikiImage', name: '🌍 維基百科每日圖片', isVisible: true },
               { id: 'wikiOtd', name: '🏛️ 歷史上的今天', isVisible: true },
               { id: 'youtube', name: '📺 YouTube 推薦影片', isVisible: true },
-              { id: 'foxNews', name: '🦊 Fox News 頭條', isVisible: true }
+              { id: 'foxNews', name: '🦊 Fox News 頭條', isVisible: true },
+              { id: 'cnnNews', name: '🟥 CNN News 頭條', isVisible: true },
+              { id: 'abcNews', name: '⬛ ABC News 頭條', isVisible: true }
             ];
             
             defaultModsList.forEach(defMod => {
