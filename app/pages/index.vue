@@ -22,7 +22,8 @@
 
       <div v-if="isContentVisible">
         
-        <NoticeBoards 
+        <NoticeBoards
+          :isClassTime="isClassTime"
           :isIpBrownlisted="isIpBrownlisted"
           :isNoticeBoardVisibleOnIndex="isNoticeBoardVisibleOnIndex"
           :parentNotices="parentNotices"
