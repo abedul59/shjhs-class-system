@@ -22,7 +22,7 @@
 
       <div v-if="isContentVisible">
         
-        <NoticeBoards
+        <NoticeBoards 
           :isClassTime="isClassTime"
           :isIpBrownlisted="isIpBrownlisted"
           :isNoticeBoardVisibleOnIndex="isNoticeBoardVisibleOnIndex"
@@ -63,7 +63,6 @@
               @update:showHygieneLocal="showHygieneLocal = $event"
             />
 
-            <!-- 點名網格元件 -->
             <AttendanceGrid 
               v-if="isIpBrownlisted"
               :isClassTime="isClassTime"
@@ -84,14 +83,12 @@
               🌴 今天是週末，點名板僅供查閱，點擊需輸入導師密碼解鎖。
             </div>
             
-            <!-- 🎵 今日推薦英語歌曲 -->
             <HomeEnglishSong 
               v-if="isEnglishSongVisible && todayEnglishSongUrl"
               :videoUrl="todayEnglishSongUrl"
               :isClassTime="isClassTime"
             />
             
-            <!-- 🏛️ 維基百科典範條目 -->
             <HomeWikiFeatured />
             
           </div>
@@ -125,7 +122,6 @@
               @update-item="updateEditingContactItem"
             />
             
-            <!-- 首頁右側大管家：負責排版洗牌其他模組 -->
             <IndexModulesPanel 
               :indexModulesConfig="indexModulesConfig"
               :indexDynamicSorting="indexDynamicSorting"
@@ -137,7 +133,6 @@
           </div>
         </div>
         
-        <!-- 座位與衛生工作板 -->
         <SeatingAndHygiene 
           :seatingChart="seatingChart"
           :showSeatingChartLocal="showSeatingChartLocal"
@@ -167,7 +162,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 
-// 引用的子元件
 import ExamDashboard from '~~/components/home/ExamDashboard.vue'
 import AttendanceGrid from '~~/components/home/AttendanceGrid.vue'
 import ContactBook from '~~/components/home/ContactBook.vue'
@@ -184,7 +178,7 @@ import HomeEnglishSong from '~~/components/home/HomeEnglishSong.vue'
 
 const supabase = useSupabaseClient()
 
-// 系統時間與常數
+// === 系統時間與常數 ===
 const dDate = new Date()
 const todayISO = `${dDate.getFullYear()}-${String(dDate.getMonth() + 1).padStart(2, '0')}-${String(dDate.getDate()).padStart(2, '0')}`
 const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
@@ -200,7 +194,7 @@ const updateTime = () => {
   currentTime.value = new Date().toLocaleTimeString('zh-TW', { hour12: false })
 }
 
-// UI 控制狀態
+// === UI 控制狀態 ===
 const showEmergencyModal = ref(false)
 const showSeatingChartLocal = ref(false)
 const showHygieneLocal = ref(false)
@@ -216,10 +210,12 @@ const currentIpStr = ref('')
 const unreadMsgCount = ref(0)
 const marqueeSettings = ref({})
 const clockConfig = ref({ theme: 'classic', color: '#1e293b', size: 35, showIcon: true })
-const autoRefreshSeconds = ref(60) 
+
+// 💡 更新為智慧變速設定結構 (預設值)
+const autoRefreshConfig = ref({ classTime: 60, breakTime: 60, weekend: 60 }) 
 let dataRefreshTimer = null
 
-// 核心資料狀態
+// === 核心資料狀態 ===
 const announcements = ref([])
 const parentAnnouncements = ref([])
 const parentNotices = ref([])
@@ -239,7 +235,7 @@ const seatingChart = ref({ isVisible: false, isRotated: false, seats: [], settin
 const defaultHygieneData = { isVisibleOnIndex: false, morning: {}, lunch: {}, squad: {} }
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
-// 英語歌曲狀態與推算今日網址
+// === 英語歌曲狀態與推算今日網址 ===
 const englishSongSchedule = ref({ 0: '', 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', isVisible: true })
 const todayEnglishSongUrl = computed(() => {
   const currentDayIndex = new Date(nowTick.value).getDay() 
@@ -247,7 +243,7 @@ const todayEnglishSongUrl = computed(() => {
 })
 const isEnglishSongVisible = computed(() => englishSongSchedule.value.isVisible !== false)
 
-// 右側面板模組設定
+// === 右側面板模組設定 ===
 const indexModulesConfig = ref([
   { id: 'wikiImage', name: '🌍 維基百科每日圖片', isVisible: true },
   { id: 'wikiOtd', name: '🏛️ 歷史上的今天', isVisible: true },
@@ -266,7 +262,7 @@ const todayVideoUrl = computed(() => {
   return youtubeSchedule.value[currentDayIndex] || ''
 })
 
-// 權限與身分狀態
+// === 權限與身分狀態 ===
 const showIdentityModal = ref(false)
 const currentIdentity = ref('匿名來訪者')
 const expectedTeacherPwd = ref('168168168')
@@ -284,7 +280,7 @@ const defaultRoleSettings = {
 }
 const roleButtonSettings = ref(JSON.parse(JSON.stringify(defaultRoleSettings)))
 
-// 點名大腦
+// === 點名與考試大腦 ===
 const { 
   allStudents, allStudentsForLogin, todayAttendances,
   expectedCount, presentCount, leaveCount, lateLeaveCount, earlyLeaveCount, lateCount, absentCount,
@@ -293,7 +289,6 @@ const {
 
 const toggleAttendance = (student) => toggleAttendanceLogic(student, isWeekday, expectedTeacherPwd.value)
 
-// 考試大腦
 const { currentThemeStyles, examStatus, countdownMinutes, countdownText } = useExamMode(examData, nowTick)
 
 const activeRoleCategory = computed(() => {
@@ -538,8 +533,8 @@ const fetchData = async () => {
     'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings',
     'index_clock_size', 'index_clock_config', 'index_auto_refresh_seconds', 'role_button_settings',
     'force_logout_timestamp', 'marquee_settings', 'youtube_schedule_data',
-    'index_modules_config',
-    'english_song_schedule_data'
+    'index_modules_config', 'english_song_schedule_data',
+    'index_auto_refresh_config'
   ]
 
   const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', keysToFetch)
@@ -609,12 +604,21 @@ const fetchData = async () => {
             scheduleButtonConfig.value = { teacherOnlyInBrownlist: true, ...v }
             break
             
-          case 'index_auto_refresh_seconds': 
-            autoRefreshSeconds.value = Number(v) || 60
-            break
-            
           case 'exam_schedule_data': 
             examData.value = { ...examData.value, ...v }
+            break
+          
+          case 'index_auto_refresh_config':
+            if (typeof v === 'object') {
+              autoRefreshConfig.value = { ...autoRefreshConfig.value, ...v }
+            }
+            break
+            
+          case 'index_auto_refresh_seconds':
+            if (!sysData.find(x => x.setting_key === 'index_auto_refresh_config')) {
+              const oldVal = Number(v) || 60
+              autoRefreshConfig.value = { classTime: oldVal, breakTime: oldVal, weekend: oldVal }
+            }
             break
           
           case 'index_modules_config': 
@@ -742,14 +746,24 @@ const fetchData = async () => {
   } catch (e) {}
 }
 
+// === 💡 智慧感知更新頻率：根據上下課狀態自動切換秒數 ===
+const currentRefreshInterval = computed(() => {
+  if (!isWeekday) return autoRefreshConfig.value.weekend
+  return isClassTime.value ? autoRefreshConfig.value.classTime : autoRefreshConfig.value.breakTime
+})
+
 const startAutoRefresh = () => {
   if (dataRefreshTimer) clearInterval(dataRefreshTimer)
-  if (autoRefreshSeconds.value > 0) { 
-    dataRefreshTimer = setInterval(fetchData, autoRefreshSeconds.value * 1000) 
+  const intervalSeconds = currentRefreshInterval.value
+  if (intervalSeconds > 0) { 
+    dataRefreshTimer = setInterval(fetchData, intervalSeconds * 1000) 
   }
 }
 
-watch(autoRefreshSeconds, () => { startAutoRefresh() })
+// 💡 監聽狀態改變，鐘聲一響瞬間切換計時器
+watch(currentRefreshInterval, () => { 
+  startAutoRefresh() 
+})
 
 const isScheduleButtonVisible = computed(() => {
   if (!scheduleButtonConfig.value.isVisible) return false
