@@ -61,9 +61,10 @@
               @update:showHygieneLocal="showHygieneLocal = $event"
             />
 
-            <!-- 點名網格元件 -->
+            <!-- 💡 點名網格元件 (已加入 isClassTime 參數控制縮放) -->
             <AttendanceGrid 
               v-if="isIpBrownlisted"
+              :isClassTime="isClassTime"
               :allStudents="allStudents"
               :todayAttendances="todayAttendances"
               :expectedCount="expectedCount"
@@ -217,7 +218,7 @@ const seatingChart = ref({ isVisible: false, isRotated: false, seats: [], settin
 const defaultHygieneData = { isVisibleOnIndex: false, morning: {}, lunch: {}, squad: {} }
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
-// 💡 修正 1：將初始設定補上 CNN 與 ABC
+// 💡 擴展預設的模組清單
 const indexModulesConfig = ref([
   { id: 'wikiImage', name: '🌍 維基百科每日圖片', isVisible: true },
   { id: 'wikiOtd', name: '🏛️ 歷史上的今天', isVisible: true },
@@ -471,7 +472,6 @@ const fetchData = async () => {
             }
             
             const existingIds = loadedMods.map(m => m.id);
-            // 💡 修正 2：確保防呆檢查包含 CNN 與 ABC
             const defaultModsList = [
               { id: 'wikiImage', name: '🌍 維基百科每日圖片', isVisible: true },
               { id: 'wikiOtd', name: '🏛️ 歷史上的今天', isVisible: true },
