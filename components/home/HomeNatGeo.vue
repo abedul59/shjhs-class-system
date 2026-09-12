@@ -38,84 +38,66 @@ const hasData = ref(false)
 const newsData = ref({ title: '', image: '', link: '' })
 
 const fetchNews = async () => {
-  // 💡 8 秒強制超時，避免網路卡死無限轉圈圈
+  // 💡 8 秒強制超時保護
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 8000)
 
   try {
     const targetUrl = 'https://www.natgeomedia.com/science/'
+    let html = ''
     
-    // 💡 改用 /raw 端點直接獲取純 HTML，避免 JSON 轉換過程遺失屬性
-    const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`, { 
-      signal: controller.signal,
-      cache: 'no-store' // 強制不使用快取，確保抓到最新
-    })
-    
+    // 💡 雙重代理防護：先嘗試 allorigins，如果失敗或被擋，立刻切換 codetabs
+    try {
+      const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}&disableCache=${Date.now()}`, { signal: controller.signal })
+      const data = await res.json()
+      html = data.contents || ''
+    } catch (e) {
+      console.warn('主要代理失敗，切換備用代理...')
+    }
+
+    if (!html || html.length < 500) {
+      const res2 = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`, { signal: controller.signal })
+      html = await res2.text()
+    }
+
     clearTimeout(timeoutId)
-    const html = await res.text()
-    
-    if (!html || html.length < 100) throw new Error('網頁內容回傳空白')
-    
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(html, 'text/html')
+    if (!html || html.length < 500) throw new Error('網頁內容回傳空白或被阻擋')
     
     let titleText = ''
     let linkUrl = ''
     let imgUrl = ''
     
-    // 💡 策略一：根據您的截圖，精準狙擊第一篇大頭條的結構
-    const heroWrap = doc.querySelector('.article-link-wrap, .artcle-btn-large')
-    if (heroWrap) {
-      const aTitle = heroWrap.querySelector('.art-btn-text h4 a') || heroWrap.querySelector('.art-btn-text a') || heroWrap.querySelector('h4 a')
-      if (aTitle) {
-        titleText = aTitle.textContent.trim()
-        linkUrl = aTitle.getAttribute('href')
-      }
-      
-      const aImg = heroWrap.querySelector('.art-btn-la-content img') || heroWrap.querySelector('img')
-      if (aImg) {
-        imgUrl = aImg.getAttribute('src') || aImg.getAttribute('data-src') || ''
-      }
-    }
+    // 💡 暴力破解 1：用 Regex 直接在原始碼中挖出文章連結與標題
+    // 尋找類似 href="/science/article/content-19384.html" 的特徵
+    const linkRegex = /href=["']([^"']*\/article\/content-\d+\.html)["'][^>]*>(.*?)<\/a>/i
+    const linkMatch = html.match(linkRegex)
     
-    // 💡 策略二：如果精準狙擊失敗，改用寬容模式掃描所有連結
-    if (!titleText || !imgUrl) {
-      const allLinks = doc.querySelectorAll('a')
-      for (let a of allLinks) {
-        const text = a.textContent.trim()
-        // 尋找看起來像文章標題的長字串 (排除選單或按鈕)
-        if (text.length > 10 && a.getAttribute('href') && a.getAttribute('href').includes('/article/')) {
-          titleText = text
-          linkUrl = a.getAttribute('href')
-          
-          // 往上層找容器，看看有沒有圖片
-          const parent = a.closest('div, section, article')
-          if (parent) {
-            const img = parent.querySelector('img')
-            if (img) imgUrl = img.getAttribute('src') || img.getAttribute('data-src') || ''
-          }
-          break
-        }
-      }
+    if (linkMatch) {
+      linkUrl = linkMatch[1]
+      // 清除可能包覆在標題外的 HTML 標籤 (例如 <span>)
+      titleText = linkMatch[2].replace(/<[^>]*>?/gm, '').trim()
     }
+
+    // 💡 暴力破解 2：無視前端隱藏，直接在原始碼裡找第一張 JPG 或 WEBP 圖片網址
+    // NatGeo 的真實照片多半是 jpg 或 webp 格式
+    const imgRegex = /(https?:\/\/[^"'\s<>]+\.(?:jpg|jpeg|webp))/i
+    const imgMatch = html.match(imgRegex)
     
-    // 💡 策略三：如果 DOM 裡的圖片標籤被 Vue 或 LazyLoad 隱藏了，直接去 HTML 源碼暴力挖出高清大圖的網址！
-    if (!imgUrl || imgUrl.length < 10 || imgUrl.includes('data:image')) {
-      // 搜尋任何結尾是 jpg/png/webp 且包含 natgeomedia 的圖片網址
-      const match = html.match(/(https?:\/\/[^"'\s]+\.natgeomedia\.com\/[^"'\s]+\.(?:jpg|jpeg|png|webp))/i)
-      if (match) {
-        imgUrl = match[1]
-      }
+    if (imgMatch) {
+      // 處理 JSON 格式中可能出現的脫逸斜線 (例如 https:\/\/...)
+      imgUrl = imgMatch[1].replace(/\\\//g, '/')
     }
-    
+
     // 💡 最終整理與防呆
-    if (imgUrl && linkUrl && titleText) {
-      // 確保網址是絕對路徑
-      if (imgUrl.startsWith('//')) imgUrl = 'https:' + imgUrl
-      if (linkUrl.startsWith('/')) linkUrl = 'https://www.natgeomedia.com' + linkUrl
+    if (linkUrl && titleText && titleText.length > 3) {
       
-      // 防止真的沒圖時破圖，給予官方預設 Logo
-      if (imgUrl.includes('data:image')) {
+      // 確保網址是完整的絕對路徑
+      if (!linkUrl.startsWith('http')) {
+        linkUrl = 'https://www.natgeomedia.com' + (linkUrl.startsWith('/') ? '' : '/') + linkUrl
+      }
+      
+      // 如果真的沒有圖，提供 NatGeo 官方 Logo 避免破圖
+      if (!imgUrl || imgUrl.includes('data:image')) {
         imgUrl = 'https://www.natgeomedia.com/assets/images/logo.svg'
       }
 
@@ -126,12 +108,12 @@ const fetchNews = async () => {
       }
       hasData.value = true
     } else {
-      throw new Error('解析不到國家地理雜誌的文章標題或連結')
+      throw new Error('無法從網頁深層原始碼中挖出文章結構')
     }
     
   } catch (err) {
-    console.error('NatGeo 抓取失敗:', err)
-    hasData.value = false // 失敗就是失敗，誠實顯示空狀態，絕不跳轉其他新聞
+    console.error('NatGeo 抓取徹底失敗:', err)
+    hasData.value = false 
   } finally {
     isLoading.value = false
   }
