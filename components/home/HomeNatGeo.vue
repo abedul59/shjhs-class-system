@@ -7,7 +7,7 @@
     
     <div class="card-content" v-if="isLoading">
       <div class="loading-state">
-        <span class="spinner">⏳</span> 正在連線取得 NatGeo 最新知識...
+        <span class="spinner">⏳</span> 正在突破連線取得最新知識...
       </div>
     </div>
     
@@ -38,66 +38,96 @@ const hasData = ref(false)
 const newsData = ref({ title: '', image: '', link: '' })
 
 const fetchNews = async () => {
-  // 💡 8 秒強制超時保護
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 8000)
-
   try {
     const targetUrl = 'https://www.natgeomedia.com/science/'
-    let html = ''
     
-    // 💡 雙重代理防護：先嘗試 allorigins，如果失敗或被擋，立刻切換 codetabs
-    try {
-      const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}&disableCache=${Date.now()}`, { signal: controller.signal })
-      const data = await res.json()
-      html = data.contents || ''
-    } catch (e) {
-      console.warn('主要代理失敗，切換備用代理...')
+    // 💡 多重代理伺服器輪詢清單：一個被擋就瞬間換下一個
+    const proxies = [
+      `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}&disableCache=${Date.now()}`,
+      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
+      `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
+    ]
+    
+    let html = ''
+
+    // 💡 輪流嘗試代理伺服器，每個最多等 4 秒
+    for (const proxyUrl of proxies) {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 4000)
+
+      try {
+        const res = await fetch(proxyUrl, { signal: controller.signal, cache: 'no-store' })
+        clearTimeout(timeoutId)
+        
+        if (!res.ok) continue
+
+        if (proxyUrl.includes('allorigins')) {
+          const data = await res.json()
+          html = data.contents || ''
+        } else {
+          html = await res.text()
+        }
+
+        // 如果成功抓到大於 1000 字元的 HTML，代表成功破防，直接跳出迴圈
+        if (html && html.length > 1000) break 
+      } catch (err) {
+        clearTimeout(timeoutId)
+        console.warn(`代理伺服器連線超時或被擋，切換下一個...`)
+      }
     }
 
-    if (!html || html.length < 500) {
-      const res2 = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`, { signal: controller.signal })
-      html = await res2.text()
-    }
-
-    clearTimeout(timeoutId)
-    if (!html || html.length < 500) throw new Error('網頁內容回傳空白或被阻擋')
+    if (!html || html.length < 1000) throw new Error('所有代理伺服器皆無法取得網頁原始碼')
+    
+    // 💡 開始解析 HTML 尋找標題與連結
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(html, 'text/html')
     
     let titleText = ''
     let linkUrl = ''
     let imgUrl = ''
     
-    // 💡 暴力破解 1：用 Regex 直接在原始碼中挖出文章連結與標題
-    // 尋找類似 href="/science/article/content-19384.html" 的特徵
-    const linkRegex = /href=["']([^"']*\/article\/content-\d+\.html)["'][^>]*>(.*?)<\/a>/i
-    const linkMatch = html.match(linkRegex)
-    
-    if (linkMatch) {
-      linkUrl = linkMatch[1]
-      // 清除可能包覆在標題外的 HTML 標籤 (例如 <span>)
-      titleText = linkMatch[2].replace(/<[^>]*>?/gm, '').trim()
-    }
-
-    // 💡 暴力破解 2：無視前端隱藏，直接在原始碼裡找第一張 JPG 或 WEBP 圖片網址
-    // NatGeo 的真實照片多半是 jpg 或 webp 格式
-    const imgRegex = /(https?:\/\/[^"'\s<>]+\.(?:jpg|jpeg|webp))/i
-    const imgMatch = html.match(imgRegex)
-    
-    if (imgMatch) {
-      // 處理 JSON 格式中可能出現的脫逸斜線 (例如 https:\/\/...)
-      imgUrl = imgMatch[1].replace(/\\\//g, '/')
-    }
-
-    // 💡 最終整理與防呆
-    if (linkUrl && titleText && titleText.length > 3) {
+    // 尋找包含 /article/content- 的真實文章連結
+    const aTags = Array.from(doc.querySelectorAll('a'))
+    for (let a of aTags) {
+      const href = a.getAttribute('href') || ''
+      // 清除多餘的 HTML 標籤與空白，取得乾淨標題
+      const text = a.textContent.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
       
-      // 確保網址是完整的絕對路徑
+      // 確保它是文章連結，且標題夠長 (排除按鈕或選單)
+      if (href.includes('/article/content-') && text.length > 6) {
+        titleText = text
+        linkUrl = href
+        break
+      }
+    }
+
+    // 💡 暴力尋找圖片：無視 Vue/JS 的隱藏，直接從網頁原始碼中硬挖 JPG/WEBP 高清大圖
+    if (linkUrl) {
+      // 排除 png 避免抓到網站的 icon 或 logo
+      const imgRegex = /https:\/\/[a-zA-Z0-9.\-_/]+?\.(?:jpg|jpeg|webp)/gi
+      const matches = html.match(imgRegex) || []
+      
+      // 過濾掉檔名看起來像廣告、頭像或 icon 的圖片
+      const validImgs = matches.filter(u => 
+        !u.toLowerCase().includes('logo') && 
+        !u.toLowerCase().includes('icon') && 
+        !u.toLowerCase().includes('avatar') &&
+        !u.toLowerCase().includes('banner')
+      )
+      
+      if (validImgs.length > 0) {
+        imgUrl = validImgs[0] // 拿第一張最可能符合的文章配圖
+      }
+    }
+
+    // 💡 最終整理與防呆處理
+    if (titleText && linkUrl) {
       if (!linkUrl.startsWith('http')) {
         linkUrl = 'https://www.natgeomedia.com' + (linkUrl.startsWith('/') ? '' : '/') + linkUrl
       }
       
-      // 如果真的沒有圖，提供 NatGeo 官方 Logo 避免破圖
-      if (!imgUrl || imgUrl.includes('data:image')) {
+      // 兜底方案：如果網頁裡真的連一張圖都挖不出來，至少給個官方 Logo 避免破圖
+      if (!imgUrl) {
         imgUrl = 'https://www.natgeomedia.com/assets/images/logo.svg'
       }
 
@@ -108,12 +138,12 @@ const fetchNews = async () => {
       }
       hasData.value = true
     } else {
-      throw new Error('無法從網頁深層原始碼中挖出文章結構')
+      throw new Error('成功取得 HTML，但無法解析出文章標題或網址')
     }
     
   } catch (err) {
     console.error('NatGeo 抓取徹底失敗:', err)
-    hasData.value = false 
+    hasData.value = false // 承認失敗，顯示無法取得，堅決不塞其他新聞
   } finally {
     isLoading.value = false
   }
