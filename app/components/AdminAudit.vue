@@ -49,24 +49,30 @@
         </div>
         <div v-else class="table-responsive">
           <table class="t">
-            <tr class="h">
-              <th width="160">時間</th>
-              <th width="110">操作區塊</th>
-              <th width="100">身分</th>
-              <th width="110">動作</th>
-              <th>詳細內容</th>
-            </tr>
-            <tr v-for="l in aLogs" :key="l.id" class="r">
-              <td class="nowrap">{{ new Date(l.created_at).toLocaleString('zh-TW', { hour12: false }) }}</td>
-              <td class="nowrap">
-                <span :class="['tag', l.subject_name === '首頁黑板' ? 'tag-board' : 'tag-subject']">
-                  {{ l.subject_name }}
-                </span>
-              </td>
-              <td class="nowrap"><strong>{{ l.operator_role }}</strong></td>
-              <td class="nowrap" :class="getActionColor(l.action_type)">{{ l.action_type }}</td>
-              <td class="details-cell">{{ l.details || '-' }}</td>
-            </tr>
+            <!-- 💡 新增 thead 以便在手機版整行隱藏 -->
+            <thead class="h">
+              <tr>
+                <th width="160">時間</th>
+                <th width="110">操作區塊</th>
+                <th width="100">身分</th>
+                <th width="110">動作</th>
+                <th>詳細內容</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="l in aLogs" :key="l.id" class="r">
+                <!-- 💡 加入 data-label，這是手機版卡片化轉換的關鍵 -->
+                <td data-label="時間" class="nowrap">{{ new Date(l.created_at).toLocaleString('zh-TW', { hour12: false }) }}</td>
+                <td data-label="操作區塊" class="nowrap">
+                  <span :class="['tag', l.subject_name === '首頁黑板' ? 'tag-board' : 'tag-subject']">
+                    {{ l.subject_name }}
+                  </span>
+                </td>
+                <td data-label="身分" class="nowrap"><strong>{{ l.operator_role }}</strong></td>
+                <td data-label="動作" class="nowrap" :class="getActionColor(l.action_type)">{{ l.action_type }}</td>
+                <td data-label="詳細內容" class="details-cell">{{ l.details || '-' }}</td>
+              </tr>
+            </tbody>
           </table>
         </div>
       </div>
@@ -186,7 +192,7 @@ const getActionColor = (action) => {
 .table-header h3 { margin: 0; color: #334155; font-size: 1.4rem; }
 .audit-container { display: flex; gap: 25px; align-items: flex-start; }
 
-/* 💡 月曆側邊欄樣式 */
+/* 月曆側邊欄樣式 */
 .calendar-sidebar { width: 320px; flex-shrink: 0; display: flex; flex-direction: column; gap: 15px; }
 .mode-btn { background: white; border: 2px solid #cbd5e1; color: #475569; padding: 12px; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: 0.2s; text-align: center; }
 .mode-btn:hover { background: #f1f5f9; }
@@ -206,7 +212,7 @@ const getActionColor = (action) => {
 .cal-date-num { font-weight: bold; font-size: 1rem; }
 .record-dot { width: 6px; height: 6px; background: #3b82f6; border-radius: 50%; margin-top: 2px; }
 
-/* 💡 右側紀錄列表樣式 */
+/* 右側紀錄列表樣式 */
 .logs-content { flex: 1; min-width: 0; background: white; padding: 20px 25px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
 .section-header { margin-bottom: 20px; border-bottom: 2px dashed #f1f5f9; padding-bottom: 15px; }
 .logs-title { margin: 0; color: #1e293b; font-size: 1.25rem; }
@@ -215,20 +221,15 @@ const getActionColor = (action) => {
 .empty-state { text-align: center; padding: 50px; color: #94a3b8; font-size: 1.1rem; font-style: italic; background: #f8fafc; border-radius: 8px; border: 2px dashed #e2e8f0; }
 .loading-text { text-align: center; padding: 30px; font-weight: bold; color: #3b82f6; font-size: 1.1rem;}
 
-/* 💡 表格響應式設定 */
-.table-responsive { 
-  overflow-x: auto; 
-  -webkit-overflow-scrolling: touch; /* iOS 滑動順暢 */
-}
+.table-responsive { overflow-x: auto; }
 
+/* 💡 電腦版表格樣式 */
 .t { width: 100%; text-align: left; border-collapse: collapse; font-size: 0.95rem; min-width: 750px;}
 .h th { padding: 12px; background: #f1f5f9; color: #334155; font-weight: bold; border-bottom: 2px solid #cbd5e1; }
 .r td { padding: 12px; border-bottom: 1px dashed #e2e8f0; vertical-align: middle; line-height: 1.5; }
 .r:hover td { background: #f8fafc; }
 
-/* 防止前方重要資料欄位在手機被折行 */
 .nowrap { white-space: nowrap; }
-
 .details-cell { color: #475569; word-break: break-all; min-width: 250px; }
 .tag { padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; display: inline-block;}
 .tag-board { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
@@ -240,7 +241,7 @@ const getActionColor = (action) => {
 .text-primary { color: #2563eb; font-weight: bold; }
 
 /* =========================================
-   💡 手機版 (RWD) 視覺優化
+   💡 終極卡片式手機版 (RWD) 視覺優化
    ========================================= */
 @media (max-width: 900px) {
   .audit-container { flex-direction: column; gap: 15px; }
@@ -251,10 +252,67 @@ const getActionColor = (action) => {
   .table-header h3 { font-size: 1.25rem; }
   .mode-btn { font-size: 1rem; padding: 10px; }
   .calendar-wrapper { padding: 15px 10px; }
-  .cal-cell { height: 45px; } /* 放大觸控熱區 */
-  .logs-content { padding: 15px; }
+  .cal-cell { height: 45px; } 
+  .logs-content { padding: 15px; background: transparent; border: none; box-shadow: none;}
   .logs-title { font-size: 1.1rem; line-height: 1.4; }
-  .t { min-width: 650px; font-size: 0.9rem; } /* 稍微縮小字體與最小寬度以減少滑動幅度 */
-  .h th, .r td { padding: 10px 8px; }
+  
+  .table-responsive { overflow-x: hidden; } /* 禁用左右滑動 */
+  
+  /* 💡 將表格強制轉為區塊元素 (Card View) */
+  .t, .t tbody, .t tr, .t td {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .t { min-width: unset; }
+  
+  /* 隱藏傳統的表格標題列 */
+  .h { display: none; }
+  
+  /* 每一列(tr)變成一張獨立的卡片 */
+  .r {
+    margin-bottom: 15px;
+    background: white;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    overflow: hidden;
+  }
+  
+  /* 儲存格(td)變成一行一行的屬性 */
+  .r td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-align: right;
+    padding: 10px 15px;
+    border-bottom: 1px dashed #e2e8f0;
+    white-space: normal; /* 解除不換行限制 */
+  }
+  
+  /* 利用 data-label 屬性動態插入標題 */
+  .r td::before {
+    content: attr(data-label);
+    font-weight: bold;
+    color: #64748b;
+    margin-right: 15px;
+    text-align: left;
+    flex-shrink: 0;
+  }
+  
+  /* 處理「詳細內容」欄位，讓它排版在文字下方 */
+  .r td.details-cell {
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    border-bottom: none;
+    background: #f8fafc;
+    min-width: unset;
+  }
+  
+  .r td.details-cell::before {
+    margin-bottom: 8px;
+    color: #3b82f6; /* 詳細內容標題給點顏色突顯 */
+  }
 }
 </style>
