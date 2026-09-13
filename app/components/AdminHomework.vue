@@ -1,21 +1,31 @@
 <template>
   <div>
     <div class="table-header"><h3>📚 班級作業總覽與科任老師管理</h3></div>
+    
     <div class="homework-section">
       <h4>🧑‍🏫 科任老師與小老師密碼管理</h4>
       <div class="teacher-list">
         <div v-for="t in subjectTeachers" :key="t.id" class="teacher-item">
-          <input v-model="t.subject_name" type="text" class="edit-input subject-input" placeholder="科目名稱"/>
-          <input v-model="t.password" type="text" class="edit-input pwd-input" placeholder="老師密碼"/>
-          <input v-model="t.assistant_password" type="text" class="edit-input pwd-input" placeholder="小老師密碼 (選填)"/>
-          <button @click="saveTeacher(t)" class="save-row-btn">💾 儲存</button>
-          <button @click="deleteTeacher(t.id)" class="del-row-btn">🗑️</button>
+          <div class="input-row">
+            <input v-model="t.subject_name" type="text" class="edit-input subject-input" placeholder="科目名稱"/>
+            <input v-model="t.password" type="text" class="edit-input pwd-input" placeholder="老師密碼"/>
+            <input v-model="t.assistant_password" type="text" class="edit-input pwd-input" placeholder="小老師密碼 (選填)"/>
+          </div>
+          <div class="action-row">
+            <button @click="saveTeacher(t)" class="save-row-btn">💾 儲存</button>
+            <button @click="deleteTeacher(t.id)" class="del-row-btn">🗑️</button>
+          </div>
         </div>
+        
         <div class="teacher-item new-teacher">
-          <input v-model="newTeacher.subject" type="text" class="edit-input subject-input" placeholder="新增科目"/>
-          <input v-model="newTeacher.password" type="text" class="edit-input pwd-input" placeholder="老師密碼"/>
-          <input v-model="newTeacher.assistant_password" type="text" class="edit-input pwd-input" placeholder="小老師密碼"/>
-          <button @click="addTeacher" class="add-btn small-btn">➕ 新增科任</button>
+          <div class="input-row">
+            <input v-model="newTeacher.subject" type="text" class="edit-input subject-input" placeholder="新增科目"/>
+            <input v-model="newTeacher.password" type="text" class="edit-input pwd-input" placeholder="老師密碼"/>
+            <input v-model="newTeacher.assistant_password" type="text" class="edit-input pwd-input" placeholder="小老師密碼"/>
+          </div>
+          <div class="action-row">
+            <button @click="addTeacher" class="add-btn small-btn">➕ 新增科任</button>
+          </div>
         </div>
       </div>
     </div>
@@ -45,12 +55,12 @@
       </div>
 
       <!-- 💡 加入列印/產生PDF 按鈕 -->
-      <div class="action-bar" style="margin-bottom: 25px; display: flex; gap: 15px;">
+      <div class="action-bar" style="margin-bottom: 25px; display: flex; gap: 15px; flex-wrap: wrap;">
         <button @click="triggerPrint" class="email-btn print-btn">
           📄 產生全班報表 (預覽 / 匯出 PDF)
         </button>
-        <button @click="sendHomeworkEmails" class="email-btn late-btn" :disabled="isSendingHomework" style="flex: 2;">
-          {{ isSendingHomework ? '正在逐一發送作業報表，請稍候...' : '📧 密碼解鎖：確認無誤並一鍵發送全班作業通知' }}
+        <button @click="sendHomeworkEmails" class="email-btn late-btn" :disabled="isSendingHomework" style="flex: 2; min-width: 250px;">
+          {{ isSendingHomework ? '正在逐一發送作業報表，請稍候...' : '📧 密碼解鎖：一鍵發送全班作業通知' }}
         </button>
       </div>
       
@@ -128,7 +138,6 @@ const saveTeacher = async (t) => { await supabase.from('subject_teachers').updat
 const deleteTeacher = async (id) => { if(confirm('確定刪除此科目？')) { await supabase.from('subject_teachers').delete().eq('id', id); subjectTeachers.value = subjectTeachers.value.filter(t => t.id !== id) } }
 const saveHwEmailTemplate = async () => { isSavingHwTemplate.value = true; await supabase.from('email_templates').upsert({ template_id: 'homework_notice', subject: hwEmailSubjectTemplate.value, content: hwEmailContentTemplate.value }); alert('✅ 作業信件範本已永久儲存！'); isSavingHwTemplate.value = false }
 
-// 💡 觸發列印(產生PDF) 功能
 const triggerPrint = () => {
   window.print()
 }
@@ -136,7 +145,6 @@ const triggerPrint = () => {
 const sendHomeworkEmails = async () => {
   isSendingHomework.value = true
   
-  // 驗證密碼邏輯
   const { data: pwdData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'admin_password').maybeSingle()
   let expectedPwd = '168168168'
   if (pwdData?.setting_value) {
@@ -172,33 +180,50 @@ const sendHomeworkEmails = async () => {
 .table-header { border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; } .table-header h3 { margin: 0; color: #334155; }
 .homework-section { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
 .homework-section h4 { margin: 0 0 15px 0; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
+
+/* 科任老師列表：改為彈性容器與換行設計 */
 .teacher-list { display: flex; flex-direction: column; gap: 10px; }
-.teacher-item { display: flex; gap: 10px; align-items: center; background: white; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0; }
+.teacher-item { display: flex; gap: 10px; align-items: center; background: white; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0; flex-wrap: wrap; }
 .new-teacher { background: #f0fdf4; border-color: #bbf7d0; }
-.edit-input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; width: 100%; }
-.subject-input { width: 120px; } .pwd-input { width: 180px; }
+
+.input-row { display: flex; gap: 10px; flex: 1; min-width: 250px; flex-wrap: wrap; }
+.action-row { display: flex; gap: 5px; flex-shrink: 0; }
+
+.edit-input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; }
+.subject-input { flex: 1; min-width: 100px; } 
+.pwd-input { flex: 1; min-width: 120px; }
+
 .add-btn.small-btn { background: #10b981; color: white; border: none; padding: 8px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; }
 .save-row-btn { background: #3b82f6; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
 .del-row-btn { background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+
+/* Email 編輯器樣式 */
 .email-editor-section { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
-.editor-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 10px; }
+.editor-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;}
 .save-template-btn { background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; }
 .var-tag { background: #e2e8f0; color: #0f172a; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-weight: bold; }
 .help-text { font-size: 0.95rem; color: #64748b; margin-bottom: 20px; line-height: 1.5; }
-.form-group { margin-bottom: 15px; } .form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #475569; }
-.textarea-input { resize: vertical; font-family: inherit; line-height: 1.5; }
+.form-group { margin-bottom: 15px; } 
+.form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #475569; }
+.textarea-input { width: 100%; resize: vertical; font-family: inherit; line-height: 1.5; }
+
+/* 預覽樣式 */
 .email-preview-section { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+.preview-note { font-size: 0.85rem; font-weight: normal; color: #64748b; margin-left: 10px; }
 .preview-box { background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
-.preview-subject { font-size: 1.1rem; color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 12px; }
-.preview-body { font-size: 1rem; color: #334155; line-height: 1.6; white-space: pre-wrap; }
-.late-btn { background-color: #f59e0b; width: 100%; font-size: 1.2rem; padding: 15px; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+.preview-subject { font-size: 1.1rem; color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 12px; word-break: break-all;}
+.preview-body { font-size: 1rem; color: #334155; line-height: 1.6; white-space: pre-wrap; word-break: break-all;}
+
+/* 發送與列印按鈕 */
+.late-btn { background-color: #f59e0b; width: 100%; font-size: 1.1rem; padding: 15px; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
 .late-btn:hover:not(:disabled) { background-color: #d97706; }
-.print-btn { background-color: #3b82f6; font-size: 1.1rem; padding: 15px; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; flex: 1; transition: 0.2s; }
+.print-btn { background-color: #3b82f6; font-size: 1.1rem; padding: 15px; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; flex: 1; min-width: 250px; transition: 0.2s; }
 .print-btn:hover { background-color: #2563eb; }
 
 .print-only-header { display: none; }
 
-.student-homework-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; max-height: 600px; overflow-y: auto; padding-right: 10px; }
+/* 學生作業卡片網格 */
+.student-homework-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; max-height: 600px; overflow-y: auto; padding-right: 10px; }
 .hw-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 .hw-card-header { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }
 .hw-card-body { padding: 15px; display: flex; flex-direction: column; gap: 15px; }
@@ -210,12 +235,49 @@ const sendHomeworkEmails = async () => {
 .badge.success { background: #dcfce7; color: #166534; } .badge.warning { background: #fee2e2; color: #991b1b; }
 
 /* =========================================
+   💡 手機版 (RWD) 視覺優化
+   ========================================= */
+@media (max-width: 768px) {
+  .teacher-item {
+    flex-direction: column; /* 變成上下堆疊 */
+    align-items: stretch;
+  }
+  .input-row {
+    flex-direction: column; /* 輸入框改為直向排列 */
+  }
+  .action-row {
+    justify-content: flex-end; /* 按鈕靠右 */
+    margin-top: 5px;
+  }
+  .add-btn.small-btn {
+    width: 100%; /* 新增按鈕滿版 */
+  }
+  .action-bar {
+    flex-direction: column; /* 列印與發送按鈕上下排列 */
+  }
+  .print-btn, .late-btn {
+    width: 100%;
+    min-width: unset;
+  }
+  .student-homework-grid {
+    grid-template-columns: 1fr; /* 作業卡片變成單欄 */
+    max-height: 800px;
+  }
+  .editor-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .save-template-btn {
+    width: 100%; /* 儲存範本按鈕滿版 */
+  }
+}
+
+/* =========================================
    💡 專屬列印排版樣式 (@media print)
    ========================================= */
 @media print {
   @page { size: A4 portrait; margin: 15mm; }
   
-  /* 隱藏不需要列印的編輯與發送信件區塊 */
   .table-header, 
   .homework-section > h4, 
   .homework-section > p.help-text, 
@@ -226,7 +288,6 @@ const sendHomeworkEmails = async () => {
     display: none !important;
   }
 
-  /* 重設外層樣式，避免列印被截斷 */
   .homework-section {
     border: none !important;
     padding: 0 !important;
@@ -234,7 +295,6 @@ const sendHomeworkEmails = async () => {
     background: transparent !important;
   }
 
-  /* 顯示列印專屬標題 */
   .print-only-header {
     display: block !important;
     text-align: center;
@@ -245,7 +305,6 @@ const sendHomeworkEmails = async () => {
   .print-only-header h2 { margin: 0 0 5px 0; color: #000; font-size: 24px; }
   .print-only-header p { margin: 0; color: #333; font-size: 14px; }
 
-  /* 強制網格展開為 A4 雙欄配置 */
   .student-homework-grid {
     display: grid !important;
     grid-template-columns: repeat(2, 1fr) !important;
@@ -255,7 +314,6 @@ const sendHomeworkEmails = async () => {
     padding: 0 !important;
   }
 
-  /* 防止卡片被跨頁切斷 */
   .hw-card {
     page-break-inside: avoid;
     border: 1px solid #000 !important;
