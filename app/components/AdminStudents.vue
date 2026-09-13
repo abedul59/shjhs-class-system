@@ -190,7 +190,7 @@
 import { ref, computed, onMounted } from 'vue'
 const supabase = useSupabaseClient()
 
-const activeTab = ref('basic') // 控制當前顯示的分頁
+const activeTab = ref('basic') 
 
 const adminStudents = ref([])
 const selectedFile = ref(null)
@@ -200,7 +200,6 @@ const isSavingAll = ref(false)
 
 const sortBy = ref('seat_number') 
 
-// 異動通知設定狀態
 const notifyEmail = ref('')
 const notifySubject = ref('🔔 班級系統通知：學生資料已{{異動類型}} ({{學生姓名}})')
 const notifyContent = ref(`導師您好：\n\n系統於 {{當下時間}} 發生了一筆學生資料變動。\n\n【變動內容】\n- 動作：{{異動類型}}\n- 影響學生：{{學生姓名}}\n\n此致\n系統自動通知`)
@@ -216,7 +215,6 @@ const previewContent = computed(() => {
   return notifyContent.value.replace(/{{異動類型}}/g, '更新').replace(/{{學生姓名}}/g, '王小明').replace(/{{當下時間}}/g, nowStr)
 })
 
-// 發送通知信的共用邏輯
 const notifyTeacher = async (actionType, studentName) => {
   if (!notifyEmail.value || !notifyEmail.value.includes('@')) return; 
   try {
@@ -265,7 +263,6 @@ const fetchData = async () => {
 
 onMounted(() => fetchData())
 
-// 儲存通知設定
 const saveNotifySettings = async () => {
   isSavingNotifySettings.value = true
   try {
@@ -293,12 +290,10 @@ const addNewStudent = () => {
     p1_rel: '', p1_tel: '', p1_mail: '', p2_rel: '', p2_tel: '', p2_mail: '', p3_rel: '', p3_tel: '', p3_mail: ''
   })
 
-  // 如果新增，自動切換回基本資料分頁方便填寫
   activeTab.value = 'basic'
   alert('✨ 已在清單最上方新增一筆空白列，請填寫完成後點擊「儲存」！')
 }
 
-// 💡 快速全選 / 全不選「不列入點名」
 const toggleAllAttendance = (status) => {
   adminStudents.value.forEach(s => {
     s.hide_attendance = status
@@ -584,10 +579,21 @@ const processImport = async () => {
 .prominent-save-btn { font-size: 1.05rem; padding: 10px 20px; box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4); animation: gentle-pulse 2s infinite;}
 @keyframes gentle-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
 
-.table-responsive { overflow-x: auto; max-height: 700px; }
+/* 💡 讓表格可以左右順暢捲動，且內部不強制換行 */
+.table-responsive { 
+  overflow-x: auto; 
+  max-height: 700px; 
+  -webkit-overflow-scrolling: touch; /* iOS 滑動優化 */
+}
 
-/* 讓寬度可以根據分頁自適應，不再強制 2100px */
-.student-edit-table { width: 100%; border-collapse: separate; border-spacing: 0; background: white; font-size: 0.95rem; }
+.student-edit-table { 
+  width: 100%; 
+  border-collapse: separate; 
+  border-spacing: 0; 
+  background: white; 
+  font-size: 0.95rem; 
+  white-space: nowrap; /* 💡 確保文字與輸入框不被擠壓變形 */
+}
 .student-edit-table th, .student-edit-table td { padding: 8px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
 .student-edit-table th { background-color: #f8fafc; color: #64748b; font-weight: bold; position: sticky; top: 0; z-index: 10; text-align: center; }
 
@@ -601,12 +607,13 @@ const processImport = async () => {
 
 .new-row-highlight td { background-color: #fefce8; }
 
-.edit-input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; width: 100%; transition: border-color 0.2s;}
+/* 💡 確保輸入框在手機上有基本寬度 */
+.edit-input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; width: 100%; min-width: 80px; transition: border-color 0.2s;}
 .edit-input:focus { border-color: #3b82f6; outline: none; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
 .num-input { width: 100%; min-width: 60px; text-align: center; } 
-.small-input { width: 100%; }
-.email-input { font-family: monospace; font-size: 0.8rem; }
-.textarea-input { resize: vertical; font-family: inherit; line-height: 1.5; }
+.small-input { width: 100%; min-width: 90px; }
+.email-input { font-family: monospace; font-size: 0.8rem; min-width: 140px; }
+.textarea-input { resize: vertical; font-family: inherit; line-height: 1.5; white-space: pre-wrap; }
 
 /* 💡 新增的微型按鈕 */
 .micro-btn-group { display: flex; justify-content: center; gap: 5px; margin-top: 5px;}
@@ -621,9 +628,15 @@ const processImport = async () => {
 
 .block-checkbox { transform: scale(1.5); cursor: pointer; accent-color: #ef4444;}
 
+/* 💡 手機版專屬優化 */
 @media (max-width: 768px) {
   .email-flex-container { flex-direction: column; }
-  .tab-bar { flex-direction: column; align-items: stretch; }
+  .tab-bar { flex-direction: column; align-items: stretch; gap: 8px; }
   .tab-spacer { display: none; }
+  .prominent-save-btn { width: 100%; margin-top: 5px; } /* 儲存按鈕滿版 */
+  .export-actions { justify-content: space-between; width: 100%; }
+  .export-btn { flex: 1 1 calc(50% - 5px); text-align: center; font-size: 0.85rem; padding: 10px 5px;} /* 按鈕自適應兩排 */
+  .table-header { flex-direction: column; align-items: flex-start; }
+  .header-controls { width: 100%; justify-content: space-between; }
 }
 </style>
