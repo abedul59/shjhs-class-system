@@ -113,7 +113,6 @@ const fetchLogs = async () => {
   isLoading.value = true
   selectedIdentity.value = null
   
-  // 抓取近 3000 筆紀錄，並且排除尚未驗證的匿名來訪者
   const { data } = await supabase.from('visitor_logs')
     .select('*')
     .neq('role', '匿名來訪者')
@@ -127,28 +126,24 @@ const fetchLogs = async () => {
 
 onMounted(() => fetchLogs())
 
-// 💡 核心邏輯：將資料「以身分(Role)」為單位進行群組歸戶
 const groupedIdentities = computed(() => {
   const map = {}
   
   rawLogs.value.forEach(log => {
-    // 略過空值或無效身分
     if (!log.role || log.role.trim() === '') return
     
     if (!map[log.role]) {
       map[log.role] = {
         role: log.role,
         latestTime: log.created_at,
-        devices: new Set(), // 使用 Set 確保設備清單不重複
+        devices: new Set(), 
         logs: []
       }
     }
     
     map[log.role].logs.push(log)
-    // 組合 IP 與 UA 以辨識不同設備
     map[log.role].devices.add(`${log.ip_address || '未知IP'}|${log.device_info || '未知設備'}`)
     
-    // 更新最後活動時間
     if (new Date(log.created_at) > new Date(map[log.role].latestTime)) {
       map[log.role].latestTime = log.created_at
     }
@@ -157,14 +152,11 @@ const groupedIdentities = computed(() => {
   return Object.values(map).sort((a, b) => new Date(b.latestTime) - new Date(a.latestTime))
 })
 
-// 搜尋過濾器
 const filteredIdentities = computed(() => {
   if (!searchQuery.value) return groupedIdentities.value
   const q = searchQuery.value.toLowerCase()
   return groupedIdentities.value.filter(u => u.role.toLowerCase().includes(q))
 })
-
-// ================= 輔助解析函式 =================
 
 const extractName = (roleStr) => {
   if (roleStr.includes('家長')) return roleStr.split('家長')[0].trim()
@@ -275,7 +267,7 @@ const getActionClass = (action) => {
 
 /* 右側時間軸 */
 .timeline-panel { flex: 1; min-width: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; height: 100%; display: flex; flex-direction: column; }
-.empty-prompt { display: flex; align-items: center; justify-content: center; height: 100%; color: #94a3b8; font-size: 1.1rem; font-style: italic; background: #f8fafc; border-radius: 8px;}
+.empty-prompt { display: flex; align-items: center; justify-content: center; height: 100%; color: #94a3b8; font-size: 1.1rem; font-style: italic; background: #f8fafc; border-radius: 8px; padding: 20px; text-align: center;}
 
 .timeline-wrapper { display: flex; flex-direction: column; height: 100%; }
 .timeline-header { padding: 20px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; border-radius: 8px 8px 0 0; }
@@ -284,7 +276,7 @@ const getActionClass = (action) => {
 .device-box { background: white; border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px 15px; }
 .device-box-title { font-weight: bold; color: #475569; font-size: 0.95rem; margin-bottom: 8px;}
 .device-list { margin: 0; padding-left: 20px; font-size: 0.9rem; color: #334155; }
-.device-list li { margin-bottom: 4px; }
+.device-list li { margin-bottom: 4px; word-break: break-all; }
 
 .timeline-content { flex: 1; overflow-y: auto; padding: 20px 30px; }
 .timeline-item { display: flex; gap: 20px; }
@@ -308,4 +300,49 @@ const getActionClass = (action) => {
 .tag-default { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
 
 .loading-state, .empty-state { text-align: center; padding: 50px 20px; color: #64748b; font-style: italic; }
+
+/* 💡 RWD：手機與小平板版面優化 */
+@media (max-width: 768px) {
+  .table-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+  .refresh-btn {
+    width: 100%; /* 按鈕滿版，方便觸控 */
+  }
+  
+  .main-layout {
+    flex-direction: column; /* 從左右排列變成上下堆疊 */
+    height: auto; /* 解除高度限制 */
+  }
+
+  .identity-list-panel {
+    width: 100%; /* 名單寬度滿版 */
+    height: 350px; /* 限制名單高度，才不會把足跡擠到最底層 */
+    flex-shrink: 1;
+  }
+
+  .timeline-panel {
+    width: 100%;
+    height: 600px; /* 給時間軸一個固定高度讓它可以獨立捲動 */
+  }
+
+  .timeline-content {
+    padding: 20px 15px; /* 縮小左右 padding 節省空間 */
+  }
+
+  .timeline-item {
+    gap: 12px; /* 縮小時間和點點的距離 */
+  }
+
+  .time-col {
+    width: 75px; /* 稍微縮小時間欄位寬度 */
+  }
+
+  .action-header {
+    flex-direction: column; /* 標籤跟文字上下排列 */
+    gap: 6px;
+  }
+}
 </style>
