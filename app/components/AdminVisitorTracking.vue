@@ -36,7 +36,7 @@
       <!-- 右側：活動時間軸 -->
       <div class="timeline-panel">
         <div v-if="!selectedVisitor" class="empty-prompt">
-          👈 請從左側選擇一位訪客以查看他的詳細活動軌跡
+          👈 請從清單選擇一位訪客以查看他的詳細活動軌跡
         </div>
         
         <div v-else class="timeline-wrapper">
@@ -59,8 +59,10 @@
                 <div class="line" v-if="idx !== selectedVisitor.logs.length - 1"></div>
               </div>
               <div class="action-col">
-                <span class="action-tag" :class="getActionClass(log.action)">{{ getActionCategory(log.action) }}</span>
-                <span class="action-text">{{ log.action }}</span>
+                <div class="action-header-mobile">
+                  <span class="action-tag" :class="getActionClass(log.action)">{{ getActionCategory(log.action) }}</span>
+                  <span class="action-text">{{ log.action }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -78,7 +80,6 @@ const rawLogs = ref([])
 const isLoading = ref(false)
 const selectedVisitor = ref(null)
 
-// 💡 解析 User-Agent 取得易讀的設備名稱
 const parseUserAgent = (ua) => {
   if (!ua) return '未知設備'
   let os = '未知系統'; let browser = '未知瀏覽器'
@@ -97,7 +98,6 @@ const parseUserAgent = (ua) => {
   return `${isMobile} (${os} - ${browser})`
 }
 
-// 💡 雜湊演算法：將 IP + UA 轉換為獨一無二的 5 碼英數編號
 const generateVisitorId = (ip, ua) => {
   const str = `${ip}|${ua}`
   let hash = 0
@@ -112,11 +112,10 @@ const fetchLogs = async () => {
   isLoading.value = true
   selectedVisitor.value = null
   
-  // 假設您的資料表 visitor_logs 已經新增了 action_details 欄位
   const { data } = await supabase.from('visitor_logs')
     .select('*')
     .order('created_at', { ascending: false })
-    .limit(1000) // 抓取最近 1000 筆紀錄
+    .limit(1000) 
     
   rawLogs.value = data || []
   isLoading.value = false
@@ -124,7 +123,6 @@ const fetchLogs = async () => {
 
 onMounted(() => fetchLogs())
 
-// 💡 資料分群邏輯：將散落的 Log 依據「IP+設備」組成獨立訪客陣列
 const sortedVisitors = computed(() => {
   const visitorsMap = {}
   
@@ -142,7 +140,6 @@ const sortedVisitors = computed(() => {
       }
     }
     
-    // 如果資料庫還沒新增 action_details 欄位，暫時拿 role 來顯示
     const actionDesc = log.action_details || log.role || '造訪網站'
     
     visitorsMap[key].logs.push({
@@ -150,17 +147,14 @@ const sortedVisitors = computed(() => {
       action: actionDesc
     })
     
-    // 更新該訪客的最後上線時間
     if (new Date(log.created_at) > new Date(visitorsMap[key].latestTime)) {
       visitorsMap[key].latestTime = log.created_at
     }
   })
 
-  // 將 Object 轉為 Array 並依照最新活動時間排序
   return Object.values(visitorsMap).sort((a, b) => new Date(b.latestTime) - new Date(a.latestTime))
 })
 
-// 輔助函式
 const maskIP = (ip) => {
   if (!ip || ip.includes('未知')) return '未知 IP'
   const parts = ip.split('.')
@@ -178,7 +172,6 @@ const formatTime = (iso, short = false) => {
 const formatDateOnly = (iso) => iso ? new Date(iso).toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' }) : ''
 const formatTimeOnly = (iso) => iso ? new Date(iso).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : ''
 
-// 判斷動作類型給予不同顏色標籤
 const getActionCategory = (action) => {
   if (action.includes('點擊') || action.includes('按鈕')) return '🖱️ 點擊'
   if (action.includes('瀏覽') || action.includes('進入')) return '👁️ 瀏覽'
@@ -195,11 +188,11 @@ const getActionClass = (action) => {
 
 <style scoped>
 .tracking-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); font-family: sans-serif;}
-.table-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 10px; }
+.table-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;}
 .table-header h3 { margin: 0; color: #334155; font-size: 1.4rem;}
 .refresh-btn { background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s;}
 .refresh-btn:hover:not(:disabled) { background: #e2e8f0; }
-.help-text { color: #64748b; font-size: 0.95rem; margin-bottom: 20px; }
+.help-text { color: #64748b; font-size: 0.95rem; margin-bottom: 20px; line-height: 1.5;}
 
 .main-layout { display: flex; gap: 20px; align-items: flex-start; height: 650px;}
 
@@ -218,12 +211,12 @@ const getActionClass = (action) => {
 
 /* 右側時間軸 */
 .timeline-panel { flex: 1; min-width: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; height: 100%; display: flex; flex-direction: column; }
-.empty-prompt { display: flex; align-items: center; justify-content: center; height: 100%; color: #94a3b8; font-size: 1.1rem; font-style: italic; background: #f8fafc; border-radius: 8px;}
+.empty-prompt { display: flex; align-items: center; justify-content: center; height: 100%; color: #94a3b8; font-size: 1.1rem; font-style: italic; background: #f8fafc; border-radius: 8px; padding: 20px; text-align: center;}
 
 .timeline-wrapper { display: flex; flex-direction: column; height: 100%; }
 .timeline-header { padding: 20px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; border-radius: 8px 8px 0 0; }
 .timeline-header h4 { margin: 0 0 10px 0; color: #1e293b; font-size: 1.3rem; }
-.v-details { display: flex; gap: 20px; font-size: 0.95rem; color: #475569; }
+.v-details { display: flex; flex-direction: column; gap: 5px; font-size: 0.95rem; color: #475569; }
 
 .timeline-content { flex: 1; overflow-y: auto; padding: 20px 30px; }
 .timeline-item { display: flex; gap: 20px; }
@@ -236,8 +229,9 @@ const getActionClass = (action) => {
 .line { flex: 1; width: 2px; background: #e2e8f0; min-height: 40px; margin-top: 5px; margin-bottom: 5px;}
 
 .action-col { flex: 1; padding-bottom: 30px; }
-.action-tag { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; margin-right: 10px; margin-top: 2px;}
-.action-text { font-size: 1.1rem; color: #334155; line-height: 1.5; }
+.action-header-mobile { display: flex; align-items: flex-start; gap: 10px;}
+.action-tag { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; margin-right: 10px; margin-top: 2px; flex-shrink: 0;}
+.action-text { font-size: 1.1rem; color: #334155; line-height: 1.5; word-break: break-word;}
 
 .tag-view { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
 .tag-click { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
@@ -245,4 +239,49 @@ const getActionClass = (action) => {
 .tag-default { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
 
 .loading-state, .empty-state { text-align: center; padding: 50px 20px; color: #64748b; font-style: italic; }
+
+/* =========================================
+   💡 手機版 (RWD) 視覺優化
+   ========================================= */
+@media (max-width: 768px) {
+  .refresh-btn {
+    width: 100%; /* 按鈕滿版更好按 */
+  }
+  
+  .main-layout {
+    flex-direction: column; /* 改為上下堆疊 */
+    height: auto; /* 釋放高度限制 */
+  }
+
+  .visitor-list-panel {
+    width: 100%; /* 清單滿版 */
+    height: 350px; /* 限制高度讓使用者能滑動到下方時間軸 */
+  }
+
+  .timeline-panel {
+    width: 100%;
+    min-height: 500px; /* 確保時間軸有足夠空間顯示 */
+  }
+
+  .timeline-content {
+    padding: 20px 15px; /* 減少左右留白，爭取顯示空間 */
+  }
+
+  .timeline-item {
+    gap: 12px; /* 縮小時間與節點間距 */
+  }
+
+  .time-col {
+    width: 75px; /* 稍微縮減時間欄寬度 */
+  }
+
+  .action-header-mobile {
+    flex-direction: column; /* 讓標籤與文字在手機上自動上下排列 */
+    gap: 5px;
+  }
+  
+  .action-tag {
+    margin-right: 0;
+  }
+}
 </style>
