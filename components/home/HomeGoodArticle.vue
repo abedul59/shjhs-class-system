@@ -1,7 +1,7 @@
 <template>
   <div class="good-article-card">
     <div class="card-header">
-      <h3>📖 導師好文分享</h3>
+      <h3>📖 教育優質文章</h3>
     </div>
     
     <div class="article-content-wrapper">
