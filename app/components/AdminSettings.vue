@@ -120,44 +120,20 @@
       
       <div class="refresh-grid">
         <div class="form-group row-align">
-          <label class="day-label">上課期間 (秒)：</label>
+          <label class="day-label-refresh">上課期間 (秒)：</label>
           <input type="number" v-model="refreshConfig.classTime" class="edit-input" style="width: 120px;" min="0" max="3600" />
         </div>
         <div class="form-group row-align">
-          <label class="day-label">下課期間 (秒)：</label>
+          <label class="day-label-refresh">下課期間 (秒)：</label>
           <input type="number" v-model="refreshConfig.breakTime" class="edit-input" style="width: 120px;" min="0" max="3600" />
         </div>
         <div class="form-group row-align">
-          <label class="day-label">週末假日 (秒)：</label>
+          <label class="day-label-refresh">週末假日 (秒)：</label>
           <input type="number" v-model="refreshConfig.weekend" class="edit-input" style="width: 120px;" min="0" max="3600" />
         </div>
       </div>
       <button @click="saveRefreshSettings" class="save-btn refresh-btn" :disabled="isSavingRefresh" style="margin-top: 15px;">
         {{ isSavingRefresh ? '儲存中...' : '💾 儲存更新頻率' }}
-      </button>
-    </div>
-
-    <!-- 🎵 今日推薦英語歌曲設定 -->
-    <div class="settings-section" style="margin-top: 25px;">
-      <h4>🎵 今日推薦英語歌曲 (顯示於左側)</h4>
-      <p class="help-text">💡 設定每天要在首頁左下角播放的英語歌曲 YouTube 網址，上課時間會自動暫停並變黑畫面。</p>
-      
-      <div class="dynamic-sort-box" style="margin-bottom: 15px;">
-        <label class="icon-toggle mod-toggle" style="background: transparent; border: none; padding: 0;">
-          <input type="checkbox" v-model="englishSongSchedule.isVisible" class="large-checkbox" />
-          <span style="font-weight: bold; color: #ec4899; font-size: 1.15rem;">顯示「今日推薦英語歌曲」面板</span>
-        </label>
-      </div>
-
-      <div class="schedule-grid">
-        <div v-for="(day, index) in ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']" :key="index" class="form-group row-align">
-          <label class="day-label">{{ day }} 網址：</label>
-          <input type="text" v-model="englishSongSchedule[index]" class="edit-input flex-grow" placeholder="請貼上 YouTube 影片網址..." />
-        </div>
-      </div>
-
-      <button @click="saveEnglishSongSettings" class="save-btn song-btn" :disabled="isSavingSong" style="margin-top: 20px;">
-        {{ isSavingSong ? '儲存中...' : '💾 儲存英語歌曲設定' }}
       </button>
     </div>
 
@@ -212,12 +188,8 @@ const isSaving = ref(false)
 const clockConfig = ref({ theme: 'classic', color: '#1e293b', size: 35, dateSize: 18, showIcon: true })
 const isSavingClock = ref(false)
 
-// 💡 更新頻率資料結構 (預設: 週末 60, 上課 120, 下課 30)
 const refreshConfig = ref({ classTime: 120, breakTime: 30, weekend: 60 })
 const isSavingRefresh = ref(false)
-
-const englishSongSchedule = ref({ 0: '', 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', isVisible: true })
-const isSavingSong = ref(false)
 
 const defaultModules = [
   { id: 'wikiImage', name: '🌍 維基百科每日圖片', isVisible: true },
@@ -252,22 +224,15 @@ const fetchConfig = async () => {
     if (oldSize) clockConfig.value.size = Number(oldSize.setting_value) || 35
   }
 
-  // 💡 載入新的智慧變速更新設定
   const { data: refreshData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'index_auto_refresh_config').maybeSingle()
   if (refreshData && refreshData.setting_value) {
     refreshConfig.value = { ...refreshConfig.value, ...refreshData.setting_value }
   } else {
-    // 若無新設定，向下相容舊版的單一秒數設定
     const { data: oldRefresh } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'index_auto_refresh_seconds').maybeSingle()
     if (oldRefresh && oldRefresh.setting_value !== undefined) {
       const oldVal = Number(oldRefresh.setting_value) || 60
       refreshConfig.value = { classTime: oldVal, breakTime: oldVal, weekend: oldVal }
     }
-  }
-
-  const { data: songData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'english_song_schedule_data').maybeSingle()
-  if (songData && songData.setting_value) {
-    englishSongSchedule.value = { ...englishSongSchedule.value, ...songData.setting_value }
   }
 
   const { data: modData } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'index_modules_config').maybeSingle()
@@ -325,21 +290,12 @@ const saveClockSettings = async () => {
   isSavingClock.value = false
 }
 
-// 💡 儲存智慧變速更新設定
 const saveRefreshSettings = async () => {
   isSavingRefresh.value = true
   const { error } = await supabase.from('system_settings').upsert({ setting_key: 'index_auto_refresh_config', setting_value: refreshConfig.value }, { onConflict: 'setting_key' })
   if (!error) alert('✅ 自動更新頻率 (智慧變速) 設定成功！')
   else alert('❌ 儲存失敗')
   isSavingRefresh.value = false
-}
-
-const saveEnglishSongSettings = async () => {
-  isSavingSong.value = true
-  const { error } = await supabase.from('system_settings').upsert({ setting_key: 'english_song_schedule_data', setting_value: englishSongSchedule.value }, { onConflict: 'setting_key' })
-  if (!error) alert('✅ 英語歌曲設定成功！重整首頁後生效。')
-  else alert('❌ 儲存失敗')
-  isSavingSong.value = false
 }
 
 const saveIndexModules = async () => {
@@ -353,7 +309,7 @@ const saveIndexModules = async () => {
 </script>
 
 <style scoped>
-.table-header { border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; }
+.table-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; }
 .table-header h3 { margin: 0; color: #334155; }
 .settings-section { background: white; padding: 25px; border-radius: 8px; border: 1px solid #cbd5e1; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 .settings-section h4 { margin-top: 0; color: #1e293b; }
@@ -383,22 +339,18 @@ const saveIndexModules = async () => {
 .icon-toggle:hover { background: #f1f5f9; }
 .large-checkbox { transform: scale(1.3); accent-color: #10b981; cursor: pointer; }
 
-.save-btn { background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; font-size: 1.1rem; cursor: pointer; transition: 0.2s;}
+.save-btn { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; font-size: 1.1rem; cursor: pointer; transition: 0.2s;}
 .save-btn:hover:not(:disabled) { filter: brightness(0.9); }
 .save-btn:disabled { background: #94a3b8; cursor: not-allowed; }
 
 .clock-save-btn { background-color: #10b981; }
 
-/* 💡 更新頻率專用排版 */
 .refresh-grid { display: flex; flex-direction: column; gap: 15px; max-width: 400px; padding: 15px; background: #faf5ff; border-left: 4px solid #8b5cf6; border-radius: 4px; margin-bottom: 20px;}
 .refresh-btn { margin-top: 0; background-color: #8b5cf6; }
 .modules-btn { background-color: #f59e0b; }
-.song-btn { background-color: #ec4899; }
 
-.schedule-grid { display: flex; flex-direction: column; gap: 10px; max-width: 600px; }
 .row-align { flex-direction: row; align-items: center; }
-.day-label { width: 120px; text-align: right; }
-.flex-grow { flex-grow: 1; }
+.day-label-refresh { width: 120px; text-align: right; }
 
 optgroup { font-weight: bold; color: #1e3a8a; background: #f1f5f9; }
 option { font-weight: normal; color: #1e293b; background: white; }
