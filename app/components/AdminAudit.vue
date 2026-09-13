@@ -50,21 +50,21 @@
         <div v-else class="table-responsive">
           <table class="t">
             <tr class="h">
-              <th width="180">時間</th>
-              <th width="120">操作區塊</th>
+              <th width="160">時間</th>
+              <th width="110">操作區塊</th>
               <th width="100">身分</th>
-              <th width="120">動作</th>
+              <th width="110">動作</th>
               <th>詳細內容</th>
             </tr>
             <tr v-for="l in aLogs" :key="l.id" class="r">
-              <td>{{ new Date(l.created_at).toLocaleString('zh-TW', { hour12: false }) }}</td>
-              <td>
+              <td class="nowrap">{{ new Date(l.created_at).toLocaleString('zh-TW', { hour12: false }) }}</td>
+              <td class="nowrap">
                 <span :class="['tag', l.subject_name === '首頁黑板' ? 'tag-board' : 'tag-subject']">
                   {{ l.subject_name }}
                 </span>
               </td>
-              <td><strong>{{ l.operator_role }}</strong></td>
-              <td :class="getActionColor(l.action_type)">{{ l.action_type }}</td>
+              <td class="nowrap"><strong>{{ l.operator_role }}</strong></td>
+              <td class="nowrap" :class="getActionColor(l.action_type)">{{ l.action_type }}</td>
               <td class="details-cell">{{ l.details || '-' }}</td>
             </tr>
           </table>
@@ -81,22 +81,19 @@ const supabase = useSupabaseClient()
 const aLogs = ref([])
 const isLoading = ref(false)
 
-// 💡 視圖狀態管理 ('latest' 或 'date')
 const viewMode = ref('latest') 
 const selectedDate = ref('')
 
-// 💡 月曆相關狀態
 const d = new Date()
 const calYear = ref(d.getFullYear())
 const calMonth = ref(d.getMonth())
-const monthLogDates = ref([]) // 記錄當月有哪些日期有紀錄
+const monthLogDates = ref([]) 
 
 onMounted(() => {
   loadLatest()
   fetchMonthLogDates()
 })
 
-// 載入最新 50 筆
 const loadLatest = async () => {
   viewMode.value = 'latest'
   selectedDate.value = ''
@@ -109,13 +106,11 @@ const loadLatest = async () => {
   isLoading.value = false
 }
 
-// 取得當月「有紀錄」的日期清單，用於在月曆上打藍點
 const fetchMonthLogDates = async () => {
   const y = calYear.value; 
   const m = String(calMonth.value + 1).padStart(2, '0')
   const lastDay = new Date(y, calMonth.value + 1, 0).getDate()
   
-  // 加上 +08:00 確保轉換為台灣時間進行搜尋
   const startDate = `${y}-${m}-01T00:00:00+08:00` 
   const endDate = `${y}-${m}-${String(lastDay).padStart(2, '0')}T23:59:59.999+08:00`
   
@@ -126,17 +121,15 @@ const fetchMonthLogDates = async () => {
     
   if (data && data.length > 0) {
     const dates = data.map(log => {
-      const dt = new Date(log.created_at) // 自動轉換為當地(台灣)時區物件
+      const dt = new Date(log.created_at) 
       return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`
     })
-    // 透過 Set 過濾掉重複的日期
     monthLogDates.value = [...new Set(dates)] 
   } else {
     monthLogDates.value = []
   }
 }
 
-// 動態計算月曆的每一天與排版
 const calendarDays = computed(() => {
   const days = []
   const firstDayOfWeek = new Date(calYear.value, calMonth.value, 1).getDay()
@@ -160,14 +153,12 @@ const nextMonth = async () => {
   await fetchMonthLogDates()
 }
 
-// 點擊月曆特定日期
 const viewDateLogs = async (day) => {
   if (day.empty) return
   viewMode.value = 'date'
   selectedDate.value = day.dateStr
   isLoading.value = true
   
-  // 加上 +08:00 確保抓取整整一天的台灣時間範圍
   const startDate = `${day.dateStr}T00:00:00+08:00`
   const endDate = `${day.dateStr}T23:59:59.999+08:00`
   
@@ -181,7 +172,6 @@ const viewDateLogs = async (day) => {
   isLoading.value = false
 }
 
-// 依據不同動作自動上色
 const getActionColor = (action) => {
   if (!action) return ''
   if (action.includes('刪除') || action.includes('缺交')) return 'text-danger'
@@ -193,6 +183,7 @@ const getActionColor = (action) => {
 
 <style scoped>
 .table-header { border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; }
+.table-header h3 { margin: 0; color: #334155; font-size: 1.4rem; }
 .audit-container { display: flex; gap: 25px; align-items: flex-start; }
 
 /* 💡 月曆側邊欄樣式 */
@@ -223,15 +214,23 @@ const getActionColor = (action) => {
 
 .empty-state { text-align: center; padding: 50px; color: #94a3b8; font-size: 1.1rem; font-style: italic; background: #f8fafc; border-radius: 8px; border: 2px dashed #e2e8f0; }
 .loading-text { text-align: center; padding: 30px; font-weight: bold; color: #3b82f6; font-size: 1.1rem;}
-.table-responsive { overflow-x: auto; }
 
-.t { width: 100%; text-align: left; border-collapse: collapse; font-size: 0.95rem; min-width: 700px;}
+/* 💡 表格響應式設定 */
+.table-responsive { 
+  overflow-x: auto; 
+  -webkit-overflow-scrolling: touch; /* iOS 滑動順暢 */
+}
+
+.t { width: 100%; text-align: left; border-collapse: collapse; font-size: 0.95rem; min-width: 750px;}
 .h th { padding: 12px; background: #f1f5f9; color: #334155; font-weight: bold; border-bottom: 2px solid #cbd5e1; }
 .r td { padding: 12px; border-bottom: 1px dashed #e2e8f0; vertical-align: middle; line-height: 1.5; }
 .r:hover td { background: #f8fafc; }
 
-.details-cell { color: #475569; word-break: break-all; }
-.tag { padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; }
+/* 防止前方重要資料欄位在手機被折行 */
+.nowrap { white-space: nowrap; }
+
+.details-cell { color: #475569; word-break: break-all; min-width: 250px; }
+.tag { padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; display: inline-block;}
 .tag-board { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
 .tag-subject { background: #e0e7ff; color: #4338ca; border: 1px solid #c7d2fe; }
 
@@ -240,8 +239,22 @@ const getActionColor = (action) => {
 .text-warning { color: #d97706; font-weight: bold; }
 .text-primary { color: #2563eb; font-weight: bold; }
 
+/* =========================================
+   💡 手機版 (RWD) 視覺優化
+   ========================================= */
 @media (max-width: 900px) {
-  .audit-container { flex-direction: column; }
+  .audit-container { flex-direction: column; gap: 15px; }
   .calendar-sidebar { width: 100%; }
+}
+
+@media (max-width: 768px) {
+  .table-header h3 { font-size: 1.25rem; }
+  .mode-btn { font-size: 1rem; padding: 10px; }
+  .calendar-wrapper { padding: 15px 10px; }
+  .cal-cell { height: 45px; } /* 放大觸控熱區 */
+  .logs-content { padding: 15px; }
+  .logs-title { font-size: 1.1rem; line-height: 1.4; }
+  .t { min-width: 650px; font-size: 0.9rem; } /* 稍微縮小字體與最小寬度以減少滑動幅度 */
+  .h th, .r td { padding: 10px 8px; }
 }
 </style>
