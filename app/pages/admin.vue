@@ -16,6 +16,9 @@
           <button @click="currentTab = 'board'" :class="{ active: currentTab === 'board' }">📢 家長須知事項推播</button>          
           <button @click="currentTab = 'parentAnnouncements'" :class="{ active: currentTab === 'parentAnnouncements' }">📌 家長公佈欄</button>
           
+          <!-- 💡 加入好文分享管理按鈕，排在公佈欄旁邊最直覺 -->
+          <button @click="currentTab = 'goodArticles'" :class="{ active: currentTab === 'goodArticles' }">📖 好文分享管理</button>
+
           <button @click="currentTab = 'announcements'" :class="{ active: currentTab === 'announcements' }">📌 班級公佈欄</button>
           <button @click="currentTab = 'classNotes'" :class="{ active: currentTab === 'classNotes' }">⚡ 今日班級注意事項管理</button>
           <button @click="currentTab = 'contact'" :class="{ active: currentTab === 'contact' }">⭐ 今日聯絡簿管理</button>
@@ -33,7 +36,6 @@
           <button @click="currentTab = 'settings'" :class="{ active: currentTab === 'settings' }">⚙️ 系統密碼設定</button>
           <button @click="currentTab = 'marqueeSettings'" :class="{ active: currentTab === 'marqueeSettings' }">📢 首頁跑馬燈設定</button>
           
-          <!-- 💡 加入首頁 YouTube 輪播設定按鈕 -->
           <button @click="currentTab = 'youtubeSchedule'" :class="{ active: currentTab === 'youtubeSchedule' }">📺 首頁輪播影片設定</button>
           
           <button @click="currentTab = 'broadcast'" :class="{ active: currentTab === 'broadcast' }">📢 遠端廣播與定時</button>
@@ -59,6 +61,10 @@
         <AdminContact v-if="currentTab === 'contact'" />
         <AdminBoard v-if="currentTab === 'board'" />
         <AdminParentAnnouncements v-if="currentTab === 'parentAnnouncements'" />
+        
+        <!-- 💡 掛載好文分享元件 -->
+        <AdminGoodArticles v-if="currentTab === 'goodArticles'" />
+
         <AdminAnnouncements v-if="currentTab === 'announcements'" />
         <AdminMessages v-if="currentTab === 'messages'" />
         <AdminStudents v-if="currentTab === 'students'" />
@@ -67,14 +73,13 @@
         <AdminAudit v-if="currentTab === 'audit'" />
         <AdminCommunication v-if="currentTab === 'communication'" />
         <AdminOfficers v-if="currentTab === 'officers'" />
-       
+        
         <AdminClassroomTracker v-if="currentTab === 'classroomTracker'" />
         <AdminIdentityTracking v-if="currentTab === 'identityTracking'" />
         <AdminVisitorTracking v-if="currentTab === 'visitor'" />
         <AdminSettings v-if="currentTab === 'settings'" />
         <AdminMarqueeSettings v-if="currentTab === 'marqueeSettings'" />
         
-        <!-- 💡 掛載 YouTube 排程面板 -->
         <AdminYouTubeSchedule v-if="currentTab === 'youtubeSchedule'" />
         
         <AdminBroadcast v-if="currentTab === 'broadcast'" />
