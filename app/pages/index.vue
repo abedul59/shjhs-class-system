@@ -36,6 +36,12 @@
           :formatNL="formatNL"
         />
 
+        <!-- 💡 插入好文分享區塊：位於家長公佈欄正下方，僅褐色名單外顯示 -->
+        <HomeGoodArticle 
+          v-if="!isIpBrownlisted && activeGoodArticle" 
+          :article="activeGoodArticle" 
+        />
+
         <div class="main-split">
           <div class="left-panel">
             
@@ -151,7 +157,6 @@
       </div>
     </div> 
 
-    <!-- 彈窗群組 -->
     <PasswordModal :show="showPwdModal" :title="pwdModalTitle" :desc="pwdModalDesc" :target="pwdTarget" :officerPasswords="officerPasswords" @close="showPwdModal = false" @success="handlePwdSuccess" />
     <IdentityModal :show="showIdentityModal" :students="allStudentsForLogin" :schools="availableSchools" :expectedTeacherPwd="expectedTeacherPwd" :hasCurrentIdentity="currentIdentity !== '匿名來訪者'" :privacyFilter="privacyFilter" @close="showIdentityModal = false" @verified="handleIdentityVerified" />
     <LargeScheduleModal v-if="showLargeSchedule" :scheduleData="scheduleData" :scheduleButtonConfig="scheduleButtonConfig" :isIpBrownlisted="isIpBrownlisted" :privacyFilter="privacyFilter" @close="showLargeSchedule = false" />
@@ -175,10 +180,10 @@ import IdentityModal from '~~/components/home/IdentityModal.vue'
 import IndexModulesPanel from '~~/components/home/IndexModulesPanel.vue'
 import HomeWikiFeatured from '~~/components/home/HomeWikiFeatured.vue'
 import HomeEnglishSong from '~~/components/home/HomeEnglishSong.vue'
+import HomeGoodArticle from '~~/components/home/HomeGoodArticle.vue' // 💡 引入好文分享元件
 
 const supabase = useSupabaseClient()
 
-// === 系統時間與常數 ===
 const dDate = new Date()
 const todayISO = `${dDate.getFullYear()}-${String(dDate.getMonth() + 1).padStart(2, '0')}-${String(dDate.getDate()).padStart(2, '0')}`
 const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
@@ -194,7 +199,6 @@ const updateTime = () => {
   currentTime.value = new Date().toLocaleTimeString('zh-TW', { hour12: false })
 }
 
-// === UI 控制狀態 ===
 const showEmergencyModal = ref(false)
 const showSeatingChartLocal = ref(false)
 const showHygieneLocal = ref(false)
@@ -211,11 +215,9 @@ const unreadMsgCount = ref(0)
 const marqueeSettings = ref({})
 const clockConfig = ref({ theme: 'classic', color: '#1e293b', size: 35, showIcon: true })
 
-// 💡 智慧變速設定結構
 const autoRefreshConfig = ref({ classTime: 60, breakTime: 60, weekend: 60 }) 
 let dataRefreshTimer = null
 
-// === 核心資料狀態 ===
 const announcements = ref([])
 const parentAnnouncements = ref([])
 const parentNotices = ref([])
@@ -235,7 +237,12 @@ const seatingChart = ref({ isVisible: false, isRotated: false, seats: [], settin
 const defaultHygieneData = { isVisibleOnIndex: false, morning: {}, lunch: {}, squad: {} }
 const hygieneData = ref(JSON.parse(JSON.stringify(defaultHygieneData)))
 
-// === 英語歌曲狀態與推算今日網址 ===
+// 💡 抓取好文分享資料
+const goodArticles = ref([])
+const activeGoodArticle = computed(() => {
+  return goodArticles.value.find(a => a.is_published === true) || null
+})
+
 const englishSongSchedule = ref({ 0: '', 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', isVisible: true })
 const todayEnglishSongUrl = computed(() => {
   const currentDayIndex = new Date(nowTick.value).getDay() 
@@ -243,7 +250,6 @@ const todayEnglishSongUrl = computed(() => {
 })
 const isEnglishSongVisible = computed(() => englishSongSchedule.value.isVisible !== false)
 
-// === 右側面板模組設定 ===
 const indexModulesConfig = ref([
   { id: 'wikiImage', name: '🌍 維基百科每日圖片', isVisible: true },
   { id: 'wikiOtd', name: '🏛️ 歷史上的今天', isVisible: true },
@@ -262,7 +268,6 @@ const todayVideoUrl = computed(() => {
   return youtubeSchedule.value[currentDayIndex] || ''
 })
 
-// === 權限與身分狀態 ===
 const showIdentityModal = ref(false)
 const currentIdentity = ref('匿名來訪者')
 const expectedTeacherPwd = ref('168168168')
@@ -280,7 +285,6 @@ const defaultRoleSettings = {
 }
 const roleButtonSettings = ref(JSON.parse(JSON.stringify(defaultRoleSettings)))
 
-// === 點名與考試大腦 ===
 const { 
   allStudents, allStudentsForLogin, todayAttendances,
   expectedCount, presentCount, leaveCount, lateLeaveCount, earlyLeaveCount, lateCount, absentCount,
@@ -424,9 +428,16 @@ const privacyFilter = (txt) => {
   return result
 }
 
-const formatNL = (txt) => privacyFilter(txt).replace(/\n/g, '<br>')
+const formatNL = (txt) => {
+  return privacyFilter(txt).replace(/\n/g, '<br>')
+}
 
-const formatDateTime = (dtStr) => dtStr ? new Date(dtStr).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : ''
+const formatDateTime = (dtStr) => {
+  return dtStr ? new Date(dtStr).toLocaleString('zh-TW', { 
+    year: 'numeric', month: '2-digit', day: '2-digit', 
+    hour: '2-digit', minute: '2-digit', hour12: false 
+  }) : ''
+}
 
 const scheduleDisplay = computed(() => {
   if (!scheduleData.value || !scheduleData.value.periods) return null
@@ -534,7 +545,7 @@ const fetchData = async () => {
     'index_clock_size', 'index_clock_config', 'index_auto_refresh_seconds', 'role_button_settings',
     'force_logout_timestamp', 'marquee_settings', 'youtube_schedule_data',
     'index_modules_config', 'english_song_schedule_data',
-    'index_auto_refresh_config'
+    'index_auto_refresh_config', 'good_articles_data' 
   ]
 
   const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', keysToFetch)
@@ -546,81 +557,62 @@ const fetchData = async () => {
         if (v === null || v === undefined) return
         
         switch (s.setting_key) {
+          case 'good_articles_data': 
+            goodArticles.value = Array.isArray(v) ? v : []
+            break
           case 'board_officer_passwords': 
             officerPasswords.value = { ...officerPasswords.value, ...v }
             break
-            
           case 'contact_history_visible': 
             isHistoryVisibleOnIndex.value = v
             break
-            
           case 'index_button_settings': 
             globalButtonSettings.value = v
             break
-            
           case 'role_button_settings': 
             roleButtonSettings.value = { ...defaultRoleSettings, ...v }
             break
-            
           case 'index_clock_config': 
             clockConfig.value = { ...clockConfig.value, ...v }
             break
-            
           case 'index_clock_size': 
             if (!sysData.find(x => x.setting_key === 'index_clock_config')) { 
               clockConfig.value.size = Number(v) || 35 
             } 
             break
-            
           case 'announcements_data': 
-            if (Array.isArray(v)) {
-              announcements.value = v.sort((a, b) => new Date(b.date) - new Date(a.date))
-            }
+            if (Array.isArray(v)) announcements.value = v.sort((a, b) => new Date(b.date) - new Date(a.date))
             break
-            
           case 'parent_announcements_data': 
-            if (Array.isArray(v)) {
-              parentAnnouncements.value = v.sort((a, b) => new Date(b.date) - new Date(a.date))
-            }
+            if (Array.isArray(v)) parentAnnouncements.value = v.sort((a, b) => new Date(b.date) - new Date(a.date))
             break
-            
           case 'announcement_board_visible': 
             isAnnouncementVisibleOnIndex.value = v
             break
-            
           case 'parent_announcement_board_visible': 
             isParentAnnouncementVisibleOnIndex.value = v
             break
-            
           case 'parent_notices_board_visible': 
             isNoticeBoardVisibleOnIndex.value = v
             break
-            
           case 'class_schedule_data': 
             scheduleData.value = v
             break
-            
           case 'schedule_button_settings': 
             scheduleButtonConfig.value = { teacherOnlyInBrownlist: true, ...v }
             break
-            
           case 'exam_schedule_data': 
             examData.value = { ...examData.value, ...v }
             break
-          
           case 'index_auto_refresh_config':
-            if (typeof v === 'object') {
-              autoRefreshConfig.value = { ...autoRefreshConfig.value, ...v }
-            }
+            if (typeof v === 'object') autoRefreshConfig.value = { ...autoRefreshConfig.value, ...v }
             break
-            
           case 'index_auto_refresh_seconds':
             if (!sysData.find(x => x.setting_key === 'index_auto_refresh_config')) {
               const oldVal = Number(v) || 60
               autoRefreshConfig.value = { classTime: oldVal, breakTime: oldVal, weekend: oldVal }
             }
             break
-          
           case 'index_modules_config': 
             let loadedMods = []
             if (Array.isArray(v)) {
@@ -643,7 +635,6 @@ const fetchData = async () => {
             })
             indexModulesConfig.value = loadedMods
             break
-
           case 'youtube_schedule_data': 
             if (typeof v === 'object') {
               if (v.videos) {
@@ -655,56 +646,31 @@ const fetchData = async () => {
               }
             }
             break
-
           case 'english_song_schedule_data':
-            if (typeof v === 'object') {
-              englishSongSchedule.value = { ...englishSongSchedule.value, ...v }
-            }
+            if (typeof v === 'object') englishSongSchedule.value = { ...englishSongSchedule.value, ...v }
             break
-
           case 'parent_notices_data': 
             if (Array.isArray(v)) { 
-              parentNotices.value = v.filter(n => 
-                !n.isHidden && 
-                (!n.startDate || n.startDate <= todayISO) && 
-                (!n.endDate || n.endDate >= todayISO)
-              ) 
+              parentNotices.value = v.filter(n => !n.isHidden && (!n.startDate || n.startDate <= todayISO) && (!n.endDate || n.endDate >= todayISO)) 
             } 
             break
-            
           case 'class_notes_data': 
             if (typeof v === 'object') classNoteItems.value = v[todayISO] || []
             break
-            
           case 'seating_chart_data': 
             if (typeof v === 'object') { 
-              seatingChart.value = { 
-                isVisible: v.isVisible || false, 
-                isRotated: v.isRotated || false, 
-                seats: (Array.isArray(v.seats) ? v.seats : []).map(seat => seat.content !== undefined ? { 
-                  id: seat.id, 
-                  isHidden: seat.isHidden, 
-                  seatNum: String(seat.content).split('\n')[0] || '', 
-                  name: String(seat.content).split('\n')[1] || '', 
-                  other: String(seat.content).split('\n').slice(2).join(' ') || '' 
-                } : seat), 
-                settings: v.settings || {} 
-              } 
+              seatingChart.value = { isVisible: v.isVisible || false, isRotated: v.isRotated || false, seats: (Array.isArray(v.seats) ? v.seats : []).map(seat => seat.content !== undefined ? { id: seat.id, isHidden: seat.isHidden, seatNum: String(seat.content).split('\n')[0] || '', name: String(seat.content).split('\n')[1] || '', other: String(seat.content).split('\n').slice(2).join(' ') || '' } : seat), settings: v.settings || {} } 
             } 
             break
-            
           case 'hygiene_management_data': 
             if (typeof v === 'object') hygieneData.value = { ...hygieneData.value, ...v }
             break
-            
           case 'marquee_settings': 
             marqueeSettings.value = v
             break
-          
           case 'force_logout_timestamp': {
             const dbLogoutTime = Number(v) || 0
             const localLogoutTime = Number(localStorage.getItem('local_logout_timestamp')) || 0
-            
             if (dbLogoutTime > localLogoutTime) {
               localStorage.setItem('local_logout_timestamp', dbLogoutTime)
               if (isIpBrownlisted.value && currentIdentity.value !== '匿名來訪者') {
@@ -746,7 +712,6 @@ const fetchData = async () => {
   } catch (e) {}
 }
 
-// === 💡 智慧感知更新頻率：根據上下課狀態自動切換秒數 ===
 const currentRefreshInterval = computed(() => {
   if (!isWeekday) return autoRefreshConfig.value.weekend
   return isClassTime.value ? autoRefreshConfig.value.classTime : autoRefreshConfig.value.breakTime
@@ -760,16 +725,13 @@ const startAutoRefresh = () => {
   }
 }
 
-// 💡 監聽上下課切換！只要鐘聲一響，立刻強制更新一次！
 watch(isClassTime, (newVal, oldVal) => {
   if (newVal !== oldVal) {
-    console.log('🔔 鐘聲響起，狀態切換，立刻觸發資料更新！')
-    fetchData()         // 立刻抓取最新資料
-    startAutoRefresh()  // 重新啟動背景倒數計時器
+    fetchData()         
+    startAutoRefresh()  
   }
 })
 
-// 💡 監聽秒數設定變動 (例如老師剛在後台改了秒數)
 watch(currentRefreshInterval, (newVal, oldVal) => { 
   if (newVal !== oldVal) {
     startAutoRefresh() 
@@ -802,11 +764,17 @@ onUnmounted(() => {
   if (dataRefreshTimer) clearInterval(dataRefreshTimer) 
 })
 
-const addContactItem = () => { editingContactItems.value.push('') }
+const addContactItem = () => { 
+  editingContactItems.value.push('') 
+}
 
-const removeContactItem = (idx) => { editingContactItems.value.splice(idx, 1) }
+const removeContactItem = (idx) => { 
+  editingContactItems.value.splice(idx, 1) 
+}
 
-const updateEditingContactItem = (index, value) => { editingContactItems.value[index] = value }
+const updateEditingContactItem = (index, value) => { 
+  editingContactItems.value[index] = value 
+}
 
 const saveContactItems = async () => {
   try {
@@ -821,11 +789,17 @@ const saveContactItems = async () => {
   }
 }
 
-const addClassNoteItem = () => { editingClassNoteItems.value.push('') }
+const addClassNoteItem = () => { 
+  editingClassNoteItems.value.push('') 
+}
 
-const removeClassNoteItem = (idx) => { editingClassNoteItems.value.splice(idx, 1) }
+const removeClassNoteItem = (idx) => { 
+  editingClassNoteItems.value.splice(idx, 1) 
+}
 
-const updateEditingClassNoteItem = (index, value) => { editingClassNoteItems.value[index] = value }
+const updateEditingClassNoteItem = (index, value) => { 
+  editingClassNoteItems.value[index] = value 
+}
 
 const saveClassNoteItems = async () => {
   try {
