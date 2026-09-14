@@ -2,7 +2,6 @@
 import { ref, computed } from 'vue'
 
 export function useAttendance(todayISO) {
-  // Nuxt 3 支援在 composable 中直接呼叫 supabase
   const supabase = useSupabaseClient()
   
   const allStudents = ref([])
@@ -17,23 +16,26 @@ export function useAttendance(todayISO) {
   const lateCount = computed(() => todayAttendances.value.filter(a => a.status && a.status.startsWith('遲到')).length)
   const absentCount = computed(() => expectedCount.value - presentCount.value - leaveCount.value - lateLeaveCount.value - earlyLeaveCount.value - lateCount.value)
 
-  // 將落落長的點名切換與密碼防護邏輯封裝在此
-  const toggleAttendanceLogic = async (student, isWeekday, expectedTeacherPwd) => {
+  // 💡 核心修正 1：加入 skipPasswordCheck (跳過密碼檢查) 通行證
+  const toggleAttendanceLogic = async (student, isWeekday, expectedTeacherPwd, skipPasswordCheck = false) => {
     const now = new Date()
     const deadlineHour = 8
     const deadlineMinute = 0
     const isPastDeadline = now.getHours() > deadlineHour || (now.getHours() === deadlineHour && now.getMinutes() >= deadlineMinute)
 
-    if (!isWeekday) {
-      const pwd = prompt("🌴 週末預設不開放點名。\n若需強制修改，請輸入導師密碼：")
-      if (pwd !== expectedTeacherPwd && pwd !== '168168168' && pwd !== '1681681681') {
-        if (pwd !== null) alert("❌ 密碼錯誤，無法變更點名狀態！"); return
-      }
-    } else if (isPastDeadline) {
-      const timeStr = `${String(deadlineHour).padStart(2, '0')}:${String(deadlineMinute).padStart(2, '0')}`
-      const pwd = prompt(`⏰ 目前已超過點名規定時間 (${timeStr})。\n為確保出缺席紀錄正確，若需強制修改請輸入「導師密碼」：`)
-      if (pwd !== expectedTeacherPwd && pwd !== '168168168' && pwd !== '1681681681') {
-        if (pwd !== null) alert("❌ 密碼錯誤，無法變更點名狀態！"); return
+    // 只有在「沒有提供解鎖通行證」的情況下，才執行原生的密碼阻擋
+    if (!skipPasswordCheck) {
+      if (!isWeekday) {
+        const pwd = prompt("🌴 週末預設不開放點名。\n若需強制修改，請輸入導師密碼：")
+        if (pwd !== expectedTeacherPwd && pwd !== '168168168' && pwd !== '1681681681') {
+          if (pwd !== null) alert("❌ 密碼錯誤，無法變更點名狀態！"); return
+        }
+      } else if (isPastDeadline) {
+        const timeStr = `${String(deadlineHour).padStart(2, '0')}:${String(deadlineMinute).padStart(2, '0')}`
+        const pwd = prompt(`⏰ 目前已超過點名規定時間 (${timeStr})。\n為確保出缺席紀錄正確，若需強制修改請輸入「導師密碼」：`)
+        if (pwd !== expectedTeacherPwd && pwd !== '168168168' && pwd !== '1681681681') {
+          if (pwd !== null) alert("❌ 密碼錯誤，無法變更點名狀態！"); return
+        }
       }
     }
 
@@ -55,7 +57,16 @@ export function useAttendance(todayISO) {
       const time = prompt("請輸入【早退離開】時間 (例如 14:00) :", "14:00")
       if (time === null) return 
       nextStatus = `早退請假(${time})`
-    } else if (currentBaseStatus === '早退請假') nextStatus = '遲到'
+    } else if (currentBaseStatus === '早退請假') {
+      // 💡 核心修正 2：為遲到狀態加上時間輸入框，並預設帶入目前時間
+      const nowH = String(now.getHours()).padStart(2, '0')
+      const nowM = String(now.getMinutes()).padStart(2, '0')
+      const time = prompt("請輸入【遲到到校】時間 (例如 08:15) :", `${nowH}:${nowM}`)
+      if (time === null) return 
+      const cleanTime = time.trim()
+      // 存入資料庫時加上底線 (遲到_08:15)，以完美串接後台 AdminAttendance 的解析格式
+      nextStatus = cleanTime ? `遲到_${cleanTime}` : '遲到'
+    }
     else if (currentBaseStatus === '遲到') nextStatus = '未到'
 
     let record = todayAttendances.value.find(a => a.student_id === student.id)
