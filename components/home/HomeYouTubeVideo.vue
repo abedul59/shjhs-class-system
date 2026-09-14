@@ -2,26 +2,34 @@
   <div class="yt-board-card" v-if="videoId">
     <div class="card-header">
       <h3>📺 今日推薦影片</h3>
-      <span class="status-badge" :class="isClassTime ? 'status-paused' : 'status-playing'">
-        {{ isClassTime ? '⏸️ 上課暫停中' : '▶️ 下課播放中' }}
+      <span class="status-badge" :class="isClassTime && !isBypassed ? 'status-paused' : 'status-playing'">
+        {{ isClassTime && !isBypassed ? '⏸️ 上課暫停中' : '▶️ 下課播放中' }}
       </span>
     </div>
     
     <div class="card-content">
       <div class="video-layout-wrapper">
-        <!-- 💡 在這裡建立一個專屬黑框容器，把影片和遮罩全包進來 -->
         <div class="video-frame-box">
           <div class="video-responsive-container" ref="wrapperEl">
             <!-- 內部將由 JS 動態注入給 YouTube 替換用的 iframe -->
           </div>
           
-          <!-- 💡 無情黑畫面疊加層 (只有上課時顯示) -->
+          <!-- 💡 無情黑畫面疊加層：加入點擊觸發盲打輸入框的機制 -->
           <transition name="fade">
-            <div v-if="isClassTime" class="black-overlay">
+            <div v-if="isClassTime && !isBypassed" class="black-overlay" @click="focusStealthInput">
               <div class="overlay-text">
                 <div class="icon">🤫</div>
                 <h4>上課中，專心聽講</h4>
                 <p>影片已隱藏並暫停，下課鐘響將自動恢復播放</p>
+                
+                <!-- 💡 隱形盲打輸入框 (完全不顯示) -->
+                <input 
+                  type="password" 
+                  ref="stealthInput" 
+                  class="stealth-input" 
+                  v-model="bypassAttempt" 
+                  @keyup.enter="handleBypass"
+                />
               </div>
             </div>
           </transition>
@@ -50,6 +58,36 @@ const videoId = computed(() => {
 const wrapperEl = ref(null)
 let player = null
 
+// 💡 盲打解鎖專屬狀態
+const isBypassed = ref(false)
+const stealthInput = ref(null)
+const bypassAttempt = ref('')
+
+const focusStealthInput = () => {
+  if (stealthInput.value) {
+    stealthInput.value.focus()
+  }
+}
+
+const handleBypass = () => {
+  // 自動生成今日動態密碼
+  const d = new Date()
+  const yy = String(d.getFullYear()).slice(2)
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const expectedDynamic = `${yy}${mm}${dd}59`
+
+  if (bypassAttempt.value === expectedDynamic || bypassAttempt.value === '168168168') {
+    isBypassed.value = true // 解鎖成功
+    if (player && typeof player.playVideo === 'function') {
+      player.playVideo()
+    }
+  }
+  
+  // 不論成功或失敗，清空輸入紀錄，保持無痕
+  bypassAttempt.value = ''
+}
+
 const initPlayer = () => {
   if (typeof window === 'undefined' || !window.YT || !window.YT.Player || !wrapperEl.value || !videoId.value) return
 
@@ -67,7 +105,7 @@ const initPlayer = () => {
     videoId: videoId.value,
     host: 'https://www.youtube-nocookie.com',
     playerVars: {
-      autoplay: props.isClassTime ? 0 : 1,
+      autoplay: (props.isClassTime && !isBypassed.value) ? 0 : 1,
       controls: 1,
       rel: 0,
       loop: 1,
@@ -81,7 +119,7 @@ const initPlayer = () => {
         if (props.isMuted) event.target.mute()
         else event.target.unMute()
 
-        if (!props.isClassTime) {
+        if (!props.isClassTime || isBypassed.value) {
           event.target.playVideo()
         } else {
           event.target.pauseVideo()
@@ -136,9 +174,12 @@ watch(videoId, async (newVal) => {
   }
 }, { immediate: true })
 
+// 💡 監聽上課時間變化：若重新上課，取消解鎖狀態並強制暫停
 watch(() => props.isClassTime, (isClass) => {
   if (!player || typeof player.pauseVideo !== 'function') return
+  
   if (isClass) {
+    isBypassed.value = false // 鐘響重新鎖上
     player.pauseVideo()
   } else {
     player.playVideo()
@@ -211,7 +252,6 @@ onBeforeUnmount(() => {
   margin: 0 auto;
 }
 
-/* 💡 外層相框，負責包住原始影片與黑層 */
 .video-frame-box {
   position: relative;
   width: 100%;
@@ -236,14 +276,13 @@ onBeforeUnmount(() => {
   height: 100%;
 }
 
-/* 💡 黑畫面遮罩，使用絕對定位完全蓋住影片 */
 .black-overlay {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: #1e293b; /* 採用質感的深藍黑 */
+  background-color: #1e293b; 
   display: flex;
   justify-content: center;
   align-items: center;
@@ -272,7 +311,16 @@ onBeforeUnmount(() => {
   font-size: 1rem;
 }
 
-/* 黑畫面出現的漸變特效 */
+/* 💡 隱藏盲打輸入框的極致 CSS 技巧 */
+.stealth-input {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
 .fade-enter-active, .fade-leave-active {
   transition: opacity 0.5s ease;
 }
