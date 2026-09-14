@@ -22,7 +22,6 @@
 
       <div v-if="isContentVisible">
         
-        <!-- 💡 學生繳交確認清單 (僅褐色名單外，且身分為家長或學生時顯示) -->
         <HomeStudentAssignments 
           v-if="!isIpBrownlisted && (activeRoleCategory === 'parent' || activeRoleCategory === 'student')"
           :currentIdentity="currentIdentity"
@@ -46,7 +45,6 @@
           :formatNL="formatNL"
         />
 
-        <!-- 💡 好文分享區塊 -->
         <HomeGoodArticle 
           v-if="!isIpBrownlisted && activeGoodArticle" 
           :article="activeGoodArticle" 
@@ -332,11 +330,28 @@ const {
   toggleAttendanceLogic
 } = useAttendance(todayISO)
 
-const toggleAttendance = (student) => {
-  toggleAttendanceLogic(student, isWeekday, expectedTeacherPwd.value)
-}
-
 const { currentThemeStyles, examStatus, countdownMinutes, countdownText } = useExamMode(examData, nowTick)
+
+// 💡 新增：紀錄正在等待解鎖的學生物件
+const pendingAttendanceStudent = ref(null)
+
+// 💡 修正點名板觸發邏輯：串接 PasswordModal 取代原生 prompt
+const toggleAttendance = (student) => {
+  if (isWeekday) {
+    // 平日直接執行
+    toggleAttendanceLogic(student, isWeekday, expectedTeacherPwd.value)
+  } else {
+    // 週末需要攔截
+    if (sessionStorage.getItem('attendance_admin_logged_in') === 'true') {
+      // 已經在此次對話中解鎖過了，傳入 isWeekday = true 來繞過原生 prompt
+      toggleAttendanceLogic(student, true, expectedTeacherPwd.value)
+    } else {
+      // 尚未解鎖，呼叫自訂的密碼彈窗 (密碼輸入時會隱藏成黑點)
+      pendingAttendanceStudent.value = student
+      openPwdModal('attendance')
+    }
+  }
+}
 
 const activeRoleCategory = computed(() => {
   const id = currentIdentity.value;
@@ -393,13 +408,12 @@ const checkIdentity = () => {
   }
 }
 
-// 💡 修正 1：綁定身分後，立刻重抓一次資料！這樣才能顯示出專屬的作業清單
 const handleIdentityVerified = async (finalIdentity) => {
   localStorage.setItem('visitor_known_identity', finalIdentity)
   currentIdentity.value = finalIdentity
   showIdentityModal.value = false
   
-  await fetchData() // 重新觸發抓取資料
+  await fetchData() 
   
   await supabase.from('visitor_logs').insert([{ 
     ip_address: currentIpStr.value || '未知IP', 
@@ -544,11 +558,7 @@ const isClassTime = computed(() => {
   return scheduleDisplay.value?.current?.status === '上課中'
 })
 
-const showPwdModal = ref(false)
-const pwdTarget = ref('')
-const pwdModalTitle = ref('')
-const pwdModalDesc = ref('')
-
+// 💡 修正 3：加入 attendance 彈窗事件
 const openPwdModal = (target) => {
   pwdTarget.value = target
   if (target === 'emergency') { 
@@ -560,13 +570,18 @@ const openPwdModal = (target) => {
   } else if (target === 'classNotes') { 
     pwdModalTitle.value = '⚡ 編輯注意事項解鎖'
     pwdModalDesc.value = '請輸入「學藝股長」、「輔導股長」或「導師」密碼：' 
+  } else if (target === 'attendance') {
+    pwdModalTitle.value = '🌴 週末點名板解鎖'
+    pwdModalDesc.value = '今天是週末，請輸入「導師」密碼以解鎖點名權限：'
   }
   showPwdModal.value = true
 }
 
+// 💡 修正 4：處理 PasswordModal 回傳的結果
 const handlePwdSuccess = async ({ target, role }) => {
   showPwdModal.value = false
   currentEditorRole.value = role
+  
   if (target === 'emergency') {
     showEmergencyModal.value = true
   } else if (target === 'contact') { 
@@ -575,6 +590,19 @@ const handlePwdSuccess = async ({ target, role }) => {
   } else if (target === 'classNotes') { 
     isEditingClassNotes.value = true
     editingClassNoteItems.value = [...classNoteItems.value] 
+  } else if (target === 'attendance') {
+    // 嚴格確保只有導師才能解鎖點名板
+    if (role !== 'teacher' && role !== '導師') {
+      alert('❌ 權限不足：週末點名板僅限導師解鎖！')
+      return
+    }
+    // 記錄解鎖狀態
+    sessionStorage.setItem('attendance_admin_logged_in', 'true')
+    if (pendingAttendanceStudent.value) {
+      // 傳入 true 欺騙 composable 它是平日，以成功繞過原生 prompt 執行點名
+      toggleAttendanceLogic(pendingAttendanceStudent.value, true, expectedTeacherPwd.value)
+      pendingAttendanceStudent.value = null
+    }
   }
   await logRoleVisit(role)
 }
@@ -584,15 +612,33 @@ const fetchData = async () => {
   contactBookItems.value = boardData?.contact_items || []
 
   const keysToFetch = [
-    'board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 
-    'contact_history_visible', 'index_button_settings', 'announcements_data', 
-    'class_schedule_data', 'exam_schedule_data', 'parent_notices_data', 
-    'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible',
-    'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings',
-    'index_clock_size', 'index_clock_config', 'index_auto_refresh_seconds', 'role_button_settings',
-    'force_logout_timestamp', 'marquee_settings', 'youtube_schedule_data',
-    'index_modules_config', 'english_song_schedule_data',
-    'index_auto_refresh_config', 'good_articles_data', 'excluded_assignment_ids_from_report'
+    'board_officer_passwords', 
+    'seating_chart_data', 
+    'hygiene_management_data', 
+    'contact_history_visible', 
+    'index_button_settings', 
+    'announcements_data', 
+    'class_schedule_data', 
+    'exam_schedule_data', 
+    'parent_notices_data', 
+    'class_notes_data', 
+    'announcement_board_visible', 
+    'parent_notices_board_visible',
+    'parent_announcements_data', 
+    'parent_announcement_board_visible', 
+    'schedule_button_settings',
+    'index_clock_size', 
+    'index_clock_config', 
+    'index_auto_refresh_seconds', 
+    'role_button_settings',
+    'force_logout_timestamp', 
+    'marquee_settings', 
+    'youtube_schedule_data',
+    'index_modules_config', 
+    'english_song_schedule_data',
+    'index_auto_refresh_config', 
+    'good_articles_data', 
+    'excluded_assignment_ids_from_report' 
   ]
 
   const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', keysToFetch)
@@ -631,10 +677,14 @@ const fetchData = async () => {
             } 
             break
           case 'announcements_data': 
-            if (Array.isArray(v)) announcements.value = v.sort((a, b) => new Date(b.date) - new Date(a.date))
+            if (Array.isArray(v)) {
+              announcements.value = v.sort((a, b) => new Date(b.date) - new Date(a.date))
+            }
             break
           case 'parent_announcements_data': 
-            if (Array.isArray(v)) parentAnnouncements.value = v.sort((a, b) => new Date(b.date) - new Date(a.date))
+            if (Array.isArray(v)) {
+              parentAnnouncements.value = v.sort((a, b) => new Date(b.date) - new Date(a.date))
+            }
             break
           case 'announcement_board_visible': 
             isAnnouncementVisibleOnIndex.value = v
@@ -655,7 +705,9 @@ const fetchData = async () => {
             examData.value = { ...examData.value, ...v }
             break
           case 'index_auto_refresh_config':
-            if (typeof v === 'object') autoRefreshConfig.value = { ...autoRefreshConfig.value, ...v }
+            if (typeof v === 'object') {
+              autoRefreshConfig.value = { ...autoRefreshConfig.value, ...v }
+            }
             break
           case 'index_auto_refresh_seconds':
             if (!sysData.find(x => x.setting_key === 'index_auto_refresh_config')) {
@@ -697,7 +749,9 @@ const fetchData = async () => {
             }
             break
           case 'english_song_schedule_data':
-            if (typeof v === 'object') englishSongSchedule.value = { ...englishSongSchedule.value, ...v }
+            if (typeof v === 'object') {
+              englishSongSchedule.value = { ...englishSongSchedule.value, ...v }
+            }
             break
           case 'parent_notices_data': 
             if (Array.isArray(v)) { 
@@ -705,15 +759,30 @@ const fetchData = async () => {
             } 
             break
           case 'class_notes_data': 
-            if (typeof v === 'object') classNoteItems.value = v[todayISO] || []
+            if (typeof v === 'object') {
+              classNoteItems.value = v[todayISO] || []
+            }
             break
           case 'seating_chart_data': 
             if (typeof v === 'object') { 
-              seatingChart.value = { isVisible: v.isVisible || false, isRotated: v.isRotated || false, seats: (Array.isArray(v.seats) ? v.seats : []).map(seat => seat.content !== undefined ? { id: seat.id, isHidden: seat.isHidden, seatNum: String(seat.content).split('\n')[0] || '', name: String(seat.content).split('\n')[1] || '', other: String(seat.content).split('\n').slice(2).join(' ') || '' } : seat), settings: v.settings || {} } 
+              seatingChart.value = { 
+                isVisible: v.isVisible || false, 
+                isRotated: v.isRotated || false, 
+                seats: (Array.isArray(v.seats) ? v.seats : []).map(seat => seat.content !== undefined ? { 
+                  id: seat.id, 
+                  isHidden: seat.isHidden, 
+                  seatNum: String(seat.content).split('\n')[0] || '', 
+                  name: String(seat.content).split('\n')[1] || '', 
+                  other: String(seat.content).split('\n').slice(2).join(' ') || '' 
+                } : seat), 
+                settings: v.settings || {} 
+              } 
             } 
             break
           case 'hygiene_management_data': 
-            if (typeof v === 'object') hygieneData.value = { ...hygieneData.value, ...v }
+            if (typeof v === 'object') {
+              hygieneData.value = { ...hygieneData.value, ...v }
+            }
             break
           case 'marquee_settings': 
             marqueeSettings.value = v
@@ -750,7 +819,9 @@ const fetchData = async () => {
   }
   
   const { data: attData } = await supabase.from('attendances').select('*').eq('record_date', todayISO)
-  if (attData) todayAttendances.value = attData
+  if (attData) {
+    todayAttendances.value = attData
+  }
 
   try {
     const { data: msgData } = await supabase.from('private_messages').select('*').neq('sender_role', '導師')
@@ -761,13 +832,16 @@ const fetchData = async () => {
     }
   } catch (e) {}
 
-  // 💡 同步抓取最新作業資料庫 (依靠 activeRoleCategory 來判斷)
   if (!isIpBrownlisted.value && (activeRoleCategory.value === 'parent' || activeRoleCategory.value === 'student')) {
     const { data: assignData } = await supabase.from('assignments').select('*').order('deadline', { ascending: true })
-    if (assignData) assignmentsData.value = assignData
+    if (assignData) {
+      assignmentsData.value = assignData
+    }
 
     const { data: subData } = await supabase.from('assignment_submissions').select('*')
-    if (subData) assignmentSubmissionsData.value = subData
+    if (subData) {
+      assignmentSubmissionsData.value = subData
+    }
   }
 }
 
@@ -810,10 +884,7 @@ onMounted(() => {
   timer = setInterval(updateTime, 1000)
   checkIpRules().then(() => { 
     loadTeacherPwd()
-    
-    // 💡 修正 2：先讀取本地端身分，再抓取資料！
     checkIdentity() 
-    
     fetchData().then(() => { 
       logVisit()
       startAutoRefresh() 
@@ -826,9 +897,18 @@ onUnmounted(() => {
   if (dataRefreshTimer) clearInterval(dataRefreshTimer) 
 })
 
-const addContactItem = () => { editingContactItems.value.push('') }
-const removeContactItem = (idx) => { editingContactItems.value.splice(idx, 1) }
-const updateEditingContactItem = (index, value) => { editingContactItems.value[index] = value }
+const addContactItem = () => { 
+  editingContactItems.value.push('') 
+}
+
+const removeContactItem = (idx) => { 
+  editingContactItems.value.splice(idx, 1) 
+}
+
+const updateEditingContactItem = (index, value) => { 
+  editingContactItems.value[index] = value 
+}
+
 const saveContactItems = async () => {
   try {
     await supabase.from('contact_books').upsert({ record_date: todayISO, contact_items: editingContactItems.value }, { onConflict: 'record_date' })
@@ -837,12 +917,23 @@ const saveContactItems = async () => {
     alert("✅ 聯絡簿已成功更新發布！")
     contactBookItems.value = [...editingContactItems.value]
     isEditingContact.value = false
-  } catch (error) { alert("❌ 儲存失敗") }
+  } catch (error) { 
+    alert("❌ 儲存失敗") 
+  }
 }
 
-const addClassNoteItem = () => { editingClassNoteItems.value.push('') }
-const removeClassNoteItem = (idx) => { editingClassNoteItems.value.splice(idx, 1) }
-const updateEditingClassNoteItem = (index, value) => { editingClassNoteItems.value[index] = value }
+const addClassNoteItem = () => { 
+  editingClassNoteItems.value.push('') 
+}
+
+const removeClassNoteItem = (idx) => { 
+  editingClassNoteItems.value.splice(idx, 1) 
+}
+
+const updateEditingClassNoteItem = (index, value) => { 
+  editingClassNoteItems.value[index] = value 
+}
+
 const saveClassNoteItems = async () => {
   try {
     const { data: currentSettings } = await supabase.from('system_settings').select('setting_value').eq('setting_key', 'class_notes_data').maybeSingle()
@@ -854,7 +945,9 @@ const saveClassNoteItems = async () => {
     alert("✅ 注意事項已成功更新發布！")
     classNoteItems.value = [...editingClassNoteItems.value]
     isEditingClassNotes.value = false
-  } catch (error) { alert("❌ 儲存失敗") }
+  } catch (error) { 
+    alert("❌ 儲存失敗") 
+  }
 }
 </script>
 
