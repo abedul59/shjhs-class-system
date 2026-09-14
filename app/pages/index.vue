@@ -22,6 +22,16 @@
 
       <div v-if="isContentVisible">
         
+        <!-- 💡 學生繳交確認清單 (僅褐色名單外，且身分為家長或學生時顯示) -->
+        <HomeStudentAssignments 
+          v-if="!isIpBrownlisted && (activeRoleCategory === 'parent' || activeRoleCategory === 'student')"
+          :currentIdentity="currentIdentity"
+          :allStudents="allStudentsForLogin"
+          :assignments="assignmentsData"
+          :submissions="assignmentSubmissionsData"
+          :excludedIds="excludedAssignmentIds"
+        />
+
         <NoticeBoards 
           :isClassTime="isClassTime"
           :isIpBrownlisted="isIpBrownlisted"
@@ -36,7 +46,7 @@
           :formatNL="formatNL"
         />
 
-        <!-- 💡 插入好文分享區塊：位於家長公佈欄正下方，僅褐色名單外顯示 -->
+        <!-- 💡 好文分享區塊 -->
         <HomeGoodArticle 
           v-if="!isIpBrownlisted && activeGoodArticle" 
           :article="activeGoodArticle" 
@@ -157,10 +167,37 @@
       </div>
     </div> 
 
-    <PasswordModal :show="showPwdModal" :title="pwdModalTitle" :desc="pwdModalDesc" :target="pwdTarget" :officerPasswords="officerPasswords" @close="showPwdModal = false" @success="handlePwdSuccess" />
-    <IdentityModal :show="showIdentityModal" :students="allStudentsForLogin" :schools="availableSchools" :expectedTeacherPwd="expectedTeacherPwd" :hasCurrentIdentity="currentIdentity !== '匿名來訪者'" :privacyFilter="privacyFilter" @close="showIdentityModal = false" @verified="handleIdentityVerified" />
-    <LargeScheduleModal v-if="showLargeSchedule" :scheduleData="scheduleData" :scheduleButtonConfig="scheduleButtonConfig" :isIpBrownlisted="isIpBrownlisted" :privacyFilter="privacyFilter" @close="showLargeSchedule = false" />
-    <EmergencyModal v-if="showEmergencyModal" @close="showEmergencyModal = false" />
+    <PasswordModal 
+      :show="showPwdModal" 
+      :title="pwdModalTitle" 
+      :desc="pwdModalDesc" 
+      :target="pwdTarget" 
+      :officerPasswords="officerPasswords" 
+      @close="showPwdModal = false" 
+      @success="handlePwdSuccess" 
+    />
+    <IdentityModal 
+      :show="showIdentityModal" 
+      :students="allStudentsForLogin" 
+      :schools="availableSchools" 
+      :expectedTeacherPwd="expectedTeacherPwd" 
+      :hasCurrentIdentity="currentIdentity !== '匿名來訪者'" 
+      :privacyFilter="privacyFilter" 
+      @close="showIdentityModal = false" 
+      @verified="handleIdentityVerified" 
+    />
+    <LargeScheduleModal 
+      v-if="showLargeSchedule" 
+      :scheduleData="scheduleData" 
+      :scheduleButtonConfig="scheduleButtonConfig" 
+      :isIpBrownlisted="isIpBrownlisted" 
+      :privacyFilter="privacyFilter" 
+      @close="showLargeSchedule = false" 
+    />
+    <EmergencyModal 
+      v-if="showEmergencyModal" 
+      @close="showEmergencyModal = false" 
+    />
   </div>
 </template>
 
@@ -180,7 +217,8 @@ import IdentityModal from '~~/components/home/IdentityModal.vue'
 import IndexModulesPanel from '~~/components/home/IndexModulesPanel.vue'
 import HomeWikiFeatured from '~~/components/home/HomeWikiFeatured.vue'
 import HomeEnglishSong from '~~/components/home/HomeEnglishSong.vue'
-import HomeGoodArticle from '~~/components/home/HomeGoodArticle.vue' // 💡 引入好文分享元件
+import HomeGoodArticle from '~~/components/home/HomeGoodArticle.vue'
+import HomeStudentAssignments from '~~/components/home/HomeStudentAssignments.vue' 
 
 const supabase = useSupabaseClient()
 
@@ -243,6 +281,11 @@ const activeGoodArticle = computed(() => {
   return goodArticles.value.find(a => a.is_published === true) || null
 })
 
+// 💡 作業與繳交狀態的響應式變數
+const assignmentsData = ref([])
+const assignmentSubmissionsData = ref([])
+const excludedAssignmentIds = ref([])
+
 const englishSongSchedule = ref({ 0: '', 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', isVisible: true })
 const todayEnglishSongUrl = computed(() => {
   const currentDayIndex = new Date(nowTick.value).getDay() 
@@ -291,7 +334,9 @@ const {
   toggleAttendanceLogic
 } = useAttendance(todayISO)
 
-const toggleAttendance = (student) => toggleAttendanceLogic(student, isWeekday, expectedTeacherPwd.value)
+const toggleAttendance = (student) => {
+  toggleAttendanceLogic(student, isWeekday, expectedTeacherPwd.value)
+}
 
 const { currentThemeStyles, examStatus, countdownMinutes, countdownText } = useExamMode(examData, nowTick)
 
@@ -537,15 +582,33 @@ const fetchData = async () => {
   contactBookItems.value = boardData?.contact_items || []
 
   const keysToFetch = [
-    'board_officer_passwords', 'seating_chart_data', 'hygiene_management_data', 
-    'contact_history_visible', 'index_button_settings', 'announcements_data', 
-    'class_schedule_data', 'exam_schedule_data', 'parent_notices_data', 
-    'class_notes_data', 'announcement_board_visible', 'parent_notices_board_visible',
-    'parent_announcements_data', 'parent_announcement_board_visible', 'schedule_button_settings',
-    'index_clock_size', 'index_clock_config', 'index_auto_refresh_seconds', 'role_button_settings',
-    'force_logout_timestamp', 'marquee_settings', 'youtube_schedule_data',
-    'index_modules_config', 'english_song_schedule_data',
-    'index_auto_refresh_config', 'good_articles_data' 
+    'board_officer_passwords', 
+    'seating_chart_data', 
+    'hygiene_management_data', 
+    'contact_history_visible', 
+    'index_button_settings', 
+    'announcements_data', 
+    'class_schedule_data', 
+    'exam_schedule_data', 
+    'parent_notices_data', 
+    'class_notes_data', 
+    'announcement_board_visible', 
+    'parent_notices_board_visible',
+    'parent_announcements_data', 
+    'parent_announcement_board_visible', 
+    'schedule_button_settings',
+    'index_clock_size', 
+    'index_clock_config', 
+    'index_auto_refresh_seconds', 
+    'role_button_settings',
+    'force_logout_timestamp', 
+    'marquee_settings', 
+    'youtube_schedule_data',
+    'index_modules_config', 
+    'english_song_schedule_data',
+    'index_auto_refresh_config', 
+    'good_articles_data', 
+    'excluded_assignment_ids_from_report' 
   ]
 
   const { data: sysData } = await supabase.from('system_settings').select('*').in('setting_key', keysToFetch)
@@ -557,6 +620,9 @@ const fetchData = async () => {
         if (v === null || v === undefined) return
         
         switch (s.setting_key) {
+          case 'excluded_assignment_ids_from_report':
+            excludedAssignmentIds.value = v || []
+            break
           case 'good_articles_data': 
             goodArticles.value = Array.isArray(v) ? v : []
             break
@@ -581,10 +647,14 @@ const fetchData = async () => {
             } 
             break
           case 'announcements_data': 
-            if (Array.isArray(v)) announcements.value = v.sort((a, b) => new Date(b.date) - new Date(a.date))
+            if (Array.isArray(v)) {
+              announcements.value = v.sort((a, b) => new Date(b.date) - new Date(a.date))
+            }
             break
           case 'parent_announcements_data': 
-            if (Array.isArray(v)) parentAnnouncements.value = v.sort((a, b) => new Date(b.date) - new Date(a.date))
+            if (Array.isArray(v)) {
+              parentAnnouncements.value = v.sort((a, b) => new Date(b.date) - new Date(a.date))
+            }
             break
           case 'announcement_board_visible': 
             isAnnouncementVisibleOnIndex.value = v
@@ -605,7 +675,9 @@ const fetchData = async () => {
             examData.value = { ...examData.value, ...v }
             break
           case 'index_auto_refresh_config':
-            if (typeof v === 'object') autoRefreshConfig.value = { ...autoRefreshConfig.value, ...v }
+            if (typeof v === 'object') {
+              autoRefreshConfig.value = { ...autoRefreshConfig.value, ...v }
+            }
             break
           case 'index_auto_refresh_seconds':
             if (!sysData.find(x => x.setting_key === 'index_auto_refresh_config')) {
@@ -647,7 +719,9 @@ const fetchData = async () => {
             }
             break
           case 'english_song_schedule_data':
-            if (typeof v === 'object') englishSongSchedule.value = { ...englishSongSchedule.value, ...v }
+            if (typeof v === 'object') {
+              englishSongSchedule.value = { ...englishSongSchedule.value, ...v }
+            }
             break
           case 'parent_notices_data': 
             if (Array.isArray(v)) { 
@@ -655,15 +729,30 @@ const fetchData = async () => {
             } 
             break
           case 'class_notes_data': 
-            if (typeof v === 'object') classNoteItems.value = v[todayISO] || []
+            if (typeof v === 'object') {
+              classNoteItems.value = v[todayISO] || []
+            }
             break
           case 'seating_chart_data': 
             if (typeof v === 'object') { 
-              seatingChart.value = { isVisible: v.isVisible || false, isRotated: v.isRotated || false, seats: (Array.isArray(v.seats) ? v.seats : []).map(seat => seat.content !== undefined ? { id: seat.id, isHidden: seat.isHidden, seatNum: String(seat.content).split('\n')[0] || '', name: String(seat.content).split('\n')[1] || '', other: String(seat.content).split('\n').slice(2).join(' ') || '' } : seat), settings: v.settings || {} } 
+              seatingChart.value = { 
+                isVisible: v.isVisible || false, 
+                isRotated: v.isRotated || false, 
+                seats: (Array.isArray(v.seats) ? v.seats : []).map(seat => seat.content !== undefined ? { 
+                  id: seat.id, 
+                  isHidden: seat.isHidden, 
+                  seatNum: String(seat.content).split('\n')[0] || '', 
+                  name: String(seat.content).split('\n')[1] || '', 
+                  other: String(seat.content).split('\n').slice(2).join(' ') || '' 
+                } : seat), 
+                settings: v.settings || {} 
+              } 
             } 
             break
           case 'hygiene_management_data': 
-            if (typeof v === 'object') hygieneData.value = { ...hygieneData.value, ...v }
+            if (typeof v === 'object') {
+              hygieneData.value = { ...hygieneData.value, ...v }
+            }
             break
           case 'marquee_settings': 
             marqueeSettings.value = v
@@ -700,7 +789,9 @@ const fetchData = async () => {
   }
   
   const { data: attData } = await supabase.from('attendances').select('*').eq('record_date', todayISO)
-  if (attData) todayAttendances.value = attData
+  if (attData) {
+    todayAttendances.value = attData
+  }
 
   try {
     const { data: msgData } = await supabase.from('private_messages').select('*').neq('sender_role', '導師')
@@ -710,6 +801,19 @@ const fetchData = async () => {
       unreadMsgCount.value = isIpBrownlisted.value ? (uParents + uStudents) : uParents
     }
   } catch (e) {}
+
+  // 💡 同步抓取最新作業資料庫
+  if (!isIpBrownlisted.value && (activeRoleCategory.value === 'parent' || activeRoleCategory.value === 'student')) {
+    const { data: assignData } = await supabase.from('assignments').select('*').order('deadline', { ascending: true })
+    if (assignData) {
+      assignmentsData.value = assignData
+    }
+
+    const { data: subData } = await supabase.from('assignment_submissions').select('*')
+    if (subData) {
+      assignmentSubmissionsData.value = subData
+    }
+  }
 }
 
 const currentRefreshInterval = computed(() => {
@@ -929,7 +1033,7 @@ const saveClassNoteItems = async () => {
   align-items: center; 
   gap: 15px; 
   border: 1px solid #bae6fd; 
-  margin-bottom: -5px;
+  margin-bottom: 15px;
 }
 
 .change-id-btn { 
@@ -956,10 +1060,25 @@ const saveClassNoteItems = async () => {
   .page-container { padding: 10px; } 
 }
 
-:deep(.text-sm) { font-size: 0.9rem !important; line-height: 1.5; }
-:deep(.text-xs) { font-size: 0.75rem !important; color: #64748b; font-weight: normal; line-height: 1.4; }
-:deep(.mt-10) { margin-top: 10px; }
-:deep(.mt-15) { margin-top: 15px; }
+:deep(.text-sm) { 
+  font-size: 0.9rem !important; 
+  line-height: 1.5; 
+}
+
+:deep(.text-xs) { 
+  font-size: 0.75rem !important; 
+  color: #64748b; 
+  font-weight: normal; 
+  line-height: 1.4; 
+}
+
+:deep(.mt-10) { 
+  margin-top: 10px; 
+}
+
+:deep(.mt-15) { 
+  margin-top: 15px; 
+}
 
 :deep(.custom-table) { 
   width: 100%; 
@@ -969,25 +1088,76 @@ const saveClassNoteItems = async () => {
   font-size: 0.95rem; 
 }
 
-:deep(.custom-table th), :deep(.custom-table td) { 
+:deep(.custom-table th), 
+:deep(.custom-table td) { 
   border: 1px solid #000; 
   padding: 8px; 
   vertical-align: middle; 
 }
 
-:deep(.custom-table th) { background-color: #f1f5f9; font-weight: bold; }
-:deep(.header-row th) { background-color: #e2e8f0; }
-:deep(.morning-table td:nth-child(1)), :deep(.morning-table td:nth-child(2)) { font-weight: bold; }
-:deep(.lunch-table th) { background: transparent; font-weight: bold; }
-:deep(.lunch-table td) { background: transparent; }
-:deep(.seat-num), :deep(.seat-number) { font-size: 1.2rem; font-weight: bold; }
-:deep(.morning-table tbody tr td:nth-child(2)) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
-:deep(.morning-table tbody tr td[rowspan] + td) { font-size: inherit !important; font-weight: normal !important; }
-:deep(.morning-table tbody tr td[rowspan] + td + td) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
-:deep(.lunch-table tbody tr:nth-child(even) td) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
-:deep(.squad-table tbody tr td:nth-child(2)) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
-:deep(.squad-table tbody tr td[rowspan] + td) { font-size: inherit !important; font-weight: normal !important; }
-:deep(.squad-table tbody tr td[rowspan] + td + td) { font-size: var(--name-size, 25px) !important; font-weight: bold !important; }
+:deep(.custom-table th) { 
+  background-color: #f1f5f9; 
+  font-weight: bold; 
+}
+
+:deep(.header-row th) { 
+  background-color: #e2e8f0; 
+}
+
+:deep(.morning-table td:nth-child(1)), 
+:deep(.morning-table td:nth-child(2)) { 
+  font-weight: bold; 
+}
+
+:deep(.lunch-table th) { 
+  background: transparent; 
+  font-weight: bold; 
+}
+
+:deep(.lunch-table td) { 
+  background: transparent; 
+}
+
+:deep(.seat-num), 
+:deep(.seat-number) { 
+  font-size: 1.2rem; 
+  font-weight: bold; 
+}
+
+:deep(.morning-table tbody tr td:nth-child(2)) { 
+  font-size: var(--name-size, 25px) !important; 
+  font-weight: bold !important; 
+}
+
+:deep(.morning-table tbody tr td[rowspan] + td) { 
+  font-size: inherit !important; 
+  font-weight: normal !important; 
+}
+
+:deep(.morning-table tbody tr td[rowspan] + td + td) { 
+  font-size: var(--name-size, 25px) !important; 
+  font-weight: bold !important; 
+}
+
+:deep(.lunch-table tbody tr:nth-child(even) td) { 
+  font-size: var(--name-size, 25px) !important; 
+  font-weight: bold !important; 
+}
+
+:deep(.squad-table tbody tr td:nth-child(2)) { 
+  font-size: var(--name-size, 25px) !important; 
+  font-weight: bold !important; 
+}
+
+:deep(.squad-table tbody tr td[rowspan] + td) { 
+  font-size: inherit !important; 
+  font-weight: normal !important; 
+}
+
+:deep(.squad-table tbody tr td[rowspan] + td + td) { 
+  font-size: var(--name-size, 25px) !important; 
+  font-weight: bold !important; 
+}
 
 @media (max-width: 850px) {
   :deep(.custom-table) { 
@@ -997,7 +1167,12 @@ const saveClassNoteItems = async () => {
     min-width: 100%; 
     border: none; 
   }
-  :deep(.custom-table th), :deep(.custom-table td) { white-space: nowrap; }
+  
+  :deep(.custom-table th), 
+  :deep(.custom-table td) { 
+    white-space: nowrap; 
+  }
+  
   :deep(.morning-table tbody tr td:nth-child(2)), 
   :deep(.morning-table tbody tr td[rowspan] + td + td), 
   :deep(.lunch-table tbody tr:nth-child(even) td), 
