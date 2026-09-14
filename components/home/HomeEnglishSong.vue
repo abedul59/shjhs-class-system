@@ -2,8 +2,8 @@
   <div class="yt-board-card" v-if="videoId">
     <div class="card-header">
       <h3>🎵 今日推薦英語歌曲</h3>
-      <span class="status-badge" :class="isClassTime ? 'status-paused' : 'status-playing'">
-        {{ isClassTime ? '⏸️ 上課暫停中' : '▶️ 下課播放中' }}
+      <span class="status-badge" :class="isClassTime && !isBypassed ? 'status-paused' : 'status-playing'">
+        {{ isClassTime && !isBypassed ? '⏸️ 上課暫停中' : '▶️ 下課播放中' }}
       </span>
     </div>
     
@@ -12,7 +12,7 @@
         <div class="video-frame-box">
           
           <div class="video-responsive-container">
-            <!-- 💡 終極解法：改用原生 iframe，完全避開 API 衝突 -->
+            <!-- 💡 原生 iframe -->
             <iframe
               ref="ytIframe"
               :src="iframeSrc"
@@ -22,13 +22,22 @@
             ></iframe>
           </div>
           
-          <!-- 無情黑畫面疊加層 (只有上課時顯示) -->
+          <!-- 💡 無情黑畫面疊加層：加入點擊觸發盲打輸入框的機制 -->
           <transition name="fade">
-            <div v-if="isClassTime" class="black-overlay">
+            <div v-if="isClassTime && !isBypassed" class="black-overlay" @click="focusStealthInput">
               <div class="overlay-text">
                 <div class="icon">🤫</div>
                 <h4>上課中，專心聽講</h4>
                 <p>歌曲已暫停，下課鐘響將自動恢復</p>
+
+                <!-- 💡 隱形盲打輸入框 (完全不顯示) -->
+                <input 
+                  type="password" 
+                  ref="stealthInput" 
+                  class="stealth-input" 
+                  v-model="bypassAttempt" 
+                  @keyup.enter="handleBypass"
+                />
               </div>
             </div>
           </transition>
@@ -50,6 +59,36 @@ const props = defineProps({
 
 const ytIframe = ref(null)
 
+// 💡 盲打解鎖專屬狀態
+const isBypassed = ref(false)
+const stealthInput = ref(null)
+const bypassAttempt = ref('')
+
+// 點擊黑畫面時，焦點自動對準隱形輸入框
+const focusStealthInput = () => {
+  if (stealthInput.value) {
+    stealthInput.value.focus()
+  }
+}
+
+// 驗證密碼邏輯
+const handleBypass = () => {
+  // 自動生成今日動態密碼
+  const d = new Date()
+  const yy = String(d.getFullYear()).slice(2)
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const expectedDynamic = `${yy}${mm}${dd}59`
+
+  if (bypassAttempt.value === expectedDynamic || bypassAttempt.value === '168168168') {
+    isBypassed.value = true // 解鎖成功
+    sendCommand('playVideo') // 呼叫底層播放
+  }
+  
+  // 不論成功或失敗，清空輸入紀錄，保持無痕
+  bypassAttempt.value = ''
+}
+
 // 💡 解析網址，抓出 11 碼的影片 ID
 const videoId = computed(() => {
   if (!props.videoUrl) return null
@@ -58,7 +97,8 @@ const videoId = computed(() => {
   return (match && match[2].length === 11) ? match[2] : null
 })
 
-// 💡 動態產生 YouTube 網址，加上 enablejsapi=1 允許我們從外部控制暫停/播放
+// 💡 動態產生 YouTube 網址
+// 注意：這裡不加入 isBypassed 的依賴，確保解鎖時不會導致整個 iframe 重新載入
 const iframeSrc = computed(() => {
   if (!videoId.value) return ''
   const autoplay = props.isClassTime ? 0 : 1
@@ -77,16 +117,17 @@ const sendCommand = (func) => {
   }
 }
 
-// 監聽上下課狀態
+// 監聽上下課狀態：若重新上課，取消解鎖狀態並強制暫停
 watch(() => props.isClassTime, (isClass) => {
   if (isClass) {
+    isBypassed.value = false // 鐘響重新鎖上
     sendCommand('pauseVideo')
   } else {
     sendCommand('playVideo')
   }
 })
 
-// 監聽靜音狀態 (若未來需要擴充)
+// 監聽靜音狀態 
 watch(() => props.isMuted, (muted) => {
   if (muted) {
     sendCommand('mute')
@@ -206,6 +247,16 @@ watch(() => props.isMuted, (muted) => {
 .overlay-text p {
   margin: 0;
   font-size: 0.95rem;
+}
+
+/* 💡 隱藏盲打輸入框的極致 CSS 技巧 */
+.stealth-input {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
 }
 
 .fade-enter-active, .fade-leave-active {
