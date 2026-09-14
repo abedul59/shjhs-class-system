@@ -332,40 +332,42 @@ const {
 
 const { currentThemeStyles, examStatus, countdownMinutes, countdownText } = useExamMode(examData, nowTick)
 
-// 💡 新增：紀錄正在等待解鎖的學生物件
 const pendingAttendanceStudent = ref(null)
 
-// 💡 核心修正：執行點名並「強制繞過(Bypass)」底層的 prompt 彈窗
+// 💡 核心修正 1：智慧攔截 prompt！
 const executeAttendanceWithBypass = async (student) => {
   const originalPrompt = window.prompt
-  // 覆寫瀏覽器內建的 prompt，讓它自動回傳正確密碼，直接騙過 useAttendance.js 的安全檢查
-  window.prompt = () => expectedTeacherPwd.value
+  
+  // 攔截 prompt：如果訊息裡有「密碼」，才回傳正確密碼；否則跳出正常的輸入框讓老師輸入時間
+  window.prompt = (message, defaultValue) => {
+    if (message && message.includes('密碼')) {
+      return expectedTeacherPwd.value
+    } else {
+      // 這是問遲到/早退時間的視窗，放行讓老師輸入
+      return originalPrompt(message, defaultValue)
+    }
+  }
+  
   try {
-    // 傳入 true 欺騙 composable 它是平日，以成功繞過所有阻擋機制
+    // 傳入 true 欺騙 composable 它是平日，以繞過密碼阻擋
     await toggleAttendanceLogic(student, true, expectedTeacherPwd.value)
   } finally {
-    // 執行完畢後立刻將 prompt 恢復原狀，避免影響其他系統功能
+    // 恢復瀏覽器預設行為
     window.prompt = originalPrompt
   }
 }
 
-// 💡 修正點名板觸發邏輯：由 index.vue 搶先攔截週末與 08:00
+// 💡 核心修正 2：每次點擊都強制彈出密碼輸入框
 const toggleAttendance = (student) => {
   const now = new Date()
-  const isLate = now.getHours() >= 8 // 判斷是否超過早上 8 點
+  const isLate = now.getHours() >= 8
 
-  // 如果是週末，或者是平日但超過 8:00
+  // 只要是週末，或者是超過 8:00，每次點擊「必定」跳出密碼輸入視窗
   if (!isWeekday || isLate) {
-    if (sessionStorage.getItem('attendance_admin_logged_in') === 'true') {
-      // 已經解鎖過，直接執行並繞過原生 prompt
-      executeAttendanceWithBypass(student)
-    } else {
-      // 尚未解鎖，呼叫自訂的密碼彈窗 (密碼輸入時會隱藏成黑點)
-      pendingAttendanceStudent.value = student
-      openPwdModal('attendance')
-    }
+    pendingAttendanceStudent.value = student
+    openPwdModal('attendance')
   } else {
-    // 平日且未超過 8:00，正常執行
+    // 平日且未超過 8:00，正常直接切換
     toggleAttendanceLogic(student, isWeekday, expectedTeacherPwd.value)
   }
 }
@@ -592,14 +594,14 @@ const openPwdModal = (target) => {
     pwdModalTitle.value = '⚡ 編輯注意事項解鎖'
     pwdModalDesc.value = '請輸入「學藝股長」、「輔導股長」或「導師」密碼：' 
   } else if (target === 'attendance') {
-    // 💡 修正 4：根據是週末還是遲到，給予不同的彈窗標題與說明
     const isLate = new Date().getHours() >= 8
     pwdModalTitle.value = '⏰ 點名權限解鎖'
-    pwdModalDesc.value = !isWeekday ? '今天是週末，請輸入「導師」密碼以解鎖：' : '已超過規定時間 (08:00)，請輸入「導師」密碼解鎖：'
+    pwdModalDesc.value = !isWeekday ? '今天是週末，請輸入「導師」密碼以變更點名狀態：' : '已超過規定時間 (08:00)，請輸入「導師」密碼解鎖變更：'
   }
   showPwdModal.value = true
 }
 
+// 💡 核心修正 3：移除 sessionStorage，執行完成後就關閉權限，確保「只能改一次」
 const handlePwdSuccess = async ({ target, role }) => {
   showPwdModal.value = false
   currentEditorRole.value = role
@@ -612,14 +614,13 @@ const handlePwdSuccess = async ({ target, role }) => {
     isEditingClassNotes.value = true
     editingClassNoteItems.value = [...classNoteItems.value] 
   } else if (target === 'attendance') {
-    // 💡 修正 5：處理點名解鎖成功後的行為
     if (role !== 'teacher' && role !== '導師') {
-      alert('❌ 權限不足：點名板僅限導師解鎖！')
+      alert('❌ 權限不足：點名板狀態變更僅限導師解鎖！')
       return
     }
-    sessionStorage.setItem('attendance_admin_logged_in', 'true')
+    // 不存入 sessionStorage！
     if (pendingAttendanceStudent.value) {
-      executeAttendanceWithBypass(pendingAttendanceStudent.value)
+      await executeAttendanceWithBypass(pendingAttendanceStudent.value)
       pendingAttendanceStudent.value = null
     }
   }
