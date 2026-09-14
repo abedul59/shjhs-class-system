@@ -44,31 +44,34 @@ const props = defineProps({
   excludedIds: Array
 })
 
-// 💡 1. 根據登入字串找出對應的學生 (例如從 "王小明的家長" 找出 "王小明")
+// 💡 1. 根據登入字串找出對應的學生
 const matchedStudent = computed(() => {
   if (!props.currentIdentity || props.currentIdentity === '匿名來訪者') return null
-  // 將學生名單由長到短排序，避免名字有包含關係的誤判
   const sortedStudents = [...(props.allStudents || [])].sort((a, b) => (b.real_name || '').length - (a.real_name || '').length)
   return sortedStudents.find(s => s.real_name && props.currentIdentity.includes(s.real_name))
 })
 
-// 💡 2. 過濾掉導師設定「不列入報表」的作業
+// 💡 2. 修正關鍵：過濾掉導師設定「不列入報表」的作業
 const activeAssignments = computed(() => {
-  return (props.assignments || []).filter(a => !(props.excludedIds || []).includes(a.id))
+  // 強制將排除名單的 ID 全數轉換為字串 (String)
+  const excluded = (props.excludedIds || []).map(id => String(id))
+  
+  // 比對時，也將作業本身的 ID 轉換為字串，避免型別不一致導致漏網之魚
+  return (props.assignments || []).filter(a => !excluded.includes(String(a.id)))
 })
 
 // 💡 3. 計算該學生的缺交與已交狀態
 const studentStats = computed(() => {
   if (!matchedStudent.value) return null
   
-  // 取出該學生的所有已繳交的作業 ID
+  // 取出該學生的所有已繳交的作業 ID (一樣強制轉字串確保安全)
   const mySubIds = (props.submissions || [])
-    .filter(sub => sub.student_id === matchedStudent.value.id)
-    .map(sub => sub.assignment_id)
+    .filter(sub => String(sub.student_id) === String(matchedStudent.value.id))
+    .map(sub => String(sub.assignment_id))
 
   return {
-    submitted: activeAssignments.value.filter(a => mySubIds.includes(a.id)),
-    missing: activeAssignments.value.filter(a => !mySubIds.includes(a.id))
+    submitted: activeAssignments.value.filter(a => mySubIds.includes(String(a.id))),
+    missing: activeAssignments.value.filter(a => !mySubIds.includes(String(a.id)))
   }
 })
 </script>
