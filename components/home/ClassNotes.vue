@@ -62,12 +62,20 @@ const props = defineProps({
 
 const emit = defineEmits(['open-pwd', 'cancel-edit', 'save-items', 'add-item', 'remove-item', 'update-item'])
 
-// 💡 預設收合狀態
 const isExpanded = ref(false)
 
 const toggleExpand = () => {
   isExpanded.value = !isExpanded.value
 }
+
+// 💡 智慧連動機制：有資料自動展開，沒資料自動縮起
+watch(() => props.classNoteItems, (newVal) => {
+  if (newVal && newVal.length > 0) {
+    isExpanded.value = true
+  } else {
+    isExpanded.value = false
+  }
+}, { immediate: true, deep: true }) // immediate: true 確保元件剛載入時也會立刻判斷一次
 
 // 💡 進入編輯模式時，自動強制展開
 watch(() => props.isEditingClassNotes, (newVal) => {
