@@ -335,21 +335,38 @@ const { currentThemeStyles, examStatus, countdownMinutes, countdownText } = useE
 // 💡 新增：紀錄正在等待解鎖的學生物件
 const pendingAttendanceStudent = ref(null)
 
-// 💡 修正點名板觸發邏輯：串接 PasswordModal 取代原生 prompt
+// 💡 核心修正：執行點名並「強制繞過(Bypass)」底層的 prompt 彈窗
+const executeAttendanceWithBypass = async (student) => {
+  const originalPrompt = window.prompt
+  // 覆寫瀏覽器內建的 prompt，讓它自動回傳正確密碼，直接騙過 useAttendance.js 的安全檢查
+  window.prompt = () => expectedTeacherPwd.value
+  try {
+    // 傳入 true 欺騙 composable 它是平日，以成功繞過所有阻擋機制
+    await toggleAttendanceLogic(student, true, expectedTeacherPwd.value)
+  } finally {
+    // 執行完畢後立刻將 prompt 恢復原狀，避免影響其他系統功能
+    window.prompt = originalPrompt
+  }
+}
+
+// 💡 修正點名板觸發邏輯：由 index.vue 搶先攔截週末與 08:00
 const toggleAttendance = (student) => {
-  if (isWeekday) {
-    // 平日直接執行
-    toggleAttendanceLogic(student, isWeekday, expectedTeacherPwd.value)
-  } else {
-    // 週末需要攔截
+  const now = new Date()
+  const isLate = now.getHours() >= 8 // 判斷是否超過早上 8 點
+
+  // 如果是週末，或者是平日但超過 8:00
+  if (!isWeekday || isLate) {
     if (sessionStorage.getItem('attendance_admin_logged_in') === 'true') {
-      // 已經在此次對話中解鎖過了，傳入 isWeekday = true 來繞過原生 prompt
-      toggleAttendanceLogic(student, true, expectedTeacherPwd.value)
+      // 已經解鎖過，直接執行並繞過原生 prompt
+      executeAttendanceWithBypass(student)
     } else {
       // 尚未解鎖，呼叫自訂的密碼彈窗 (密碼輸入時會隱藏成黑點)
       pendingAttendanceStudent.value = student
       openPwdModal('attendance')
     }
+  } else {
+    // 平日且未超過 8:00，正常執行
+    toggleAttendanceLogic(student, isWeekday, expectedTeacherPwd.value)
   }
 }
 
@@ -558,7 +575,11 @@ const isClassTime = computed(() => {
   return scheduleDisplay.value?.current?.status === '上課中'
 })
 
-// 💡 修正 3：加入 attendance 彈窗事件
+const showPwdModal = ref(false)
+const pwdTarget = ref('')
+const pwdModalTitle = ref('')
+const pwdModalDesc = ref('')
+
 const openPwdModal = (target) => {
   pwdTarget.value = target
   if (target === 'emergency') { 
@@ -571,17 +592,17 @@ const openPwdModal = (target) => {
     pwdModalTitle.value = '⚡ 編輯注意事項解鎖'
     pwdModalDesc.value = '請輸入「學藝股長」、「輔導股長」或「導師」密碼：' 
   } else if (target === 'attendance') {
-    pwdModalTitle.value = '🌴 週末點名板解鎖'
-    pwdModalDesc.value = '今天是週末，請輸入「導師」密碼以解鎖點名權限：'
+    // 💡 修正 4：根據是週末還是遲到，給予不同的彈窗標題與說明
+    const isLate = new Date().getHours() >= 8
+    pwdModalTitle.value = '⏰ 點名權限解鎖'
+    pwdModalDesc.value = !isWeekday ? '今天是週末，請輸入「導師」密碼以解鎖：' : '已超過規定時間 (08:00)，請輸入「導師」密碼解鎖：'
   }
   showPwdModal.value = true
 }
 
-// 💡 修正 4：處理 PasswordModal 回傳的結果
 const handlePwdSuccess = async ({ target, role }) => {
   showPwdModal.value = false
   currentEditorRole.value = role
-  
   if (target === 'emergency') {
     showEmergencyModal.value = true
   } else if (target === 'contact') { 
@@ -591,16 +612,14 @@ const handlePwdSuccess = async ({ target, role }) => {
     isEditingClassNotes.value = true
     editingClassNoteItems.value = [...classNoteItems.value] 
   } else if (target === 'attendance') {
-    // 嚴格確保只有導師才能解鎖點名板
+    // 💡 修正 5：處理點名解鎖成功後的行為
     if (role !== 'teacher' && role !== '導師') {
-      alert('❌ 權限不足：週末點名板僅限導師解鎖！')
+      alert('❌ 權限不足：點名板僅限導師解鎖！')
       return
     }
-    // 記錄解鎖狀態
     sessionStorage.setItem('attendance_admin_logged_in', 'true')
     if (pendingAttendanceStudent.value) {
-      // 傳入 true 欺騙 composable 它是平日，以成功繞過原生 prompt 執行點名
-      toggleAttendanceLogic(pendingAttendanceStudent.value, true, expectedTeacherPwd.value)
+      executeAttendanceWithBypass(pendingAttendanceStudent.value)
       pendingAttendanceStudent.value = null
     }
   }
