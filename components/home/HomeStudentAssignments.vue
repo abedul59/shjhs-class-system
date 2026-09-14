@@ -1,7 +1,7 @@
 <template>
   <div v-if="matchedStudent && studentStats" class="student-assign-card">
     <div class="card-header">
-      <h3>📝 {{ matchedStudent.real_name }} 的作業繳交確認清單</h3>
+      <h3>📝 {{ matchedStudent.real_name }} 的作業/物品繳交確認清單</h3>
       <span v-if="studentStats.missing.length === 0" class="badge success">💯 作業全齊，太棒了！</span>
       <span v-else class="badge warning">⚠️ 目前缺交 {{ studentStats.missing.length }} 項作業</span>
     </div>
