@@ -332,42 +332,20 @@ const {
 
 const { currentThemeStyles, examStatus, countdownMinutes, countdownText } = useExamMode(examData, nowTick)
 
+// 💡 紀錄正在等待解鎖的學生物件
 const pendingAttendanceStudent = ref(null)
 
-// 💡 核心修正 1：智慧攔截 prompt！
-const executeAttendanceWithBypass = async (student) => {
-  const originalPrompt = window.prompt
-  
-  // 攔截 prompt：如果訊息裡有「密碼」，才回傳正確密碼；否則跳出正常的輸入框讓老師輸入時間
-  window.prompt = (message, defaultValue) => {
-    if (message && message.includes('密碼')) {
-      return expectedTeacherPwd.value
-    } else {
-      // 這是問遲到/早退時間的視窗，放行讓老師輸入
-      return originalPrompt(message, defaultValue)
-    }
-  }
-  
-  try {
-    // 傳入 true 欺騙 composable 它是平日，以繞過密碼阻擋
-    await toggleAttendanceLogic(student, true, expectedTeacherPwd.value)
-  } finally {
-    // 恢復瀏覽器預設行為
-    window.prompt = originalPrompt
-  }
-}
-
-// 💡 核心修正 2：每次點擊都強制彈出密碼輸入框
+// 💡 核心修正 2：每次點擊都強制要求輸入密碼
 const toggleAttendance = (student) => {
   const now = new Date()
   const isLate = now.getHours() >= 8
 
-  // 只要是週末，或者是超過 8:00，每次點擊「必定」跳出密碼輸入視窗
+  // 只要是週末或超過 08:00，強制跳出密碼框 (不再檢查 sessionStorage 快取)
   if (!isWeekday || isLate) {
     pendingAttendanceStudent.value = student
     openPwdModal('attendance')
   } else {
-    // 平日且未超過 8:00，正常直接切換
+    // 平日且未超時，正常執行
     toggleAttendanceLogic(student, isWeekday, expectedTeacherPwd.value)
   }
 }
@@ -601,10 +579,11 @@ const openPwdModal = (target) => {
   showPwdModal.value = true
 }
 
-// 💡 核心修正 3：移除 sessionStorage，執行完成後就關閉權限，確保「只能改一次」
+// 💡 核心修正 3：成功輸入密碼後，直接呼叫底層 API 並附帶 skipPasswordCheck = true
 const handlePwdSuccess = async ({ target, role }) => {
   showPwdModal.value = false
   currentEditorRole.value = role
+  
   if (target === 'emergency') {
     showEmergencyModal.value = true
   } else if (target === 'contact') { 
@@ -618,9 +597,11 @@ const handlePwdSuccess = async ({ target, role }) => {
       alert('❌ 權限不足：點名板狀態變更僅限導師解鎖！')
       return
     }
-    // 不存入 sessionStorage！
+    
+    // 💡 我們不再儲存 sessionStorage，確保單次解鎖
     if (pendingAttendanceStudent.value) {
-      await executeAttendanceWithBypass(pendingAttendanceStudent.value)
+      // 呼叫 toggleAttendanceLogic，並傳遞第四個參數 (true) 來略過密碼檢查
+      await toggleAttendanceLogic(pendingAttendanceStudent.value, true, expectedTeacherPwd.value, true)
       pendingAttendanceStudent.value = null
     }
   }
