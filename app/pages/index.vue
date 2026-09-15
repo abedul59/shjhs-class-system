@@ -103,7 +103,8 @@
               :isClassTime="isClassTime"
             />
             
-            <HomeWikiFeatured />
+            <!-- 💡 根據資料庫設定決定是否顯示典範條目 -->
+            <HomeWikiFeatured v-if="isWikiFeaturedVisible" />
             
           </div>
 
@@ -299,6 +300,12 @@ const indexModulesConfig = ref([
 ])
 const indexDynamicSorting = ref(false)
 
+// 💡 動態判斷維基百科典範條目是否顯示
+const isWikiFeaturedVisible = computed(() => {
+  const mod = indexModulesConfig.value.find(m => m.id === 'wikiFeatured')
+  return mod ? mod.isVisible : true 
+})
+
 const youtubeSchedule = ref({})
 const youtubeIsMuted = ref(true)
 
@@ -332,20 +339,16 @@ const {
 
 const { currentThemeStyles, examStatus, countdownMinutes, countdownText } = useExamMode(examData, nowTick)
 
-// 💡 紀錄正在等待解鎖的學生物件
 const pendingAttendanceStudent = ref(null)
 
-// 💡 核心修正 2：每次點擊都強制要求輸入密碼
 const toggleAttendance = (student) => {
   const now = new Date()
   const isLate = now.getHours() >= 8
 
-  // 只要是週末或超過 08:00，強制跳出密碼框 (不再檢查 sessionStorage 快取)
   if (!isWeekday || isLate) {
     pendingAttendanceStudent.value = student
     openPwdModal('attendance')
   } else {
-    // 平日且未超時，正常執行
     toggleAttendanceLogic(student, isWeekday, expectedTeacherPwd.value)
   }
 }
@@ -579,7 +582,6 @@ const openPwdModal = (target) => {
   showPwdModal.value = true
 }
 
-// 💡 核心修正 3：成功輸入密碼後，直接呼叫底層 API 並附帶 skipPasswordCheck = true
 const handlePwdSuccess = async ({ target, role }) => {
   showPwdModal.value = false
   currentEditorRole.value = role
@@ -598,9 +600,7 @@ const handlePwdSuccess = async ({ target, role }) => {
       return
     }
     
-    // 💡 我們不再儲存 sessionStorage，確保單次解鎖
     if (pendingAttendanceStudent.value) {
-      // 呼叫 toggleAttendanceLogic，並傳遞第四個參數 (true) 來略過密碼檢查
       await toggleAttendanceLogic(pendingAttendanceStudent.value, true, expectedTeacherPwd.value, true)
       pendingAttendanceStudent.value = null
     }
