@@ -140,7 +140,7 @@
     <!-- 🧩 首頁擴充模組顯示與排序 (右側) -->
     <div class="settings-section" style="margin-top: 25px;">
       <h4>🧩 首頁擴充模組顯示與排序 (右側)</h4>
-      <p class="help-text">💡 自由控制首頁右側面板的「擴充模組」是否顯示，並可使用箭頭調整它們的預設上下順序。</p>
+      <p class="help-text">💡 自由控制首頁面板的「擴充模組」是否顯示，並可使用箭頭調整右側面板模組的上下順序。</p>
       
       <div class="dynamic-sort-box">
         <label class="icon-toggle mod-toggle" style="background: transparent; border: none; padding: 0;">
@@ -163,9 +163,13 @@
             </span>
           </div>
 
-          <div class="module-actions">
+          <div class="module-actions" v-if="mod.id !== 'wikiFeatured'">
             <button @click="moveModuleUp(index)" :disabled="index === 0" class="move-btn" title="上移">⬆️</button>
             <button @click="moveModuleDown(index)" :disabled="index === indexModules.length - 1" class="move-btn" title="下移">⬇️</button>
+          </div>
+          <!-- 提示 wikiFeatured 是在左側固定位置 -->
+          <div v-else style="font-size: 0.85rem; color: #64748b; font-style: italic;">
+            固定於左側面板
           </div>
         </div>
       </div>
@@ -191,7 +195,9 @@ const isSavingClock = ref(false)
 const refreshConfig = ref({ classTime: 120, breakTime: 30, weekend: 60 })
 const isSavingRefresh = ref(false)
 
+// 💡 核心修正：將 wikiFeatured (典範條目) 加入模組清單
 const defaultModules = [
+  { id: 'wikiFeatured', name: '📖 維基百科 典範條目', isVisible: true },
   { id: 'wikiImage', name: '🌍 維基百科每日圖片', isVisible: true },
   { id: 'wikiOtd', name: '🏛️ 歷史上的今天', isVisible: true },
   { id: 'youtube', name: '📺 YouTube 推薦影片', isVisible: true },
@@ -245,6 +251,7 @@ const fetchConfig = async () => {
       if (modData.setting_value.dynamicSorting !== undefined) dynamicSorting.value = modData.setting_value.dynamicSorting
     }
     
+    // 確保所有 defaultModules 都有在清單內
     const existingIds = loadedMods.map(m => m.id)
     defaultModules.forEach(defMod => {
       if (!existingIds.includes(defMod.id)) {
