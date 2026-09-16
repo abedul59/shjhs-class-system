@@ -442,41 +442,43 @@ const getSubmissionTimeText = (studentId) => {
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-// 💡 核心修正：導入樂觀更新 (Optimistic UI Update) 保證時間瞬間寫入且不消失！
+// 💡 核心修正：強制合併本機生成的 created_at 確保時間絕對不會被覆蓋消失
 const toggleSubmission = async (studentId, seatNumber, realName) => {
   if (!currentAssignment.value) return
   
   const submitted = isSubmitted(studentId)
   
   if (submitted) {
-    // 樂觀更新：立刻從畫面上移除，達到零延遲體驗
     allSubmissions.value = allSubmissions.value.filter(sub => !(sub.assignment_id === currentAssignment.value.id && sub.student_id === studentId))
     
-    // 背景非同步寫入資料庫
     await supabase.from('assignment_submissions').delete()
       .eq('assignment_id', currentAssignment.value.id)
       .eq('student_id', studentId)
     logAction('變更繳交狀態', `將 ${seatNumber}號 ${realName} 的【${currentAssignment.value.title}】狀態改為：❌ 缺交`)
   } else {
-    // 樂觀更新：立刻寫入當下本機時間，時間戳記瞬間出現絕對不消失！
+    // 自己生出當下的絕對時間 ISO 字串
+    const nowIso = new Date().toISOString()
+    
+    // 樂觀更新：立刻把我們自己的絕對時間寫進去，顯示在畫面上
     const tempSub = {
       assignment_id: currentAssignment.value.id,
       student_id: studentId,
-      created_at: new Date().toISOString()
+      created_at: nowIso 
     }
     allSubmissions.value.push(tempSub)
 
-    // 背景非同步寫入資料庫
+    // 送出給資料庫，並且強制使用我們給的時間
     const { data } = await supabase.from('assignment_submissions').insert({ 
       assignment_id: currentAssignment.value.id, 
-      student_id: studentId 
+      student_id: studentId,
+      created_at: nowIso 
     }).select().single()
     
-    // 若資料庫成功回傳，悄悄替換掉剛剛的暫存資料以獲取正式的 ID
+    // 將資料庫回傳的真實資料，與我們保留的絕對時間強制合併
     if (data) {
       const idx = allSubmissions.value.findIndex(s => s.assignment_id === currentAssignment.value.id && s.student_id === studentId)
       if (idx !== -1) {
-        allSubmissions.value[idx] = data
+        allSubmissions.value[idx] = { ...tempSub, ...data, created_at: data.created_at || nowIso }
       }
     }
     
@@ -641,6 +643,7 @@ h3 { color: #334155; margin-top: 0; margin-bottom: 15px; border-bottom: 2px soli
 .is-missing { background: #fee2e2; border-color: #ef4444; color: #991b1b; }
 .sub-time { font-size: 0.75rem; margin-top: 4px; font-weight: normal; opacity: 0.85; font-family: monospace; }
 
+/* 導師後台管理區塊 CSS */
 .mt-20 { margin-top: 20px; }
 .table-header { border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; } 
 .table-header h3 { margin: 0; color: #334155; }
