@@ -258,10 +258,8 @@ const excludedAssignmentIds = ref([])
 const hwEmailSubjectTemplate = ref('📚 班級作業繳交通知 - {{學生姓名}}')
 const hwEmailContentTemplate = ref(`親愛的家長您好：\n\n為您彙整 【{{學生姓名}}】 目前的各科作業繳交狀況：\n\n✅ 已交作業：\n{{已交清單}}\n\n❌ 缺交作業：\n{{缺交清單}}\n\n請您協助督促孩子盡速完成缺交作業。若有任何疑問，歡迎透過班級系統私訊聯繫。\n\n班級導師 敬上`)
 
-// 列印模式控制狀態
 const printMode = ref('all')
 
-// === 登入與稽核 ===
 const logRoleVisit = async (roleName) => {
   try {
     const ipRes = await fetch('https://api.ipify.org?format=json')
@@ -281,7 +279,6 @@ const fetchTeachers = async () => {
   if (data) teachersList.value = data
 }
 
-// 雙重密碼驗證
 const verifyPassword = async () => {
   if (!selectedSubject.value || !passwordInput.value) return
   
@@ -445,23 +442,42 @@ const getSubmissionTimeText = (studentId) => {
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+// 💡 核心修正：導入樂觀更新 (Optimistic UI Update) 保證時間瞬間寫入且不消失！
 const toggleSubmission = async (studentId, seatNumber, realName) => {
   if (!currentAssignment.value) return
+  
   const submitted = isSubmitted(studentId)
+  
   if (submitted) {
-    await supabase.from('assignment_submissions').delete().eq('assignment_id', currentAssignment.value.id).eq('student_id', studentId)
+    // 樂觀更新：立刻從畫面上移除，達到零延遲體驗
     allSubmissions.value = allSubmissions.value.filter(sub => !(sub.assignment_id === currentAssignment.value.id && sub.student_id === studentId))
+    
+    // 背景非同步寫入資料庫
+    await supabase.from('assignment_submissions').delete()
+      .eq('assignment_id', currentAssignment.value.id)
+      .eq('student_id', studentId)
     logAction('變更繳交狀態', `將 ${seatNumber}號 ${realName} 的【${currentAssignment.value.title}】狀態改為：❌ 缺交`)
   } else {
+    // 樂觀更新：立刻寫入當下本機時間，時間戳記瞬間出現絕對不消失！
+    const tempSub = {
+      assignment_id: currentAssignment.value.id,
+      student_id: studentId,
+      created_at: new Date().toISOString()
+    }
+    allSubmissions.value.push(tempSub)
+
+    // 背景非同步寫入資料庫
     const { data } = await supabase.from('assignment_submissions').insert({ 
       assignment_id: currentAssignment.value.id, 
       student_id: studentId 
     }).select().single()
     
-    // 確保存入全域變數中供 UI 即時顯示時間
+    // 若資料庫成功回傳，悄悄替換掉剛剛的暫存資料以獲取正式的 ID
     if (data) {
-      if (!data.created_at) data.created_at = new Date().toISOString()
-      allSubmissions.value.push(data)
+      const idx = allSubmissions.value.findIndex(s => s.assignment_id === currentAssignment.value.id && s.student_id === studentId)
+      if (idx !== -1) {
+        allSubmissions.value[idx] = data
+      }
     }
     
     logAction('變更繳交狀態', `將 ${seatNumber}號 ${realName} 的【${currentAssignment.value.title}】狀態改為：✅ 已交`)
@@ -623,10 +639,8 @@ h3 { color: #334155; margin-top: 0; margin-bottom: 15px; border-bottom: 2px soli
 .stu-name { font-size: 0.95rem; font-weight: bold; }
 .is-submitted { background: #dcfce7; border-color: #22c55e; color: #166534; }
 .is-missing { background: #fee2e2; border-color: #ef4444; color: #991b1b; }
-/* 💡 新增的繳交時間戳記 CSS */
 .sub-time { font-size: 0.75rem; margin-top: 4px; font-weight: normal; opacity: 0.85; font-family: monospace; }
 
-/* 導師後台管理區塊 CSS */
 .mt-20 { margin-top: 20px; }
 .table-header { border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; } 
 .table-header h3 { margin: 0; color: #334155; }
