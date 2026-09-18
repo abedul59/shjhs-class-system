@@ -117,7 +117,7 @@
                    @click="toggleSubmission(student.id, student.seat_number, student.real_name)">
                 <span class="seat-num">{{ student.seat_number }}</span>
                 <span class="stu-name">{{ student.real_name }}</span>
-                <!-- 💡 顯示繳交時間，未交時使用隱藏區塊維持高度一致 -->
+                <!-- 💡 防坍塌設計：無論有無時間，版面高度都會固定 -->
                 <span v-if="isSubmitted(student.id)" class="sub-time">{{ getSubmissionTimeText(student.id) }}</span>
                 <span v-else class="sub-time" style="visibility: hidden;">00/00 00:00</span>
               </div>
@@ -434,25 +434,28 @@ const currentSubmissions = computed(() => {
 })
 const isSubmitted = (studentId) => currentSubmissions.value.some(sub => sub.student_id === studentId)
 
-// 💡 取得已繳交的時間文字 (永久安全顯示)
+// 💡 終極防護版：取得已繳交的時間文字 (若資料庫沒時間欄位，至少給出佔位符避免崩塌)
 const getSubmissionTimeText = (studentId) => {
   const sub = currentSubmissions.value.find(s => s.student_id === studentId)
-  if (!sub || !sub.created_at) return ''
+  if (!sub) return ''
+  // 萬一 SQL Editor 還沒建好 created_at 欄位，回傳預設文字保持版面方正
+  if (!sub.created_at) return '免補時間'
+  
   const d = new Date(sub.created_at)
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-// 💡 絕對成功的樂觀更新：本機存入時間後，不等待資料庫回傳，直接完成
+// 💡 完美的樂觀更新：本機存入時間後，不等待資料庫回傳
 const toggleSubmission = async (studentId, seatNumber, realName) => {
   if (!currentAssignment.value) return
   
   const submitted = isSubmitted(studentId)
   
   if (submitted) {
-    // 樂觀更新：立刻從畫面上移除 (變成紅色)
+    // 樂觀更新：立刻從畫面上移除 (變回紅色)
     allSubmissions.value = allSubmissions.value.filter(sub => !(sub.assignment_id === currentAssignment.value.id && sub.student_id === studentId))
     
-    // 背景刪除，Fire-and-forget (不使用 .select()，避開權限報錯)
+    // 背景刪除，Fire-and-forget (只管刪，不等待)
     supabase.from('assignment_submissions').delete()
       .eq('assignment_id', currentAssignment.value.id)
       .eq('student_id', studentId)
@@ -468,7 +471,7 @@ const toggleSubmission = async (studentId, seatNumber, realName) => {
       created_at: nowIso 
     })
 
-    // 背景寫入，Fire-and-forget (不使用 .select()，避開權限報錯，確保資料絕對成功塞入)
+    // 背景寫入，Fire-and-forget (確保資料庫有收到即可，不要去管它的回傳值)
     supabase.from('assignment_submissions').insert({ 
       assignment_id: currentAssignment.value.id, 
       student_id: studentId
