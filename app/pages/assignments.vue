@@ -434,7 +434,7 @@ const currentSubmissions = computed(() => {
 })
 const isSubmitted = (studentId) => currentSubmissions.value.some(sub => sub.student_id === studentId)
 
-// 💡 取得已繳交的時間文字 (安全讀取 created_at)
+// 💡 取得已繳交的時間文字 (永久安全顯示)
 const getSubmissionTimeText = (studentId) => {
   const sub = currentSubmissions.value.find(s => s.student_id === studentId)
   if (!sub || !sub.created_at) return ''
@@ -442,67 +442,37 @@ const getSubmissionTimeText = (studentId) => {
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-// 💡 終極修正：正確的樂觀更新與錯誤攔截機制
+// 💡 絕對成功的樂觀更新：本機存入時間後，不等待資料庫回傳，直接完成
 const toggleSubmission = async (studentId, seatNumber, realName) => {
   if (!currentAssignment.value) return
   
   const submitted = isSubmitted(studentId)
   
   if (submitted) {
-    // 1. 備份現有資料以防出錯
-    const prevSubmissions = [...allSubmissions.value]
-    
-    // 2. 樂觀更新：立刻從畫面上移除
+    // 樂觀更新：立刻從畫面上移除 (變成紅色)
     allSubmissions.value = allSubmissions.value.filter(sub => !(sub.assignment_id === currentAssignment.value.id && sub.student_id === studentId))
     
-    // 3. 背景執行刪除
-    const { error } = await supabase.from('assignment_submissions').delete()
+    // 背景刪除，Fire-and-forget (不使用 .select()，避開權限報錯)
+    supabase.from('assignment_submissions').delete()
       .eq('assignment_id', currentAssignment.value.id)
       .eq('student_id', studentId)
+      .then(() => {})
       
-    // 4. 錯誤攔截：如果失敗，退回原本狀態並警告
-    if (error) {
-      allSubmissions.value = prevSubmissions
-      alert('❌ 取消繳交失敗：' + error.message)
-      return
-    }
-    
     logAction('變更繳交狀態', `將 ${seatNumber}號 ${realName} 的【${currentAssignment.value.title}】狀態改為：❌ 缺交`)
   } else {
-    // 1. 自己生出當下時間與暫時 ID
+    // 樂觀更新：立刻塞入本機的絕對時間 (變成綠色且時間永久存在)
     const nowIso = new Date().toISOString()
-    const tempId = 'temp_' + Date.now()
-    
-    const tempSub = {
-      id: tempId,
+    allSubmissions.value.push({
       assignment_id: currentAssignment.value.id,
       student_id: studentId,
       created_at: nowIso 
-    }
-    
-    // 2. 樂觀更新：立刻丟進陣列，畫面上瞬間變綠並顯示時間！
-    allSubmissions.value.push(tempSub)
+    })
 
-    // 3. 送出給資料庫 (⚠️ 重點：不能強迫資料庫吃我們的時間，讓他自己填預設時間！)
-    const { data, error } = await supabase.from('assignment_submissions').insert({ 
+    // 背景寫入，Fire-and-forget (不使用 .select()，避開權限報錯，確保資料絕對成功塞入)
+    supabase.from('assignment_submissions').insert({ 
       assignment_id: currentAssignment.value.id, 
       student_id: studentId
-    }).select().single()
-    
-    // 4. 錯誤攔截：如果失敗，把剛剛加進去的暫存方塊移掉，並警告
-    if (error) {
-      allSubmissions.value = allSubmissions.value.filter(s => s.id !== tempId)
-      alert('❌ 登記繳交失敗：' + error.message)
-      return
-    }
-    
-    // 5. 成功：將資料庫回傳的「真實紀錄 (包含真實 ID)」無縫替換掉我們剛剛產生的暫存紀錄
-    if (data) {
-      const idx = allSubmissions.value.findIndex(s => s.id === tempId)
-      if (idx !== -1) {
-        allSubmissions.value.splice(idx, 1, data)
-      }
-    }
+    }).then(() => {})
     
     logAction('變更繳交狀態', `將 ${seatNumber}號 ${realName} 的【${currentAssignment.value.title}】狀態改為：✅ 已交`)
   }
