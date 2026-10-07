@@ -41,6 +41,7 @@
             <div class="msg-info"><span class="sender">{{ msg.sender_role === '學生' ? '我' : '👨‍🏫 導師' }}</span><span class="time">{{ formatTime(msg.created_at) }}</span></div>
             <div class="msg-content">{{ msg.content }}</div>
           </div>
+          <PrivateMediaThread :student-id="selectedStudentId" chat-type="學生" />
         </div>
         <form @submit.prevent="sendMessage" class="reply-form">
           <textarea v-model="newMessage" rows="2" placeholder="請輸入訊息..." required :disabled="isSending"></textarea>
@@ -102,6 +103,12 @@ const verifyIdentity = async () => {
       .single()
 
     if (error || !data) { showMessage('error', '❌ 驗證失敗：生日或身分證後五碼錯誤！'); isLoading.value = false; return }
+    try {
+      await $fetch('/api/private-media/session', { method: 'POST', body: {
+        action: 'login', role: 'student', studentId: selectedStudentId.value,
+        birthday: studentBirthday.value, idLast5: studentIdLast5.value
+      }, retry: 0 })
+    } catch { /* Text messages keep their original login; the attachment panel displays its own error. */ }
     verifiedStudentName.value = data.real_name; isVerified.value = true; await loadChatHistory()
   } catch (error) { showMessage('error', '系統錯誤'); } finally { isLoading.value = false }
 }
@@ -115,7 +122,11 @@ const sendMessage = async () => {
   } catch (error) { alert('傳送失敗') } finally { isSending.value = false }
 }
 
-const logout = () => { isVerified.value = false; studentBirthday.value = ''; studentIdLast5.value = ''; chatMessages.value = [] }
+const logout = async () => {
+  try { await $fetch('/api/private-media/session', { method: 'POST', body: { action: 'logout' }, retry: 0 }) }
+  catch { alert('附件登出尚未完成，請恢復連線後重試。'); return }
+  isVerified.value = false; studentBirthday.value = ''; studentIdLast5.value = ''; chatMessages.value = []
+}
 const formatTime = (isoString) => new Date(isoString).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 const scrollToBottom = () => { nextTick(() => { const c = document.getElementById('chatContainer'); if (c) c.scrollTop = c.scrollHeight }) }
 

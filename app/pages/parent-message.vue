@@ -86,6 +86,7 @@
             </div>
             <div class="msg-content">{{ msg.content }}</div>
           </div>
+          <PrivateMediaThread :student-id="selectedStudentId" chat-type="家長" />
         </div>
         <form @submit.prevent="sendMessage" class="reply-form">
           <textarea v-model="newMessage" rows="2" placeholder="請輸入訊息..." required :disabled="isSending"></textarea>
@@ -233,6 +234,13 @@ const verifyIdentity = async () => {
       return
     }
 
+    try {
+      await $fetch('/api/private-media/session', { method: 'POST', body: {
+        action: 'login', role: 'parent', studentId: selectedStudentId.value, authMethod: authMethod.value,
+        birthday: studentBirthday.value, idLast4: studentIdLast4.value, emailPrefix: emailPrefix.value
+      }, retry: 0 })
+    } catch { /* Text messages keep their original login; the attachment panel displays its own error. */ }
+
     verifiedStudentName.value = stData.real_name
     isVerified.value = true
     await loadChatHistory()
@@ -315,7 +323,9 @@ const sendMessage = async () => {
   }
 }
 
-const logout = () => { 
+const logout = async () => {
+  try { await $fetch('/api/private-media/session', { method: 'POST', body: { action: 'logout' }, retry: 0 }) }
+  catch { alert('附件登出尚未完成，請恢復連線後重試。'); return }
   isVerified.value = false
   studentBirthday.value = ''
   studentIdLast4.value = ''

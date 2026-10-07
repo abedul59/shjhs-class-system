@@ -123,6 +123,10 @@ const verifyPassword = async () => {
       }
     }
     if (passwordInput.value === expectedPwd || passwordInput.value === '168168168') {
+      try { await $fetch('/api/private-media/session', { method: 'POST', body: {
+        action: 'login', role: 'teacher', password: passwordInput.value,
+        timezoneOffset: new Date().getTimezoneOffset()
+      }, retry: 0 }) } catch { /* Original admin login remains available if attachments are not configured. */ }
       isUnlocked.value = true
       sessionStorage.setItem('main_admin_logged_in', 'true') 
       try {
@@ -133,13 +137,19 @@ const verifyPassword = async () => {
     } else { alert('❌ 密碼錯誤！') }
   } catch (e) {
     if (passwordInput.value === '168168168') {
+      try { await $fetch('/api/private-media/session', { method: 'POST', body: {
+        action: 'login', role: 'teacher', password: passwordInput.value,
+        timezoneOffset: new Date().getTimezoneOffset()
+      }, retry: 0 }) } catch {}
       isUnlocked.value = true
       sessionStorage.setItem('main_admin_logged_in', 'true') 
     } else { alert('❌ 密碼錯誤或無法連線至設定檔！') }
   }
 }
 
-const handleLogout = () => {
+const handleLogout = async () => {
+  try { await $fetch('/api/private-media/session', { method: 'POST', body: { action: 'logout' }, retry: 0 }) }
+  catch { alert('附件登出尚未完成，請恢復連線後重試。'); return }
   isUnlocked.value = false
   passwordInput.value = ''
   sessionStorage.removeItem('main_admin_logged_in')
