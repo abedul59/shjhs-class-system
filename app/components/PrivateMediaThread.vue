@@ -45,10 +45,12 @@ const api = body => $fetch('/api/private-media/media', { method: 'POST', body, r
 const formatTime = value => new Date(value).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false })
 const status = err => err?.statusCode || err?.response?.status
 function mediaError(err) {
-  if (status(err) === 401) return '請先到個人首頁驗證身分。'
-  if (status(err) === 403) return '目前身分無法查看此對話附件。'
+  if (status(err) === 401) return '附件登入已失效，請從目前頁面登出，再用原有方式重新登入。'
+  if (status(err) === 403) return '目前身分無法使用此對話的附件。'
+  if (status(err) === 503) return '附件服務尚未設定完成或暫時無法連線，請通知管理者檢查 Vercel 伺服器金鑰、Supabase 資料表與私有 Storage bucket。'
+  if (status(err) === 400 || status(err) === 413) return '檔案格式、大小或上傳內容不符合限制，請換一個檔案重試。'
   if (status(err) === 429) return '上傳次數過多，請稍後再試。'
-  return '附件操作失敗，請檢查檔案、連線或儲存設定後重試。'
+  return '附件操作失敗，請更新頁面後重試；若仍失敗，請通知管理者。'
 }
 async function load(more = false) {
   if (!props.studentId || !props.chatType) return

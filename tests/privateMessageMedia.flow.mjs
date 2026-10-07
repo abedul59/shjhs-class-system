@@ -74,8 +74,10 @@ test('student and teacher uploads stay in their private channel, with teacher ed
   await new Promise(resolve => probe.close(resolve))
   const app = spawn(process.execPath, ['.output/server/index.mjs'], { env: { ...process.env,
     HOST: '127.0.0.1', PORT: String(port), NUXT_PUBLIC_SUPABASE_URL: mediaUrl,
-    NUXT_PUBLIC_SUPABASE_KEY: 'fixture-public-key', NUXT_PRIVATE_MEDIA_SECRET: 'fixture-private-media-secret-over-thirty-two-characters',
-    NUXT_PRIVATE_MEDIA_SUPABASE_URL: mediaUrl, NUXT_PRIVATE_MEDIA_SERVICE_KEY: 'fixture-service-key'
+    NUXT_PUBLIC_SUPABASE_KEY: 'fixture-public-key', NUXT_PRIVATE_MEDIA_SECRET: '',
+    NUXT_PRIVATE_MEDIA_SUPABASE_URL: '', NUXT_PRIVATE_MEDIA_SERVICE_KEY: '',
+    NUXT_STUDENT_BROADCAST_SUPABASE_URL: mediaUrl,
+    NUXT_STUDENT_BROADCAST_SERVICE_KEY: 'fixture-existing-service-key-over-thirty-two-characters'
   }, stdio: 'ignore' })
   t.after(async () => {
     app.kill()

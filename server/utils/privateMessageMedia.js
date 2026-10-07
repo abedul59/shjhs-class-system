@@ -26,8 +26,10 @@ export function validateCaption(value) {
   return value.trim()
 }
 export function mediaClient(config) {
-  if (!config.privateMediaSupabaseUrl || !config.privateMediaServiceKey) fail(503, 'Media storage is not configured')
-  return createClient(config.privateMediaSupabaseUrl, config.privateMediaServiceKey, {
+  const url = config.privateMediaSupabaseUrl || process.env.NUXT_STUDENT_BROADCAST_SUPABASE_URL || process.env.NUXT_PUBLIC_SUPABASE_URL
+  const key = config.privateMediaServiceKey || process.env.NUXT_STUDENT_BROADCAST_SERVICE_KEY
+  if (!url || !key) fail(503, 'Media storage is not configured')
+  return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
   })
 }

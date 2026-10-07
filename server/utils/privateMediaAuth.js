@@ -7,8 +7,10 @@ const cookieOptions = { httpOnly: true, sameSite: 'strict', secure: process.env.
 const fail = (statusCode, statusMessage) => { throw createError({ statusCode, statusMessage }) }
 
 export function mediaSecret(config) {
-  if (typeof config.privateMediaSecret !== 'string' || config.privateMediaSecret.length < 32) fail(503, 'Media sessions are not configured')
-  return config.privateMediaSecret
+  if (typeof config.privateMediaSecret === 'string' && config.privateMediaSecret.length >= 32) return config.privateMediaSecret
+  const serviceKey = config.privateMediaServiceKey || process.env.NUXT_STUDENT_BROADCAST_SERVICE_KEY
+  if (typeof serviceKey !== 'string' || serviceKey.length < 32) fail(503, 'Media service key is not configured')
+  return createHmac('sha256', serviceKey).update('private-media-session-signing-v1').digest('hex')
 }
 
 export function privateResponse(event) {

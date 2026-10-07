@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { authorizeMedia, checkedMediaInfo, makeMediaTicket, newMediaPath, readMediaTicket,
   validateCaption, validateFile } from '../server/utils/privateMessageMedia.js'
 import { createMediaSession, decodeMediaSession, legacyDynamicPassword, matchesLegacyTeacherPassword,
-  verifyMediaIdentity } from '../server/utils/privateMediaAuth.js'
+  mediaSecret, verifyMediaIdentity } from '../server/utils/privateMediaAuth.js'
 
 const secret = 'a-secret-longer-than-thirty-two-characters-for-tests'
 
@@ -27,6 +27,8 @@ test('attachment session is signed and scoped without changing legacy passwords'
   assert.equal(matchesLegacyTeacherPassword('custom', { type: 'custom', custom_pwd: 'custom' }, -480, now), true)
   assert.equal(matchesLegacyTeacherPassword('168168168', { type: 'custom', custom_pwd: 'custom' }, -480, now), true)
   assert.equal(matchesLegacyTeacherPassword('custom', { type: 'dynamic' }, -480, now), false)
+  assert.equal(mediaSecret({ privateMediaSecret: '', privateMediaServiceKey: 'service-key-over-thirty-two-characters' }).length, 64)
+  assert.throws(() => mediaSecret({ privateMediaSecret: '', privateMediaServiceKey: '' }))
 })
 
 test('attachment login accepts the original student and parent verification methods', async () => {

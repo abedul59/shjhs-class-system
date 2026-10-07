@@ -4,8 +4,8 @@ import { authorizeMedia, mediaClient, mediaIdentity, mediaRow, MEDIA_BUCKET, MED
 export default defineEventHandler(async event => {
   privateResponse(event)
   const config = useRuntimeConfig(event)
-  const identity = mediaIdentity(event, config)
   const db = mediaClient(config)
+  const identity = mediaIdentity(event, config)
   const query = getQuery(event)
 
   if (query.mode === 'unread-counts') {
